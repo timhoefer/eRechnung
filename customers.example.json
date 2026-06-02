@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Beispiel GmbH",
+    "contact": "z. Hd. Erika Mustermann",
+    "address_line": "Beispielweg 2",
+    "postcode": "14467",
+    "city": "Potsdam",
+    "state": "",
+    "country": "DE",
+    "vat_id": "DE000000000",
+    "email": "info@beispiel.de",
+    "reference": ""
+  },
+  {
+    "name": "Example Ltd",
+    "contact": "",
+    "address_line": "1 Example Street",
+    "postcode": "M50 2AB",
+    "city": "Manchester",
+    "state": "",
+    "country": "GB",
+    "vat_id": "GB000000000",
+    "email": "",
+    "reference": "",
+    "items": [
+      {
+        "description": "Design Retainer",
+        "quantity": "1",
+        "unit": "LS",
+        "unit_price": "1000"
+      }
+    ]
+  }
+]

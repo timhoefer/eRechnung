@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.result_title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <h1>{{ t.result_title }}</h1>
+  <p class="sub">{{ inv.number }} &middot; {{ buyer.name }}</p>
+</header>
+
+<div class="card status {{ 'ok' if valid else 'err' }}">
+  {% if valid %}
+    <strong>&#10003; {{ t.valid_ok }}</strong>
+    <p>{{ t.valid_ok_text }}</p>
+  {% else %}
+    <strong>&#10007; {{ t.valid_err }}</strong>
+    <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+  <p class="hint">{{ t.valid_hint }}</p>
+</div>
+
+<div class="card">
+  <h2>{{ t.summary }}</h2>
+  <table class="summary">
+    <tr><td>{{ t.treatment_label }}</td><td>{{ totals.treatment_label }}</td></tr>
+    <tr><td>{{ t.net }}</td><td>{{ totals.line_total|money(lang) }} {{ inv.currency }}</td></tr>
+    <tr><td>{{ t.vat }}</td><td>{{ totals.tax_total|money(lang) }} {{ inv.currency }}</td></tr>
+    <tr class="grand"><td>{{ t.total }}</td><td>{{ totals.grand_total|money(lang) }} {{ inv.currency }}</td></tr>
+  </table>
+</div>
+
+<div class="actions">
+  <a href="{{ url_for('index') }}" class="link">{{ t.new_invoice }}</a>
+  <span class="spacer"></span>
+  <a href="{{ url_for('view', filename=filename) }}" target="_blank"><button type="button" class="secondary">{{ t.pdf_view }}</button></a>
+  <a href="{{ url_for('download', filename=filename) }}"><button type="button">{{ t.pdf_download }}</button></a>
+</div>
+</body>
+</html>

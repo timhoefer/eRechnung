@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.app_title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <div>
+      <h1>{{ t.app_title }}</h1>
+      <p class="sub">{{ t.app_sub }}</p>
+    </div>
+    <nav class="langswitch">
+      {% for code, name in languages.items() %}
+        <a href="{{ url_for('setlang', code=code) }}" class="{{ 'active' if code == lang else '' }}">{{ code|upper }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="flash {{ cat }}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="layout">
+<div class="form-pane">
+
+<details class="card" {% if not seller.name %}open{% endif %}>
+  <summary><strong>{{ t.master }}</strong> &mdash; {{ t.master_hint }}</summary>
+  <form method="post" action="{{ url_for('settings') }}" id="settings-form" class="grid">
+    <label>{{ t.name }}<input name="name" value="{{ seller.name or '' }}" required></label>
+    <label>{{ t.subtitle }}<input name="subtitle" value="{{ seller.subtitle or '' }}" placeholder="z. B. Design"></label>
+    <label>{{ t.street }}<input name="address_line" value="{{ seller.address_line or '' }}"></label>
+    <label>{{ t.postcode }}<input name="postcode" value="{{ seller.postcode or '' }}"></label>
+    <label>{{ t.city }}<input name="city" value="{{ seller.city or '' }}"></label>
+    <label>{{ t.country }}
+      <select name="country">
+        {% for code, label in countries %}
+          <option value="{{ code }}" {{ 'selected' if code == (seller.country or 'DE') else '' }}>{{ loc(label, lang) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ t.vat_id }}<input name="vat_id" value="{{ seller.vat_id or '' }}" placeholder="DE123456789"></label>
+    <label>{{ t.tax_number }}<input name="tax_number" value="{{ seller.tax_number or '' }}"></label>
+    <label>{{ t.email }}<input name="email" type="email" value="{{ seller.email or '' }}"></label>
+    <label>{{ t.phone }}<input name="phone" value="{{ seller.phone or '' }}" placeholder="+49 …"></label>
+    <label>{{ t.web }}<input name="web" value="{{ seller.web or '' }}" placeholder="machineandfolk.com"></label>
+    <label>{{ t.iban }}<input name="iban" value="{{ seller.iban or '' }}"></label>
+    <label>{{ t.bic }}<input name="bic" value="{{ seller.bic or '' }}"></label>
+    <label>{{ t.bank_name }}<input name="bank_name" value="{{ seller.bank_name or '' }}"></label>
+    <label>{{ t.account_holder }}<input name="account_name" value="{{ seller.account_name or '' }}"></label>
+    <label class="wide">{{ t.default_terms }}<input name="default_payment_terms" value="{{ seller.default_payment_terms or 'Zahlbar innerhalb von 14 Tagen ohne Abzug.' }}"></label>
+    <div class="wide"><button type="submit" class="secondary">{{ t.save_master }}</button></div>
+  </form>
+</details>
+
+<form method="post" action="{{ url_for('generate') }}" id="invoice-form">
+  <div class="card">
+    <h2>{{ t.invoice }}</h2>
+    <div class="grid">
+      <label>{{ t.invoice_no }}<input name="number" value="{{ defaults.number }}" required></label>
+      <label>{{ t.invoice_date }}<input name="issue_date" type="date" value="{{ defaults.issue_date }}" required></label>
+      <label>{{ t.due }}<input name="due_date" type="date" value="{{ defaults.due_date }}"></label>
+      <label class="wide">{{ t.service_period }}
+        <span class="period">
+          <input name="service_start" type="date" aria-label="{{ t.service_from }}">
+          <span class="period-sep">–</span>
+          <input name="service_end" type="date" aria-label="{{ t.service_to }}">
+        </span>
+      </label>
+      <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
+      <label>{{ t.invoice_language }}
+        <select name="language">
+          {% for code, name in languages.items() %}
+            <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="wide">{{ t.profile }}
+        <select name="profile" id="profile">
+          <option value="en16931" selected>{{ t.profile_en16931 }}</option>
+          <option value="xrechnung">{{ t.profile_xrechnung }}</option>
+        </select>
+      </label>
+      <p class="hint wide" id="profile-hint" hidden>{{ t.profile_hint }}</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>{{ t.customer }}</h2>
+    <div class="customer-bar">
+      <label class="wide">{{ t.saved_customer }}
+        <select id="saved_customer" name="saved_customer">
+          <option value="">{{ t.new_customer }}</option>
+          {% for c in customers %}<option value="{{ loop.index0 }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="secondary" formaction="{{ url_for('customers_save') }}" formnovalidate>{{ t.save_customer }}</button>
+      <button type="submit" class="secondary danger" formaction="{{ url_for('customers_delete') }}" formnovalidate>{{ t.delete }}</button>
+    </div>
+    <div class="grid">
+      <label class="wide">{{ t.name }}<input name="buyer_name" required></label>
+      <label class="wide">{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
+      <label class="wide">{{ t.street }}<input name="buyer_address_line"></label>
+      <label>{{ t.postcode }}<input name="buyer_postcode"></label>
+      <label>{{ t.city }}<input name="buyer_city"></label>
+      <label>{{ t.country }}
+        <select name="buyer_country" id="buyer_country">
+          {% for code, label in countries %}
+            <option value="{{ code }}" {{ 'selected' if code == 'DE' else '' }}>{{ loc(label, lang) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label id="buyer-state-field" hidden>{{ t.state }}<select name="buyer_state" id="buyer_state"></select></label>
+      <label>{{ t.vat_id }}<input name="buyer_vat_id" placeholder="ATU12345678"></label>
+      <label>{{ t.email }}<input name="buyer_email" type="email"></label>
+      <label class="wide">{{ t.buyer_reference }}<input name="buyer_reference"></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>{{ t.tax_treatment }}</h2>
+    <label class="wide">
+      <select name="tax_treatment" id="tax_treatment">
+        {% for key, tr in treatments.items() %}
+          <option value="{{ key }}" data-rate="{{ tr.rate }}" data-note="{{ loc(tr.note, lang) or '' }}">{{ loc(tr.label, lang) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="hint" id="tax-note"></p>
+    <label class="wide">{{ t.extra_note }}<input name="note" placeholder="{{ t.extra_note_ph }}"></label>
+  </div>
+
+  <div class="card">
+    <h2>{{ t['items'] }}</h2>
+    <table id="items">
+      <thead>
+        <tr><th>{{ t.description }}</th><th>{{ t.quantity }}</th><th>{{ t.unit }}</th><th>{{ t.unit_price }}</th><th>{{ t.amount }}</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr class="item">
+          <td><input name="description"></td>
+          <td><input type="number" name="quantity" value="1" min="0" step="any" class="num qty"></td>
+          <td>
+            <select name="unit" class="unit">
+              {% for code, label in units %}
+                <option value="{{ code }}" {{ 'selected' if code == 'HUR' else '' }}>{{ loc(label, lang) }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td><input name="unit_price" value="0" class="num price"></td>
+          <td class="line-sum">0,00</td>
+          <td><button type="button" class="del" title="{{ t.delete }}">&times;</button></td>
+        </tr>
+        <tr class="item-extra">
+          <td colspan="6">
+            <button type="button" class="add-period">{{ t.add_period }}</button>
+            <label class="period-label" hidden>{{ t.service_period }}
+              <span class="period">
+                <input name="item_start" type="date" aria-label="{{ t.service_from }}">
+                <span class="period-sep">–</span>
+                <input name="item_end" type="date" aria-label="{{ t.service_to }}">
+                <button type="button" class="del-period" title="{{ t.remove_period }}">&times;</button>
+              </span>
+            </label>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="customer-bar">
+      <button type="button" id="add-row" class="secondary">{{ t.add_item }}</button>
+      <label class="wide">{{ t.saved_items }}
+        <select id="saved_item"><option value="">{{ t.insert_item }}</option></select>
+      </label>
+      <button type="button" id="save-items" class="secondary">{{ t.save_items }}</button>
+    </div>
+    <p class="hint" id="items-status">{{ t.unit_hint }}</p>
+
+    <div class="totals">
+      <div><span>{{ t.net }}</span><strong id="t-net">0,00</strong></div>
+      <div><span id="t-tax-label">{{ t.vat }}</span><strong id="t-tax">0,00</strong></div>
+      <div class="grand"><span>{{ t.total }}</span><strong id="t-grand">0,00</strong></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a href="{{ url_for('validate') }}" class="link">{{ t.archive_link }}</a>
+    <span class="spacer"></span>
+    <button type="submit" formaction="{{ url_for('preview') }}" formtarget="_blank" class="secondary">{{ t.pdf_preview }}</button>
+    <button type="submit">{{ t.generate }}</button>
+  </div>
+</form>
+
+</div><!-- /form-pane -->
+
+<aside class="preview-pane">
+  <div class="preview-head">{{ t.live_preview }}</div>
+  <iframe id="preview-frame" title="{{ t.live_preview }}"></iframe>
+</aside>
+</div><!-- /layout -->
+
+<script>
+  window.CUSTOMERS = {{ customers|tojson }};
+  window.DRAFT = {{ draft|tojson }};
+  window.UI_LANG = {{ lang|tojson }};
+  window.VAT_LABEL = {{ t.vat|tojson }};
+  window.PREVIEW_URL = {{ url_for('preview_html')|tojson }};
+  window.SELLER_AUTOSAVE_URL = {{ url_for('settings_autosave')|tojson }};
+  window.CUSTOMER_AUTOSAVE_URL = {{ url_for('customers_autosave')|tojson }};
+  window.CUSTOMER_ITEMS_SAVE_URL = {{ url_for('customers_items_save')|tojson }};
+  window.MSG_NEED_BUYER_VAT = {{ t['need_buyer_vat']|tojson }};
+  window.MSG_INSERT_ITEM = {{ t['insert_item']|tojson }};
+  window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
+  window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "country": "DE",
+  "name": "Max Mustermann",
+  "subtitle": "Design",
+  "address_line": "Musterstraße 1",
+  "postcode": "10115",
+  "city": "Berlin",
+  "vat_id": "DE123456789",
+  "tax_number": "00/000/00000",
+  "email": "mail@example.com",
+  "phone": "+49 30 0000000",
+  "web": "www.example.com",
+  "iban": "DE00000000000000000000",
+  "bic": "XXXXDEXXXXX",
+  "bank_name": "Beispielbank",
+  "account_name": "Max Mustermann",
+  "default_payment_terms": "Zahlbar innerhalb von 14 Tagen ohne Abzug.",
+  "last_invoice_number": "2026-000"
+}

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Lokale Konfiguration / Editor
+.claude/
+.DS_Store
+.vscode/
+
+# Echte persönliche Daten – NICHT committen (siehe *.example.json)
+seller.json
+customers.json
+
+# Erzeugte Rechnungen (PDF + Sidecar-JSON)
+output/

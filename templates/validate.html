@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.validate_title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <h1>{{ t.validate_title }}</h1>
+  <p class="sub">{{ t.validate_sub }}</p>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="flash {{ cat }}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+{% if result %}
+<div class="card status {{ 'ok' if result.ok else 'err' }}">
+  <strong>{{ '✓' if result.ok else '✗' }} {{ result.label }}</strong>
+  {% if result.ok %}
+    <p>{{ t.validate_ok_text }}</p>
+  {% else %}
+    <ul>{% for m in result.messages %}<li>{{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>{{ t.check_file }}</h2>
+  <form method="post" enctype="multipart/form-data">
+    <p class="hint">{{ t.check_file_hint }}</p>
+    <input type="file" name="file" accept=".pdf,.xml" required>
+    <div style="margin-top:12px"><button type="submit">{{ t.check }}</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>{{ t.archive }} ({{ archive|length }})</h2>
+  {% if archive %}
+  <table class="archive">
+    <thead><tr><th>{{ t.file }}</th><th>{{ t.created }}</th><th></th></tr></thead>
+    <tbody>
+      {% for a in archive %}
+      <tr>
+        <td>{{ a.filename }}</td>
+        <td>{{ a.modified }}</td>
+        <td class="r">
+          <a href="{{ url_for('view', filename=a.filename) }}" target="_blank" class="link">{{ t.act_view }}</a>
+          <a href="{{ url_for('download', filename=a.filename) }}" class="link">{{ t.act_download }}</a>
+          {% if a.has_draft %}<a href="{{ url_for('index', **{'from': a.filename}) }}" class="link">{{ t.act_edit }}</a>{% endif %}
+          <button type="button" class="link danger-link js-delete" data-filename="{{ a.filename }}">{{ t.act_delete }}</button>
+          <form method="post" style="display:inline">
+            <input type="hidden" name="filename" value="{{ a.filename }}">
+            <button type="submit" class="secondary small">{{ t.act_check }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="hint">{{ t.no_invoices }}</p>
+  {% endif %}
+</div>
+
+<div class="card status {{ 'ok' if depinfo.current and not depinfo.update_available and not depinfo.error else '' }}">
+  <strong>{{ t.dep_title }}</strong>
+  <table class="summary" style="margin-top:8px">
+    <tr><td>{{ t.dep_drafthorse }} — {{ t.dep_current }}</td><td>{{ depinfo.current or '—' }}</td></tr>
+    {% if depinfo.latest %}<tr><td>{{ t.dep_latest }}</td><td>{{ depinfo.latest }}</td></tr>{% endif %}
+  </table>
+  {% if depinfo.error == 'offline' %}
+    <p class="hint">{{ t.dep_offline }}</p>
+  {% elif depinfo.update_available %}
+    <p style="margin:10px 0 0"><strong>{{ t.dep_update_available }}</strong></p>
+    <p class="hint">{{ t.dep_update_cmd }} <code>pip install -U drafthorse</code></p>
+  {% elif depinfo.current %}
+    <p class="hint">✓ {{ t.dep_uptodate }}</p>
+  {% endif %}
+</div>
+
+<div class="actions">
+  <a href="{{ url_for('index') }}" class="link">{{ t.back_to_form }}</a>
+</div>
+
+<div class="modal-backdrop" id="delete-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-title">
+    <h3 id="del-title">{{ t.confirm_delete_title }}</h3>
+    <p><strong id="del-filename"></strong> {{ t.confirm_delete_text }}</p>
+    <form method="post" action="{{ url_for('archive_delete') }}" class="modal-actions">
+      <input type="hidden" name="filename" id="del-input">
+      <button type="button" class="secondary" id="del-cancel">{{ t.cancel }}</button>
+      <button type="submit" class="danger">{{ t.act_delete|capitalize }}</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById("delete-modal");
+    const nameEl = document.getElementById("del-filename");
+    const input = document.getElementById("del-input");
+    function open(filename) {
+      nameEl.textContent = filename;
+      input.value = filename;
+      modal.hidden = false;
+    }
+    function close() { modal.hidden = true; }
+    document.querySelectorAll(".js-delete").forEach((btn) => {
+      btn.addEventListener("click", () => open(btn.dataset.filename));
+    });
+    document.getElementById("del-cancel").addEventListener("click", close);
+    modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  })();
+</script>
+</body>
+</html>
