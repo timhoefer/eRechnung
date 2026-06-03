@@ -4,11 +4,16 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 
-from drafthorse.models.accounting import ApplicableTradeTax
+from drafthorse.models.accounting import (
+    ApplicableTradeTax,
+    CategoryTradeTax,
+    TradeAllowanceCharge,
+)
 from drafthorse.models.document import Document
 from drafthorse.models.note import IncludedNote
 from drafthorse.models.party import TaxRegistration
 from drafthorse.models.payment import PaymentMeans, PaymentTerms
+from drafthorse.models.references import InvoiceReferencedDocument
 from drafthorse.models.tradelines import LineItem
 
 TWO = Decimal("0.01")
@@ -55,14 +60,14 @@ TAX_TREATMENTS = {
         },
         "note": {
             "de": (
-                "Nicht im Inland steuerbare sonstige Leistung gemäß § 3a Abs. 2 UStG. "
-                "Die Steuerschuld geht ggf. nach den Vorschriften des Empfängerlandes "
-                "auf den Leistungsempfänger über."
+                "Nicht im Inland steuerbare sonstige Leistung (§ 3a Abs. 2 UStG). "
+                "Die Steuer schuldet der Leistungsempfänger im Wege des "
+                "Reverse-Charge-Verfahrens nach den Vorschriften seines Landes."
             ),
             "en": (
-                "Not subject to German VAT pursuant to Section 3a (2) German VAT Act "
-                "(UStG). The tax liability may pass to the recipient under the rules "
-                "of the recipient's country."
+                "Not subject to German VAT — place of supply is where the customer "
+                "belongs (Sec. 3a(2) German VAT Act). VAT to be accounted for by the "
+                "recipient under the reverse-charge rules of the recipient's country."
             ),
         },
         "reason": {
@@ -124,8 +129,14 @@ def _parse_date(value) -> date:
     return datetime.strptime(value, "%Y-%m-%d").date()
 
 
-def compute_totals(items, rate: Decimal):
-    """Zeilensummen, Netto, Steuer und Brutto berechnen."""
+def compute_totals(items, rate: Decimal, discount=Decimal("0")):
+    """Zeilensummen, Zwischensumme, Rabatt, Steuerbasis, Steuer und Brutto berechnen.
+
+    Rückgabe: (computed, line_total, discount, tax_basis, tax_total, grand_total)
+      line_total  – Summe der Positionen (BT-106)
+      discount    – Gesamt-Nachlass (BT-107), auf [0, line_total] begrenzt
+      tax_basis   – Steuerbasis = line_total − discount (BT-109)
+    """
     line_total = Decimal("0")
     computed = []
     for it in items:
@@ -135,9 +146,15 @@ def compute_totals(items, rate: Decimal):
         line_total += net
         computed.append({**it, "net": net, "qty": qty, "unit_price": unit_price})
     line_total = q(line_total)
-    tax_total = q(line_total * rate / Decimal("100"))
-    grand_total = q(line_total + tax_total)
-    return computed, line_total, tax_total, grand_total
+    discount = q(discount)
+    if discount < Decimal("0"):
+        discount = Decimal("0.00")
+    if discount > line_total:
+        discount = line_total
+    tax_basis = q(line_total - discount)
+    tax_total = q(tax_basis * rate / Decimal("100"))
+    grand_total = q(tax_basis + tax_total)
+    return computed, line_total, discount, tax_basis, tax_total, grand_total
 
 
 def build_xml(data) -> bytes:
@@ -151,7 +168,10 @@ def build_xml(data) -> bytes:
     note_text = loc(treatment["note"], lang)
     reason_text = loc(treatment["reason"], lang)
 
-    computed, line_total, tax_total, grand_total = compute_totals(data["items"], rate)
+    discount_in = Decimal(str(inv.get("discount") or "0"))
+    computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
+        data["items"], rate, discount_in
+    )
     currency = inv.get("currency", "EUR")
     profile = inv.get("profile", "en16931")
 
@@ -167,8 +187,17 @@ def build_xml(data) -> bytes:
     else:
         doc.context.guideline_parameter.id = "urn:cen.eu:en16931:2017"
     doc.header.id = inv["number"]
-    doc.header.type_code = "380"  # Handelsrechnung
+    # BT-3 Belegart: 380 Rechnung, 381 Gutschrift/Storno, 384 Korrekturrechnung
+    doc.header.type_code = inv.get("doc_type") or "380"
     doc.header.issue_date_time = _parse_date(inv["issue_date"])
+
+    # BT-25/BT-26 Bezug auf vorausgegangene Rechnung (bei Storno/Korrektur Pflicht).
+    ref_number = inv.get("ref_number")
+    if ref_number:
+        ird = doc.trade.settlement.invoice_referenced_document
+        ird.issuer_assigned_id = ref_number  # BT-25
+        if inv.get("ref_date"):
+            ird.issue_date_time = _parse_date(inv["ref_date"])  # BT-26
 
     # Pflichthinweis (Steuerbefreiung / Reverse Charge) + optionaler Freitext
     if note_text:
@@ -191,7 +220,9 @@ def build_xml(data) -> bytes:
         tr = TaxRegistration()
         tr.id = ("VA", seller["vat_id"])  # USt-IdNr.
         s.tax_registrations.add(tr)
-    if seller.get("tax_number"):
+    # Steuernummer (FC) nur, wenn vorhanden und in den Stammdaten aktiviert.
+    # Rechtlich genügt USt-IdNr ODER Steuernummer (§ 14 Abs. 4 Nr. 2 UStG).
+    if seller.get("tax_number") and seller.get("show_tax_number", True):
         tr2 = TaxRegistration()
         tr2.id = ("FC", seller["tax_number"])  # Steuernummer
         s.tax_registrations.add(tr2)
@@ -255,10 +286,26 @@ def build_xml(data) -> bytes:
         li.settlement.monetary_summation.total_amount = it["net"]
         doc.trade.items.add(li)
 
+    # BG-20 Beleg-Nachlass (Rabatt). Mindert die Steuerbasis der Kategorie.
+    if discount > 0:
+        ac = TradeAllowanceCharge()
+        ac.indicator = False  # False = Abschlag/Allowance (kein Zuschlag)
+        ac.actual_amount = discount  # BT-92
+        # BR-33: ein Beleg-Nachlass braucht einen Grund -> Default, falls leer.
+        ac.reason = inv.get("discount_reason") or (
+            "Rabatt" if lang != "en" else "Discount"
+        )
+        cat = CategoryTradeTax()  # BT-95/96: gleiche Kategorie/Satz wie die Positionen
+        cat.type_code = "VAT"
+        cat.category_code = treatment["category"]
+        cat.rate_applicable_percent = rate
+        ac.trade_tax.add(cat)
+        doc.trade.settlement.allowance_charge.add(ac)
+
     # Steueraufstellung (eine Gruppe je Behandlung)
     tax = ApplicableTradeTax()
     tax.calculated_amount = tax_total
-    tax.basis_amount = line_total
+    tax.basis_amount = tax_basis
     tax.type_code = "VAT"
     tax.category_code = treatment["category"]
     tax.rate_applicable_percent = rate
@@ -291,8 +338,8 @@ def build_xml(data) -> bytes:
     ms = doc.trade.settlement.monetary_summation
     ms.line_total = line_total
     ms.charge_total = Decimal("0.00")
-    ms.allowance_total = Decimal("0.00")
-    ms.tax_basis_total = line_total  # BT-109: ohne currencyID (CII-DT-031)
+    ms.allowance_total = discount  # BT-107: Summe der Abschläge
+    ms.tax_basis_total = tax_basis  # BT-109: line_total − discount (ohne currencyID)
     ms.tax_total = (tax_total, currency)  # BT-110: currencyID Pflicht
     ms.grand_total = grand_total
     ms.due_amount = grand_total

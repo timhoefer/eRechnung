@@ -21,7 +21,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }  /* schlägt display:flex von .period/label */
 body {
-  margin: 0; padding: 0 0 60px; background: var(--bg); color: var(--ink);
+  margin: 0; padding: 0 0 88px; background: var(--bg); color: var(--ink);
   font: 15px/1.5 var(--font);
 }
 header { padding: 26px 24px 14px; max-width: 1500px; margin: 0 auto; }
@@ -54,6 +54,8 @@ input, select {
   border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%;
 }
 input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); cursor: pointer; }
+label.check input[type="checkbox"] { width: auto; padding: 0; margin: 0; accent-color: var(--accent); cursor: pointer; }
 select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -143,10 +145,20 @@ button.secondary:hover { background: #e0e3e9; }
 .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
 .hint code { background: #eceef2; padding: 1px 5px; border-radius: 4px; }
 #tax-note { color: var(--accent-d); font-size: 12px; min-height: 1em; }
+.discount-row { display: flex; gap: 12px; align-items: flex-end; margin: 10px 0 4px; }
+.discount-row label:first-child { flex: 0 0 140px; }
+.discount-row label:last-child { flex: 1; }
+#t-disc-row { color: var(--muted); }
 .totals { margin-top: 16px; margin-left: auto; width: 280px; }
 .totals div { display: flex; justify-content: space-between; padding: 5px 4px; font-variant-numeric: tabular-nums; }
 .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: 17px; margin-top: 4px; }
-.actions { display: flex; justify-content: flex-end; gap: 12px; background: transparent; border: none; }
+.actions {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+  display: flex; justify-content: flex-end; align-items: center; gap: 12px;
+  padding: 12px 24px; margin: 0; max-width: none; border-radius: 0;
+  background: var(--card); border: none; border-top: 1px solid var(--line);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, .06);
+}
 .flash { padding: 12px 18px; font-size: 14px; }
 .flash.ok { border-color: var(--ok); color: var(--ok); background: #f0fdf4; }
 .flash.err { border-color: var(--err); color: var(--err); background: #fef2f2; }
@@ -202,8 +214,8 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
 .form-pane { flex: 1 1 0; min-width: 0; }
 .form-pane .card, .form-pane details.card, .form-pane .actions { max-width: none; margin-left: 0; margin-right: 0; }
 .preview-pane {
-  flex: 0 0 480px; position: sticky; top: 16px;
-  display: flex; flex-direction: column; height: calc(100vh - 32px);
+  flex: 0 0 420px; position: sticky; top: 16px; margin-top: 16px;
+  display: flex; flex-direction: column; max-height: calc(100vh - 96px);
   border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden;
 }
 .preview-head {
@@ -217,11 +229,14 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
   border-radius: 7px; background: #fff; color: var(--muted); cursor: pointer;
 }
 .preview-expand:hover { color: var(--accent); border-color: var(--accent); }
-#preview-frame { flex: 1 1 auto; width: 100%; border: none; background: #fff; }
+.preview-frame-wrap { flex: 0 1 auto; overflow: auto; background: #fff; }
+.preview-frame-inner { position: relative; width: 100%; }
+#preview-frame { position: absolute; top: 0; left: 0; transform-origin: top left;
+  border: none; background: #fff; }
 
 @media (max-width: 1100px) {
   .layout { flex-direction: column; }
-  .preview-pane { flex: none; width: 100%; position: static; height: 70vh; }
+  .preview-pane { flex: none; width: 100%; position: static; max-height: none; }
 }
 
 /* Vorschau-Drawer in Originalgröße (A4 100%) */

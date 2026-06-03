@@ -122,6 +122,8 @@ def apply_seller_form(seller: dict, form) -> dict:
     for field in SELLER_FIELDS:
         if field in form:
             seller[field] = form.get(field, "").strip()
+    # Checkbox: fehlt im abgesendeten Stammdaten-Formular = abgewählt.
+    seller["show_tax_number"] = form.get("show_tax_number") is not None
     return seller
 
 
@@ -336,16 +338,22 @@ def _assemble(form):
         "profile": form.get("profile", "en16931"),
         "note": form.get("note", "").strip() or None,
         "payment_terms": form.get("payment_terms", "").strip() or None,
+        "doc_type": form.get("doc_type", "380") or "380",
+        "ref_number": form.get("ref_number", "").strip() or None,
+        "ref_date": form.get("ref_date") or None,
+        "discount": (form.get("discount", "0") or "0").replace(",", ".").strip() or "0",
+        "discount_reason": form.get("discount_reason", "").strip() or None,
     }
     buyer = buyer_from_form(form)
     data = {"seller": seller, "buyer": buyer, "invoice": inv, "items": items}
 
     treatment = TAX_TREATMENTS[inv["tax_treatment"]]
-    computed, line_total, tax_total, grand_total = compute_totals(
-        items, treatment["rate"]
+    computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
+        items, treatment["rate"], Decimal(str(inv["discount"]))
     )
     unit_labels = {code: loc(label, inv_lang) for code, label in UNITS}
-    body_class = "page" if form.get("_full") else ""
+    mode = form.get("_full")
+    body_class = "mini" if mode == "mini" else ("page" if mode else "")
     html = render_template(
         "invoice_pdf.html",
         ti=translate(inv_lang),  # Übersetzungen in Rechnungssprache
@@ -360,12 +368,16 @@ def _assemble(form):
         treatment_note=loc(treatment["note"], inv_lang),
         treatment_label=loc(treatment["label"], inv_lang),
         line_total=line_total,
+        discount=discount,
+        tax_basis=tax_basis,
         tax_total=tax_total,
         grand_total=grand_total,
         D=Decimal,
     )
     totals = {
         "line_total": line_total,
+        "discount": discount,
+        "tax_basis": tax_basis,
         "tax_total": tax_total,
         "grand_total": grand_total,
         "treatment_label": loc(treatment["label"], get_ui_lang(request)),

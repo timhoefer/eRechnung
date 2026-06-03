@@ -79,6 +79,14 @@
     body.page { width: 210mm; min-height: 297mm; margin: 16mm auto; padding: 22mm 18mm 24mm 18mm;
       background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,.22); }
   }
+
+  /* Mini-Vorschau: echte A4-Breite (210mm), maßstabsgetreue Schriftgrößen –
+     wird per CSS-transform im Eingabeformular verkleinert. */
+  @media screen {
+    html.mini { background: #fff; }
+    body.mini { width: 210mm; height: 297mm; margin: 0; padding: 22mm 18mm 24mm 18mm;
+      background: #fff; box-shadow: none; overflow: hidden; }
+  }
 </style>
 </head>
 <body class="{{ body_class }}">
@@ -101,14 +109,16 @@
         {% if seller.email %}<tr><td class="k">{{ ti.email }}</td><td class="v">{{ seller.email }}</td></tr>{% endif %}
         {% if seller.web %}<tr><td class="k">{{ ti.web.split(' ')[0] }}</td><td class="v">{{ seller.web }}</td></tr>{% endif %}
         {% if seller.vat_id %}<tr><td class="k taxgap">{{ ti.vat_id }}</td><td class="v taxgap">{{ seller.vat_id }}</td></tr>{% endif %}
-        {% if seller.tax_number %}<tr><td class="k{% if not seller.vat_id %} taxgap{% endif %}">{{ ti.tax_number }}</td><td class="v{% if not seller.vat_id %} taxgap{% endif %}">{{ seller.tax_number }}</td></tr>{% endif %}
+        {% if seller.tax_number and seller.get('show_tax_number', True) %}<tr><td class="k{% if not seller.vat_id %} taxgap{% endif %}">{{ ti.tax_number }}</td><td class="v{% if not seller.vat_id %} taxgap{% endif %}">{{ seller.tax_number }}</td></tr>{% endif %}
       </table>
     </div>
   </div>
 
+  {% set doc_title = ti.pdf_cancel if inv.doc_type == '381' else (ti.pdf_correction if inv.doc_type == '384' else ti.pdf_invoice) %}
   <div class="invoice-line">
-    <div class="no">{{ ti.pdf_invoice }} {{ ti.pdf_no }} {{ inv.number }}</div>
+    <div class="no">{{ doc_title }} {{ ti.pdf_no }} {{ inv.number }}</div>
     <div class="date">{{ ti.pdf_date }}: {{ inv.issue_date|datefmt }}{% if inv.due_date %} &middot; {{ ti.pdf_due }}: {{ inv.due_date|datefmt }}{% endif %}</div>
+    {% if inv.ref_number %}<div class="ref">{{ ti.pdf_ref_to }}: {{ inv.ref_number }}{% if inv.ref_date %} ({{ inv.ref_date|datefmt }}){% endif %}</div>{% endif %}
     {% if inv.service_start and inv.service_end %}<div class="ref">{{ ti.pdf_service_period }}: {{ inv.service_start|datefmt }} – {{ inv.service_end|datefmt }}</div>{% endif %}
     {% if buyer.reference %}<div class="ref">{{ ti.pdf_reference }}: {{ buyer.reference }}</div>{% endif %}
   </div>
@@ -139,7 +149,11 @@
   </table>
 
   <div class="totals">
-    {% if items|length > 1 %}
+    {% if discount and discount > 0 %}
+    <div><span>{{ ti.pdf_subtotal }}</span><span class="amt">{{ inv.currency }} {{ line_total|money(inv.language) }}</span></div>
+    <div><span>{{ ti.pdf_discount }}{% if inv.discount_reason %} ({{ inv.discount_reason }}){% endif %}</span><span class="amt">− {{ inv.currency }} {{ discount|money(inv.language) }}</span></div>
+    <div><span>{{ ti.pdf_net }}</span><span class="amt">{{ inv.currency }} {{ tax_basis|money(inv.language) }}</span></div>
+    {% elif items|length > 1 %}
     <div><span>{{ ti.pdf_net }}</span><span class="amt">{{ inv.currency }} {{ line_total|money(inv.language) }}</span></div>
     {% endif %}
     {% if treatment.rate > 0 %}

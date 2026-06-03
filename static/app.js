@@ -14,10 +14,28 @@ function recalc() {
     row.querySelector(".line-sum").textContent = fmt(sum);
     net += sum;
   });
-  const tax = (net * rate) / 100;
-  document.querySelector("#t-net").textContent = fmt(net);
+  const discEl = document.querySelector("#discount");
+  let discount = discEl ? num(discEl.value) : 0;
+  if (discount < 0) discount = 0;
+  if (discount > net) discount = net;
+  const basis = net - discount;
+  const tax = (basis * rate) / 100;
+  const subRow = document.querySelector("#t-sub-row");
+  const discRow = document.querySelector("#t-disc-row");
+  if (discount > 0) {
+    if (subRow) subRow.hidden = false;
+    if (discRow) discRow.hidden = false;
+    const subEl = document.querySelector("#t-sub");
+    const dEl = document.querySelector("#t-disc");
+    if (subEl) subEl.textContent = fmt(net);
+    if (dEl) dEl.textContent = "− " + fmt(discount);
+  } else {
+    if (subRow) subRow.hidden = true;
+    if (discRow) discRow.hidden = true;
+  }
+  document.querySelector("#t-net").textContent = fmt(basis);
   document.querySelector("#t-tax").textContent = fmt(tax);
-  document.querySelector("#t-grand").textContent = fmt(net + tax);
+  document.querySelector("#t-grand").textContent = fmt(basis + tax);
   const vatLabel = window.VAT_LABEL || "USt";
   document.querySelector("#t-tax-label").textContent = rate > 0 ? vatLabel + " " + rate + " %" : vatLabel;
 }
@@ -31,6 +49,18 @@ function showProfileHint() {
   const profile = document.querySelector("#profile");
   const hint = document.querySelector("#profile-hint");
   if (profile && hint) hint.hidden = profile.value !== "xrechnung";
+}
+
+// Bezugsfelder (Storno/Korrektur) nur bei Belegart != 380 (normale Rechnung) zeigen.
+function toggleRefFields() {
+  const sel = document.querySelector("#doc_type");
+  if (!sel) return;
+  const show = sel.value !== "380";
+  document.querySelectorAll(".ref-field").forEach((el) => {
+    el.hidden = !show;
+  });
+  const refNo = document.querySelector("[name='ref_number']");
+  if (refNo) refNo.required = show;
 }
 
 // Bundesländer/Staaten je Land: [Code, Anzeigename]. Code wandert ins XML (BT-54).
@@ -485,11 +515,27 @@ function saveCustomerItems() {
 }
 
 let previewTimer;
+const A4_W = 794; // 210 mm bei 96 dpi – logische Breite der Mini-Vorschau
+const A4_H = 1123; // 297 mm bei 96 dpi – A4-Höhe (eine Seite)
+function scaleMiniPreview() {
+  const frame = document.getElementById("preview-frame");
+  const inner = frame && frame.parentElement;
+  const wrap = inner && inner.parentElement;
+  if (!frame || !inner || !wrap) return;
+  const wrapW = wrap.clientWidth;
+  const s = wrapW / A4_W;
+  frame.style.width = A4_W + "px";
+  frame.style.height = A4_H + "px";
+  frame.style.transform = "scale(" + s + ")";
+  inner.style.height = A4_H * s + "px";
+}
 function updatePreview() {
   const form = document.getElementById("invoice-form");
   const frame = document.getElementById("preview-frame");
   if (!form || !frame || !window.PREVIEW_URL) return;
-  fetch(window.PREVIEW_URL, { method: "POST", body: new FormData(form) })
+  const data = new FormData(form);
+  data.append("_full", "mini");
+  fetch(window.PREVIEW_URL, { method: "POST", body: data })
     .then((r) => r.text())
     .then((html) => {
       frame.srcdoc = html;
@@ -534,7 +580,10 @@ let sellerSaveTimer;
 function autosaveSeller() {
   const form = document.getElementById("settings-form");
   if (!form || !window.SELLER_AUTOSAVE_URL) return;
-  fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body: new FormData(form) }).catch(() => {});
+  // Nach dem Speichern Vorschau auffrischen (Stammdaten fließen ins PDF ein).
+  fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body: new FormData(form) })
+    .then(() => updatePreview())
+    .catch(() => {});
 }
 function scheduleSellerSave() {
   clearTimeout(sellerSaveTimer);
@@ -641,6 +690,7 @@ window.addEventListener("resize", repositionMenus);
 document.addEventListener("change", (e) => {
   if (e.target.id === "tax_treatment") showNote();
   if (e.target.id === "profile") showProfileHint();
+  if (e.target.id === "doc_type") toggleRefFields();
   if (e.target.id === "buyer_country") updateStateField();
   if (e.target.id === "saved_customer") {
     if (e.target.value !== "") fillCustomer(e.target.value);
@@ -745,6 +795,10 @@ let restoredFromLang = false;
 
 if (!restoredFromLang) applyDraft();
 
+const previewFrameEl = document.getElementById("preview-frame");
+if (previewFrameEl) previewFrameEl.addEventListener("load", scaleMiniPreview);
+window.addEventListener("resize", scaleMiniPreview);
+
 const previewExpandBtn = document.getElementById("preview-expand");
 if (previewExpandBtn) previewExpandBtn.addEventListener("click", openPreviewDrawer);
 const drawerCloseBtn = document.getElementById("drawer-close");
@@ -763,6 +817,7 @@ document.addEventListener("keydown", (e) => {
 
 showNote();
 showProfileHint();
+toggleRefFields();
 updateStateField();
 syncItemPeriods();
 syncAllUnitDisplays();
