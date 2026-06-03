@@ -52,11 +52,16 @@ TAX_TREATMENTS = {
         "reason": {"de": None, "en": None},
     },
     "non_eu": {
-        "category": "O",
+        # Kategorie AE (Reverse Charge) für Drittland-B2B (z. B. UK): der
+        # Leistungsempfänger schuldet die Steuer. Setzt – wie EU-Reverse-Charge –
+        # die USt-IdNr des Kunden voraus (BR-AE-02). NICHT O (verbietet USt-IdNr
+        # + Steuersatz, BR-O-02/05) und nicht G (Ausfuhr-Semantik passt für eine
+        # Dienstleistung schlechter).
+        "category": "AE",
         "rate": Decimal("0"),
         "label": {
-            "de": "Nicht steuerbar – Drittland (Dienstleistung)",
-            "en": "Not taxable – third country (service)",
+            "de": "Reverse Charge – Drittland (z. B. UK)",
+            "en": "Reverse charge – third country (e.g. UK)",
         },
         "note": {
             "de": (
@@ -68,6 +73,35 @@ TAX_TREATMENTS = {
                 "Not subject to German VAT — place of supply is where the customer "
                 "belongs (Sec. 3a(2) German VAT Act). VAT to be accounted for by the "
                 "recipient under the reverse-charge rules of the recipient's country."
+            ),
+        },
+        "reason": {
+            "de": "Nicht steuerbare sonstige Leistung (§ 3a Abs. 2 UStG)",
+            "en": "Non-taxable other service (Section 3a (2) UStG)",
+        },
+    },
+    "non_eu_g": {
+        # Fallback für Drittland-Kunden OHNE USt-IdNr: Kategorie G (steuerfreie
+        # Ausfuhr, "VAT not charged") verlangt nur die USt-IdNr des Verkäufers
+        # (BR-G-02), nicht die des Kunden – anders als AE. Reverse Charge gilt
+        # weiterhin; der Nachweis der Unternehmereigenschaft (z. B. UK: Certificate
+        # of Residence) wird separat aufbewahrt, nicht in der Rechnung.
+        "category": "G",
+        "rate": Decimal("0"),
+        "label": {
+            "de": "Nicht steuerbar – Drittland (ohne USt-IdNr)",
+            "en": "Not taxable – third country (no VAT ID)",
+        },
+        "note": {
+            "de": (
+                "Nicht im Inland steuerbare sonstige Leistung (§ 3a Abs. 2 UStG). "
+                "Die Steuer schuldet der Leistungsempfänger nach den Vorschriften "
+                "seines Landes."
+            ),
+            "en": (
+                "Not subject to German VAT — place of supply is where the customer "
+                "belongs (Sec. 3a(2) German VAT Act). VAT to be accounted for by the "
+                "recipient under the rules of the recipient's country."
             ),
         },
         "reason": {

@@ -53,8 +53,38 @@ function recalc() {
 }
 
 function showNote() {
-  const opt = document.querySelector("#tax_treatment option:checked");
+  const sel = document.querySelector("#tax_treatment");
+  const opt = sel.querySelector("option:checked");
   document.querySelector("#tax-note").textContent = opt.dataset.note || "";
+  // Reminder zum Nachweis der Unternehmereigenschaft nur bei Drittland-Fällen.
+  const proof = document.querySelector("#proof-hint");
+  if (proof) proof.hidden = !(sel.value === "non_eu" || sel.value === "non_eu_g");
+}
+
+// EU-Mitgliedstaaten (ISO-3166-1 alpha-2) für die automatische Steuer-Vorauswahl.
+const EU_COUNTRIES = new Set([
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "GR", "HU",
+  "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI",
+  "ES", "SE",
+]);
+// Empfängerland -> passende steuerliche Behandlung (Default, vom Nutzer überschreibbar).
+function deriveTreatment(country) {
+  country = (country || "DE").toUpperCase();
+  if (country === "DE") return "de_19";
+  if (EU_COUNTRIES.has(country)) return "eu_reverse";
+  return "non_eu";
+}
+// Steuerliche Behandlung passend zum Kundenland vorauswählen.
+// Kleinunternehmer bleibt unangetastet (hängt am Verkäuferstatus, nicht am Land).
+function autoSelectTreatment() {
+  const sel = document.querySelector("#tax_treatment");
+  if (!sel || sel.value === "kleinunternehmer") return;
+  const cc = document.querySelector("[name='buyer_country']");
+  const want = deriveTreatment(cc ? cc.value : "DE");
+  if (sel.value === want) return;
+  if (![...sel.options].some((o) => o.value === want)) return;
+  sel.value = want;
+  showNote();
 }
 
 function showProfileHint() {
@@ -750,10 +780,15 @@ document.addEventListener("change", (e) => {
   if (e.target.id === "doc_type") toggleRefFields();
   if (e.target.classList.contains("disc-type")) recalc();
   if (e.target.name === "currency") updateDiscTypeLabels();
-  if (e.target.id === "buyer_country") updateStateField();
+  if (e.target.id === "buyer_country") {
+    updateStateField();
+    autoSelectTreatment();
+  }
   if (e.target.id === "saved_customer") {
-    if (e.target.value !== "") fillCustomer(e.target.value);
-    else lastSavedCustomerName = "";
+    if (e.target.value !== "") {
+      fillCustomer(e.target.value);
+      autoSelectTreatment();
+    } else lastSavedCustomerName = "";
     refreshSavedItems();
   }
   if (e.target.matches('#items [name="description"]')) {
@@ -839,7 +874,7 @@ document.addEventListener("submit", (e) => {
   if (e.submitter && e.submitter.hasAttribute("formaction")) return; // nur der Erzeugen-Button
   const treatment = document.querySelector("#tax_treatment");
   const vat = form.querySelector('[name="buyer_vat_id"]');
-  if (treatment && treatment.value === "eu_reverse" && vat && !vat.value.trim()) {
+  if (treatment && (treatment.value === "eu_reverse" || treatment.value === "non_eu") && vat && !vat.value.trim()) {
     e.preventDefault();
     vat.setCustomValidity(window.MSG_NEED_BUYER_VAT || "VAT ID required");
     vat.reportValidity();

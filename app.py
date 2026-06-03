@@ -525,7 +525,7 @@ def generate():
     if not data["items"]:
         flash(translate(get_ui_lang(request))["need_item"], "err")
         return redirect(url_for("index"))
-    if data["invoice"]["tax_treatment"] == "eu_reverse" and not data["buyer"].get("vat_id"):
+    if data["invoice"]["tax_treatment"] in ("eu_reverse", "non_eu") and not data["buyer"].get("vat_id"):
         flash(translate(get_ui_lang(request))["need_buyer_vat"], "err")
         return redirect(url_for("index"))
     if data["invoice"]["profile"] == "xrechnung":

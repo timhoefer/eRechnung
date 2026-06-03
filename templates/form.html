@@ -153,6 +153,7 @@
       </select>
     </label>
     <p class="hint" id="tax-note"></p>
+    <p class="hint" id="proof-hint" hidden>{{ t.proof_hint }}</p>
   </div>
 
   <div class="card">
@@ -282,6 +283,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=20"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=23"></script>
 </body>
 </html>
