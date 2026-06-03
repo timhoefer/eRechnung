@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=22">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=23">
 </head>
 <body>
 <header>
@@ -185,15 +185,28 @@
         </tr>
         <tr class="item-extra">
           <td colspan="6">
-            <button type="button" class="add-period">{{ t.add_period }}</button>
-            <label class="period-label" hidden>{{ t.service_period }}
-              <span class="period">
-                <input name="item_start" type="date" aria-label="{{ t.service_from }}">
-                <span class="period-sep">–</span>
-                <input name="item_end" type="date" aria-label="{{ t.service_to }}">
-                <button type="button" class="del-period" title="{{ t.remove_period }}" aria-label="{{ t.remove_period }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
-              </span>
-            </label>
+            <div class="extra-row">
+              <button type="button" class="add-period">{{ t.add_period }}</button>
+              <label class="period-label" hidden>{{ t.service_period }}
+                <span class="period">
+                  <input name="item_start" type="date" aria-label="{{ t.service_from }}">
+                  <span class="period-sep">–</span>
+                  <input name="item_end" type="date" aria-label="{{ t.service_to }}">
+                  <button type="button" class="del-period" title="{{ t.remove_period }}" aria-label="{{ t.remove_period }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
+                </span>
+              </label>
+              <button type="button" class="add-discount">{{ t.add_discount }}</button>
+              <label class="discount-label" hidden>{{ t.discount }}
+                <span class="line-disc">
+                  <input name="item_discount" class="num disc-input" inputmode="decimal" value="0" aria-label="{{ t.discount }}">
+                  <select name="item_discount_type" class="disc-type" aria-label="{{ t.discount }}">
+                    <option value="pct">%</option>
+                    <option value="abs">€</option>
+                  </select>
+                  <button type="button" class="del-discount" title="{{ t.remove_discount }}" aria-label="{{ t.remove_discount }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
+                </span>
+              </label>
+            </div>
           </td>
         </tr>
       </tbody>
@@ -269,6 +282,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=19"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20"></script>
 </body>
 </html>

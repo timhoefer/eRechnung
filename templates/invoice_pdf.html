@@ -139,7 +139,7 @@
     <tbody>
       {% for it in items %}
       <tr>
-        <td>{{ it.description }}{% if it.item_start and it.item_end %}<div class="line-period">{{ ti.pdf_service_period }}: {{ it.item_start|datefmt }} – {{ it.item_end|datefmt }}</div>{% endif %}</td>
+        <td>{{ it.description }}{% if it.item_start and it.item_end %}<div class="line-period">{{ ti.pdf_service_period }}: {{ it.item_start|datefmt }} – {{ it.item_end|datefmt }}</div>{% endif %}{% if it.line_disc and it.line_disc > 0 %}<div class="line-period">{{ ti.pdf_discount }}{% if it.disc_type == 'pct' %} {{ '%g'|format(it.disc_val) }}&nbsp;%{% endif %}: − {{ inv.currency }} {{ it.line_disc|money(inv.language) }}</div>{% endif %}</td>
         <td class="r">{{ it.qty|qtyfmt(inv.language) }} {{ unit_labels.get(it.unit, '') }}</td>
         <td class="r">{{ inv.currency }} {{ it.unit_price|money(inv.language) }}</td>
         <td class="r">{{ inv.currency }} {{ it.net|money(inv.language) }}</td>

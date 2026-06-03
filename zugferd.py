@@ -142,9 +142,27 @@ def compute_totals(items, rate: Decimal, discount=Decimal("0")):
     for it in items:
         qty = Decimal(str(it["quantity"]))
         unit_price = Decimal(str(it["unit_price"]))
-        net = q(qty * unit_price)
+        gross = q(qty * unit_price)
+        # Positions-Rabatt (BG-27): Prozent oder fester Betrag, auf [0, gross] begrenzt.
+        d_type = it.get("item_discount_type") or "pct"
+        d_val = Decimal(str(it.get("item_discount") or "0"))
+        if d_val < Decimal("0"):
+            d_val = Decimal("0")
+        if d_type == "abs":
+            line_disc = q(d_val)
+            if line_disc > gross:
+                line_disc = gross
+        else:  # pct
+            if d_val > Decimal("100"):
+                d_val = Decimal("100")
+            line_disc = q(gross * d_val / Decimal("100"))
+        net = q(gross - line_disc)
         line_total += net
-        computed.append({**it, "net": net, "qty": qty, "unit_price": unit_price})
+        computed.append({
+            **it, "qty": qty, "unit_price": unit_price, "gross": gross,
+            "line_disc": line_disc, "disc_type": d_type, "disc_val": d_val,
+            "net": net,
+        })
     line_total = q(line_total)
     discount = q(discount)
     if discount < Decimal("0"):
@@ -283,6 +301,16 @@ def build_xml(data) -> bytes:
         if it.get("item_start") and it.get("item_end"):
             li.settlement.period.start = _parse_date(it["item_start"])
             li.settlement.period.end = _parse_date(it["item_end"])
+        # BG-27 Positions-Nachlass (Rabatt): mindert das Positions-Netto (BT-131).
+        if it.get("line_disc", 0) > 0:
+            lac = TradeAllowanceCharge()
+            lac.indicator = False  # Abschlag
+            lac.actual_amount = it["line_disc"]  # BT-136
+            if it.get("disc_type") == "pct" and it.get("disc_val"):
+                lac.calculation_percent = it["disc_val"]  # BT-138
+                lac.basis_amount = it["gross"]  # BT-137
+            lac.reason = "Rabatt" if lang != "en" else "Discount"  # BT-139
+            li.settlement.allowance_charge.add(lac)
         li.settlement.monetary_summation.total_amount = it["net"]
         doc.trade.items.add(li)
 

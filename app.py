@@ -272,6 +272,8 @@ def parse_items(form) -> list[dict]:
     items = []
     starts = form.getlist("item_start")
     ends = form.getlist("item_end")
+    discounts = form.getlist("item_discount")
+    discount_types = form.getlist("item_discount_type")
     for i, (desc, qty, unit, price) in enumerate(
         zip(
             form.getlist("description"),
@@ -290,6 +292,8 @@ def parse_items(form) -> list[dict]:
                 "unit_price": (price or "0").replace(",", "."),
                 "item_start": (starts[i] if i < len(starts) else "") or None,
                 "item_end": (ends[i] if i < len(ends) else "") or None,
+                "item_discount": ((discounts[i] if i < len(discounts) else "0") or "0").replace(",", "."),
+                "item_discount_type": (discount_types[i] if i < len(discount_types) else "pct") or "pct",
             }
         )
     return items

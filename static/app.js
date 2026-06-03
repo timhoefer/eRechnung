@@ -10,9 +10,21 @@ function recalc() {
   const rate = num(document.querySelector("#tax_treatment option:checked").dataset.rate);
   let net = 0;
   document.querySelectorAll("#items tbody .item").forEach((row) => {
-    const sum = num(row.querySelector(".qty").value) * num(row.querySelector(".price").value);
-    row.querySelector(".line-sum").textContent = fmt(sum);
-    net += sum;
+    const gross = num(row.querySelector(".qty").value) * num(row.querySelector(".price").value);
+    const extra = row.nextElementSibling;
+    let lineDisc = 0;
+    if (extra) {
+      const dInp = extra.querySelector(".disc-input");
+      const dType = extra.querySelector(".disc-type");
+      const dVal = dInp ? num(dInp.value) : 0;
+      if (dVal > 0) {
+        if (dType && dType.value === "abs") lineDisc = Math.min(dVal, gross);
+        else lineDisc = (gross * Math.min(dVal, 100)) / 100;
+      }
+    }
+    const lineNet = gross - lineDisc;
+    row.querySelector(".line-sum").textContent = fmt(lineNet);
+    net += lineNet;
   });
   const discEl = document.querySelector("#discount");
   let discount = discEl ? num(discEl.value) : 0;
@@ -129,9 +141,15 @@ function addRow() {
   clone.querySelector(".line-sum").textContent = fmt(0);
   const cloneExtra = first.nextElementSibling.cloneNode(true); // zugehörige Zusatz-Zeile
   cloneExtra.querySelectorAll("input").forEach((i) => (i.value = ""));
+  const dInp = cloneExtra.querySelector(".disc-input");
+  if (dInp) dInp.value = "0";
+  const dType = cloneExtra.querySelector(".disc-type");
+  if (dType) dType.selectedIndex = 0;
   tbody.appendChild(clone);
   tbody.appendChild(cloneExtra);
   showItemPeriod(clone, false); // neue Zeile startet ohne Leistungszeitraum
+  showItemDiscount(clone, false); // … und ohne Rabatt
+  updateDiscTypeLabels();
 }
 
 // Leistungszeitraum einer Position ein-/ausblenden; beim Entfernen Datumsfelder leeren.
@@ -151,8 +169,47 @@ function showItemPeriod(row, show) {
 function syncItemPeriods() {
   document.querySelectorAll("#items tbody .item").forEach((row) => {
     const extra = row.nextElementSibling;
-    const has = extra ? [...extra.querySelectorAll("input")].some((i) => i.value) : false;
+    const pl = extra ? extra.querySelector(".period-label") : null;
+    const has = pl ? [...pl.querySelectorAll("input")].some((i) => i.value) : false;
     showItemPeriod(row, has);
+  });
+}
+
+// Positions-Rabatt einer Zeile ein-/ausblenden; beim Entfernen Wert zurücksetzen.
+function showItemDiscount(row, show) {
+  const extra = row.nextElementSibling;
+  if (!extra) return;
+  const addBtn = extra.querySelector(".add-discount");
+  const label = extra.querySelector(".discount-label");
+  if (!addBtn || !label) return;
+  addBtn.hidden = show;
+  label.hidden = !show;
+  if (!show) {
+    const inp = label.querySelector(".disc-input");
+    if (inp) inp.value = "0";
+    const sel = label.querySelector(".disc-type");
+    if (sel) sel.selectedIndex = 0;
+  }
+}
+
+// Beim Laden/Wiederherstellen: Rabatt nur dort zeigen, wo ein Wert > 0 steht.
+function syncItemDiscounts() {
+  document.querySelectorAll("#items tbody .item").forEach((row) => {
+    const extra = row.nextElementSibling;
+    const inp = extra ? extra.querySelector(".disc-input") : null;
+    showItemDiscount(row, !!(inp && num(inp.value) > 0));
+  });
+}
+
+// Beschriftung der „Betrag“-Option am Währungssymbol ausrichten.
+function currencySymbol(code) {
+  return { EUR: "€", USD: "$", GBP: "£", CHF: "CHF", JPY: "¥" }[code] || code || "€";
+}
+function updateDiscTypeLabels() {
+  const curEl = document.querySelector("[name='currency']");
+  const sym = currencySymbol((curEl ? curEl.value : "EUR").trim().toUpperCase());
+  document.querySelectorAll(".disc-type option[value='abs']").forEach((o) => {
+    o.textContent = sym;
   });
 }
 
@@ -166,7 +223,7 @@ function snapshotForm(form) {
 }
 function restoreForm(form, data) {
   if (!form || !data) return;
-  const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end"];
+  const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end", "item_discount", "item_discount_type"];
   const itemCount = (data.description || []).length;
   let rows = form.querySelectorAll("#items tbody .item").length;
   while (rows < itemCount) {
@@ -691,6 +748,8 @@ document.addEventListener("change", (e) => {
   if (e.target.id === "tax_treatment") showNote();
   if (e.target.id === "profile") showProfileHint();
   if (e.target.id === "doc_type") toggleRefFields();
+  if (e.target.classList.contains("disc-type")) recalc();
+  if (e.target.name === "currency") updateDiscTypeLabels();
   if (e.target.id === "buyer_country") updateStateField();
   if (e.target.id === "saved_customer") {
     if (e.target.value !== "") fillCustomer(e.target.value);
@@ -745,6 +804,19 @@ document.addEventListener("click", (e) => {
   if (delP) {
     const extra = delP.closest(".item-extra");
     if (extra) showItemPeriod(extra.previousElementSibling, false);
+    schedulePreview();
+  }
+  const addD = e.target.closest(".add-discount");
+  if (addD) {
+    const extra = addD.closest(".item-extra");
+    if (extra) showItemDiscount(extra.previousElementSibling, true);
+    schedulePreview();
+  }
+  const delD = e.target.closest(".del-discount");
+  if (delD) {
+    const extra = delD.closest(".item-extra");
+    if (extra) showItemDiscount(extra.previousElementSibling, false);
+    recalc();
     schedulePreview();
   }
   if (e.target.classList.contains("del")) {
@@ -820,6 +892,8 @@ showProfileHint();
 toggleRefFields();
 updateStateField();
 syncItemPeriods();
+syncItemDiscounts();
+updateDiscTypeLabels();
 syncAllUnitDisplays();
 refreshSavedItems();
 recalc();

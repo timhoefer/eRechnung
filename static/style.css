@@ -108,33 +108,34 @@ table#items input { padding: 7px 8px; }
 .totals, .line-sum, table.summary td:last-child { font-variant-numeric: tabular-nums; }
 .period { display: flex; align-items: center; gap: 8px; }
 .period-sep { color: var(--muted); }
-.add-period {
-  display: block; width: fit-content; margin-bottom: 14px;
-  padding: 0; background: none; color: var(--accent);
+.line-disc { display: flex; align-items: center; gap: 8px; }
+.disc-input { width: 84px; }
+.disc-type { width: 76px; }
+/* Toggle-Zeile: „+ Leistungszeitraum“ und „+ Rabatt“ nebeneinander, umbruchfähig. */
+.extra-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin-bottom: 14px; }
+.add-period, .add-discount {
+  width: fit-content; padding: 0; border: none; background: none; color: var(--accent);
   font-size: 12px; font-weight: 600;
 }
-.add-period:hover { background: none; color: var(--accent-d); text-decoration: underline; }
+.add-period:hover, .add-discount:hover { background: none; color: var(--accent-d); text-decoration: underline; }
 .item-extra td { padding: 2px 4px 28px; }
-/* Zusätzlicher Abstand nur wenn der Leistungszeitraum aufgeklappt ist:
-   liegt auf .period-label, die sonst via [hidden] komplett entfernt wird
-   – unabhängig von JS-Klassen/Cache. */
-.period-label { margin-bottom: 14px; }
+.period-label, .discount-label { margin: 0; }
+.period-label .period, .discount-label .line-disc { margin-top: 4px; }
 #items tbody .item td { border-top: 1px solid var(--line); padding-top: 22px; }
 #items tbody .item:first-child td { border-top: none; padding-top: 3px; }
-.period-label .period { margin-top: 4px; }
-.del-period { flex: 0 0 auto; }
+.del-period, .del-discount { flex: 0 0 auto; }
 .line-sum {
   display: block; width: 100%; padding: 7px 8px;
   border: 1px solid var(--line); border-radius: 8px; background: #f5f6f8;
   color: var(--muted); text-align: right; font-size: 14px;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.del, .del-period {
+.del, .del-period, .del-discount {
   display: inline-flex; align-items: center; justify-content: center;
   border: none; background: #fbeaea; color: var(--err); width: 37px; height: 37px;
   border-radius: 7px; cursor: pointer; font-size: 17px; line-height: 1; padding: 0;
 }
-.del:hover, .del-period:hover { background: #f5d9d9; }
+.del:hover, .del-period:hover, .del-discount:hover { background: #f5d9d9; }
 button {
   font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 9px; cursor: pointer;
   border: none; background: var(--accent); color: #fff;
