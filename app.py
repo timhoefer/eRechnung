@@ -345,9 +345,11 @@ def _assemble(form):
         items, treatment["rate"]
     )
     unit_labels = {code: loc(label, inv_lang) for code, label in UNITS}
+    body_class = "page" if form.get("_full") else ""
     html = render_template(
         "invoice_pdf.html",
         ti=translate(inv_lang),  # Übersetzungen in Rechnungssprache
+        body_class=body_class,
         seller=seller,
         buyer=buyer,
         buyer_address_lines=format_buyer_address(buyer, inv_lang),

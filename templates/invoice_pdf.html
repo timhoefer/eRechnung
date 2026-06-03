@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{ inv.language }}">
+<html lang="{{ inv.language }}" class="{{ body_class }}">
 <head>
 <meta charset="utf-8">
 <style>
@@ -18,7 +18,7 @@
 
   .head { display: flex; justify-content: space-between; align-items: flex-start; }
   .recipient { max-width: 90mm; }
-  .addr-label { font-size: 8pt; color: #888; text-transform: uppercase;
+  .addr-label { font-size: 8pt; font-weight: 600; color: #666; text-transform: uppercase;
     letter-spacing: .5px; margin-bottom: 1.5mm; }
   .recipient .name { font-weight: 600; }
   .recipient div { margin: .3mm 0; }
@@ -27,10 +27,11 @@
   .sender .contact tr td { padding: .2mm 0; vertical-align: top; }
   .sender .contact .k { color: #888; padding-right: 4mm; text-align: right; white-space: nowrap; }
   .sender .contact .v { text-align: left; white-space: nowrap; }
-  .sender .contact .name { font-weight: 700; font-size: 11pt; }
+  .sender .contact .name { font-weight: 700; font-size: 10pt; }
   .sender .contact .subtitle { color: #555; }
   .sender .contact .gap { padding-top: 2mm; }
   .sender .contact .block-end { padding-bottom: 2.5mm; }
+  .sender .contact .taxgap { padding-top: 2.5mm; }
 
   .invoice-line { margin-top: 16mm; }
   .invoice-line .no { font-weight: 700; font-size: 14pt; }
@@ -41,19 +42,20 @@
   .intro p { margin: 0 0 2mm; }
 
   table.items { width: 100%; border-collapse: collapse; margin-top: 6mm; }
-  table.items th { text-align: left; font-size: 8pt; text-transform: uppercase;
-    letter-spacing: .4px; color: #666; border-bottom: 1.5px solid #333; padding: 0 4px 4px; }
-  table.items td { padding: 6px 4px; border-bottom: .5px solid #e2e2e2; vertical-align: top; }
+  table.items th { text-align: left; font-size: 8pt; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .5px; color: #666; border-bottom: 1px solid #999; padding: 0 0 5px; }
+  table.items td { padding: 9px 0; border-bottom: .5px solid #e2e2e2; vertical-align: top; }
+  table.items tr:last-child td { border-bottom: none; }
   table.items td.r, table.items th.r { text-align: right; white-space: nowrap;
     font-variant-numeric: tabular-nums; }
   .line-period { font-size: 8pt; color: #666; margin-top: 1mm; }
 
-  .totals { margin-top: 6mm; margin-left: auto; width: 78mm; font-size: 9pt; }
-  .totals div { display: flex; justify-content: space-between; padding: 2.5px 4px; }
+  .totals { margin-top: 0; font-size: 10pt; border-top: 1px solid #999; padding-top: 3mm; }
+  .totals div { display: flex; justify-content: space-between; padding: 1mm 0; }
   .totals .amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .totals .rc { color: #444; font-size: 9pt; }
-  .totals .grand { border: 1.5px solid #333; font-weight: 700; font-size: 11pt;
-    margin-top: 3mm; padding: 3mm 4px; }
+  .totals .rc { color: #444; }
+  .totals .grand { font-weight: 700; font-size: 11pt; margin-top: 2mm;
+    border-top: 1.5px solid #1a1a1a; padding-top: 2mm; }
 
   .note { margin-top: 8mm; font-size: 9pt; color: #333; background: #f6f6f6;
     padding: 4mm; border-left: 3px solid #999; line-height: 1.4; }
@@ -70,9 +72,16 @@
 
   /* Nur in der Live-Vorschau (iframe), nicht im PDF: Innenabstand wie der Druckrand */
   @media screen { body { padding: 24px 28px; } }
+
+  /* Drawer-Vorschau: echtes A4-Blatt in 100% Größe (WeasyPrint ignoriert @media screen) */
+  @media screen {
+    html.page { background: #d8d8dc; }
+    body.page { width: 210mm; min-height: 297mm; margin: 16mm auto; padding: 22mm 18mm 24mm 18mm;
+      background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,.22); }
+  }
 </style>
 </head>
-<body>
+<body class="{{ body_class }}">
   <div class="head">
     <div class="recipient">
       <div class="addr-label">{{ ti.pdf_bill_to }}</div>
@@ -82,6 +91,7 @@
       {% if buyer.vat_id %}<div>{{ ti.vat_id }}: {{ buyer.vat_id }}</div>{% endif %}
     </div>
     <div class="sender">
+      <div class="addr-label" aria-hidden="true" style="margin:0">&nbsp;</div>
       <table class="contact">
         <tr><td class="k"></td><td class="v name">{{ seller.name }}</td></tr>
         {% if seller.subtitle %}<tr><td class="k"></td><td class="v subtitle">{{ seller.subtitle }}</td></tr>{% endif %}
@@ -90,8 +100,8 @@
         {% if seller.phone %}<tr><td class="k">{{ ti.phone }}</td><td class="v">{{ seller.phone }}</td></tr>{% endif %}
         {% if seller.email %}<tr><td class="k">{{ ti.email }}</td><td class="v">{{ seller.email }}</td></tr>{% endif %}
         {% if seller.web %}<tr><td class="k">{{ ti.web.split(' ')[0] }}</td><td class="v">{{ seller.web }}</td></tr>{% endif %}
-        {% if seller.vat_id %}<tr><td class="k">{{ ti.vat_id }}</td><td class="v">{{ seller.vat_id }}</td></tr>{% endif %}
-        {% if seller.tax_number %}<tr><td class="k">{{ ti.tax_number }}</td><td class="v">{{ seller.tax_number }}</td></tr>{% endif %}
+        {% if seller.vat_id %}<tr><td class="k taxgap">{{ ti.vat_id }}</td><td class="v taxgap">{{ seller.vat_id }}</td></tr>{% endif %}
+        {% if seller.tax_number %}<tr><td class="k{% if not seller.vat_id %} taxgap{% endif %}">{{ ti.tax_number }}</td><td class="v{% if not seller.vat_id %} taxgap{% endif %}">{{ seller.tax_number }}</td></tr>{% endif %}
       </table>
     </div>
   </div>
