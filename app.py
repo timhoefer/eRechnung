@@ -60,16 +60,49 @@ def _resolve_data_dir() -> Path:
     return BASE
 
 
+def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
+    """Aus src_dir alle Datendateien entfernen, die in ref_dir byte-identisch
+    vorliegen (sicheres 'Verschieben'/Aufräumen). Es wird nichts gelöscht, wenn
+    die Kopie fehlt oder abweicht – Datenverlust ist damit ausgeschlossen."""
+    if src_dir.resolve() == ref_dir.resolve():
+        return
+    import filecmp
+
+    def rm(s: Path, r: Path) -> None:
+        try:
+            if s.is_file() and r.is_file() and filecmp.cmp(s, r, shallow=False):
+                s.unlink()
+        except OSError:
+            pass
+
+    rm(src_dir / "seller.json", ref_dir / "seller.json")
+    rm(src_dir / "customers.json", ref_dir / "customers.json")
+    src_out = src_dir / "output"
+    if src_out.is_dir():
+        for f in list(src_out.iterdir()):
+            if f.is_file():
+                rm(f, ref_dir / "output" / f.name)
+        try:
+            if not any(src_out.iterdir()):
+                src_out.rmdir()
+        except OSError:
+            pass
+
+
 DATA_DIR = _resolve_data_dir()
 SELLER_FILE = DATA_DIR / "seller.json"
 CUSTOMERS_FILE = DATA_DIR / "customers.json"
 OUTPUT_DIR = DATA_DIR / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# Eigener Datenordner aktiv? Dann im App-Ordner verbliebene identische
+# Kopien aufräumen (z. B. nach einem früheren Umzug).
+_drop_identical(BASE, DATA_DIR)
 
 
 def set_data_dir(raw: str):
-    """Datenordner umstellen: prüfen, vorhandene Daten kopieren (ohne zu
-    überschreiben), Pfad speichern, globale Pfade aktualisieren. -> (ok, key)."""
+    """Datenordner umstellen: prüfen, vorhandene Daten in den neuen Ordner
+    verschieben (ohne zu überschreiben; Original erst nach verifizierter
+    Kopie entfernt), Pfad speichern, globale Pfade aktualisieren. -> (ok, key)."""
     global DATA_DIR, SELLER_FILE, CUSTOMERS_FILE, OUTPUT_DIR
     import shutil
 
@@ -113,6 +146,9 @@ def set_data_dir(raw: str):
     CUSTOMERS_FILE = target / "customers.json"
     OUTPUT_DIR = target / "output"
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Verschieben abschließen: identische Originale im alten Ordner entfernen.
+    if target.resolve() != old.resolve():
+        _drop_identical(old, target)
     return True, "data_dir_ok"
 
 app = Flask(__name__)
