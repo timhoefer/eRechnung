@@ -151,6 +151,46 @@ def set_data_dir(raw: str):
         _drop_identical(old, target)
     return True, "data_dir_ok"
 
+def _file_info(p: Path) -> dict:
+    try:
+        ts = datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+    except OSError:
+        ts = "?"
+    return {"path": str(p), "modified": ts}
+
+
+def data_conflicts() -> list:
+    """Mögliche Datenkonflikte erkennen (nie automatisch auflösen):
+    - abweichende/verwaiste Kopien im App-Ordner, wenn ein eigener Datenordner aktiv ist
+    - Dropbox-/Sync-Konfliktkopien im aktiven Datenordner."""
+    import filecmp
+
+    out = []
+    if DATA_DIR.resolve() != BASE.resolve():
+        for name in ("seller.json", "customers.json"):
+            s, r = BASE / name, DATA_DIR / name
+            if s.is_file() and r.is_file():
+                try:
+                    same = filecmp.cmp(s, r, shallow=False)
+                except OSError:
+                    same = True
+                if not same:
+                    out.append(
+                        {"type": "leftover", "name": name,
+                         "a": _file_info(s), "b": _file_info(r)}
+                    )
+            elif s.is_file() and not r.is_file():
+                out.append({"type": "orphan", "name": name, "a": _file_info(s)})
+
+    markers = ("conflicted copy", "in konflikt stehende", "in-konflikt", "konfliktkopie")
+    for d in (DATA_DIR, DATA_DIR / "output"):
+        if d.is_dir():
+            for f in sorted(d.iterdir()):
+                if f.is_file() and any(m in f.name.lower() for m in markers):
+                    out.append({"type": "sync", "name": f.name, "a": _file_info(f)})
+    return out
+
+
 app = Flask(__name__)
 app.secret_key = "erechnung-local"  # nur für Flash-Messages, rein lokal
 
@@ -827,6 +867,7 @@ def validate():
         data_dir=str(DATA_DIR),
         data_dir_custom=DATA_DIR.resolve() != BASE.resolve(),
         can_browse=(sys.platform == "darwin"),
+        conflicts=data_conflicts(),
     )
 
 

@@ -18,6 +18,29 @@
   {% endfor %}
 {% endwith %}
 
+{% if conflicts %}
+<div class="card status warn">
+  <strong>⚠ {{ t.conflict_title }}</strong>
+  <p class="hint" style="margin:6px 0 0">{{ t.conflict_hint }}</p>
+  <ul class="conflicts">
+    {% for c in conflicts %}
+      {% if c.type == 'leftover' %}
+        <li><strong>{{ c.name }}</strong> — {{ t.conflict_leftover }}<br>
+          <code>{{ c.a.path }}</code> ({{ c.a.modified }})<br>
+          <code>{{ c.b.path }}</code> ({{ c.b.modified }})<br>
+          <span class="hint">{{ t.conflict_uses_data }}</span></li>
+      {% elif c.type == 'orphan' %}
+        <li><strong>{{ c.name }}</strong> — {{ t.conflict_orphan }}<br>
+          <code>{{ c.a.path }}</code> ({{ c.a.modified }})</li>
+      {% elif c.type == 'sync' %}
+        <li>{{ t.conflict_sync }}<br>
+          <code>{{ c.a.path }}</code> ({{ c.a.modified }})</li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 {% if result %}
 <div class="card status {{ 'ok' if result.ok else 'err' }}">
   <strong>{{ '✓' if result.ok else '✗' }} {{ result.label }}</strong>
