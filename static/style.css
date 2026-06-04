@@ -214,7 +214,7 @@ button.secondary:hover { background: #e0e3e9; }
 .flash.ok { border-color: var(--ok); color: var(--ok); background: #f0fdf4; }
 .flash.err { border-color: var(--err); color: var(--err); background: #fef2f2; }
 
-.customer-bar { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 14px; }
+.customer-bar { display: flex; gap: 12px; align-items: flex-end; margin-top: 16px; }
 .customer-bar label { flex: 1; }
 .customer-bar .spacer { flex: 1; }
 button.danger { color: var(--err); background: #fbeaea; }

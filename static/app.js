@@ -87,16 +87,6 @@ function autoSelectTreatment() {
   showNote();
 }
 
-// "z.Hd. / c/o" ein-/ausklappen (analog zum Leistungszeitraum bei den Positionen).
-function syncAttnField() {
-  const label = document.querySelector(".attn-label");
-  const btn = document.querySelector(".add-attn");
-  const inp = document.querySelector("[name='buyer_contact']");
-  if (!label || !btn || !inp) return;
-  const has = !!inp.value.trim();
-  label.hidden = !has;
-  btn.hidden = has;
-}
 
 function currentProfile() {
   const el = document.getElementById("profile");
@@ -423,9 +413,12 @@ function applyDraft() {
 }
 
 function currentCustomer() {
-  const sel = document.querySelector("#saved_customer");
-  if (!sel || sel.value === "") return null;
-  return (window.CUSTOMERS || [])[sel.value] || null;
+  const el = document.querySelector("[name='buyer_name']");
+  const name = el && el.value.trim().toLowerCase();
+  if (!name) return null;
+  return (window.CUSTOMERS || []).find(
+    (c) => (c.name || "").trim().toLowerCase() === name
+  ) || null;
 }
 
 // Pool gespeicherter Positionen: bei gewähltem Kunden dessen Positionen,
@@ -560,6 +553,87 @@ function applySavedItemToRow(row) {
   syncUnitDisplay(u);
   if (it.unit_price) row.querySelector(".price").value = it.unit_price;
   recalc();
+}
+
+// ---- Kunden-Combobox: Name/Firma schlägt gespeicherte Kunden vor ----------
+let custMenu = null;
+let custInput = null;
+let custIndex = -1;
+function ensureCustMenu() {
+  if (custMenu) return custMenu;
+  custMenu = document.createElement("div");
+  custMenu.className = "combo-menu";
+  custMenu.hidden = true;
+  document.body.appendChild(custMenu);
+  return custMenu;
+}
+function closeCustMenu() {
+  if (custMenu) custMenu.hidden = true;
+  if (custInput) custInput.setAttribute("aria-expanded", "false");
+  custInput = null;
+  custIndex = -1;
+}
+function positionCustMenu(input) {
+  const r = input.getBoundingClientRect();
+  custMenu.style.left = r.left + "px";
+  custMenu.style.top = r.bottom + 3 + "px";
+  custMenu.style.width = Math.max(r.width, 240) + "px";
+}
+function openCustMenu(input) {
+  const menu = ensureCustMenu();
+  custInput = input;
+  custIndex = -1;
+  const q = input.value.trim().toLowerCase();
+  const pool = (window.CUSTOMERS || [])
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => !q || (c.name || "").toLowerCase().includes(q));
+  menu.innerHTML = "";
+  menu._pool = pool;
+  if (pool.length === 0) {
+    menu.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    return;
+  }
+  pool.forEach(({ c, i }, idx) => {
+    const opt = document.createElement("div");
+    opt.className = "combo-opt";
+    opt.dataset.index = idx;
+    const d = document.createElement("span");
+    d.className = "combo-opt-desc";
+    d.textContent = c.name || "";
+    opt.appendChild(d);
+    const sub = [c.city, c.vat_id].filter(Boolean).join(" · ");
+    if (sub) {
+      const p = document.createElement("span");
+      p.className = "combo-opt-price";
+      p.textContent = sub;
+      opt.appendChild(p);
+    }
+    opt.addEventListener("mousedown", (ev) => {
+      ev.preventDefault();
+      chooseCust(i);
+    });
+    menu.appendChild(opt);
+  });
+  positionCustMenu(input);
+  menu.hidden = false;
+  input.setAttribute("aria-expanded", "true");
+}
+function chooseCust(idx) {
+  fillCustomer(idx);
+  closeCustMenu();
+  autoSelectTreatment();
+  refreshSavedItems();
+  recalc();
+  schedulePreview();
+}
+function highlightCust(delta) {
+  if (!custMenu || custMenu.hidden) return;
+  const opts = custMenu.querySelectorAll(".combo-opt");
+  if (!opts.length) return;
+  custIndex = (custIndex + delta + opts.length) % opts.length;
+  opts.forEach((o, i) => o.classList.toggle("active", i === custIndex));
+  opts[custIndex].scrollIntoView({ block: "nearest" });
 }
 
 // ---- Eigenes Einheiten-Dropdown (gestylt wie die Beschreibungs-Combobox) ----
@@ -781,9 +855,11 @@ document.addEventListener("input", (e) => {
   schedulePreview();
   if (e.target.name && e.target.name.startsWith("buyer_")) scheduleCustomerSave();
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
+  if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
 });
 document.addEventListener("focusin", (e) => {
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
+  if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
 });
 document.addEventListener("keydown", (e) => {
   if (!e.target.matches('#items [name="description"]')) return;
@@ -809,10 +885,39 @@ document.addEventListener("keydown", (e) => {
     closeComboMenu();
   }
 });
+// Tastaturbedienung der Kunden-Combobox.
+document.addEventListener("keydown", (e) => {
+  if (!e.target.classList || !e.target.classList.contains("cust-name")) return;
+  if (!custMenu || custMenu.hidden) {
+    if (e.key === "ArrowDown") {
+      openCustMenu(e.target);
+      e.preventDefault();
+    }
+    return;
+  }
+  if (e.key === "ArrowDown") {
+    highlightCust(1);
+    e.preventDefault();
+  } else if (e.key === "ArrowUp") {
+    highlightCust(-1);
+    e.preventDefault();
+  } else if (e.key === "Enter") {
+    const pool = custMenu._pool;
+    if (custIndex >= 0 && pool && pool[custIndex]) {
+      chooseCust(pool[custIndex].i);
+      e.preventDefault();
+    }
+  } else if (e.key === "Escape") {
+    closeCustMenu();
+  }
+});
 document.addEventListener("mousedown", (e) => {
   const inMenu = e.target.closest(".combo-menu");
-  if (!e.target.closest(".combo") && !inMenu) closeComboMenu();
+  const combo = e.target.closest(".combo");
+  if (!combo && !inMenu) closeComboMenu();
   if (!e.target.closest(".unitsel") && !inMenu) closeUnitMenu();
+  const inCustCombo = combo && combo.querySelector(".cust-name");
+  if (!inCustCombo && !inMenu) closeCustMenu();
 });
 // Tastaturbedienung des Einheiten-Dropdowns.
 document.addEventListener("keydown", (e) => {
@@ -841,6 +946,7 @@ document.addEventListener("keydown", (e) => {
 });
 function repositionMenus() {
   if (comboInput && comboMenu && !comboMenu.hidden) positionComboMenu(comboInput);
+  if (custInput && custMenu && !custMenu.hidden) positionCustMenu(custInput);
   if (unitSelectEl && unitMenu && !unitMenu.hidden) {
     const btn = unitSelectEl.parentElement.querySelector(".unitsel-btn");
     if (btn) positionUnitMenu(btn);
@@ -856,14 +962,6 @@ document.addEventListener("change", (e) => {
   if (e.target.id === "buyer_country") {
     updateStateField();
     autoSelectTreatment();
-  }
-  if (e.target.id === "saved_customer") {
-    if (e.target.value !== "") {
-      fillCustomer(e.target.value);
-      autoSelectTreatment();
-    } else lastSavedCustomerName = "";
-    syncAttnField();
-    refreshSavedItems();
   }
   if (e.target.matches('#items [name="description"]')) {
     applySavedItemToRow(e.target.closest(".item"));
@@ -885,13 +983,19 @@ document.addEventListener("click", (e) => {
     schedulePreview();
     return;
   }
-  if (e.target.closest(".add-attn")) {
-    const label = document.querySelector(".attn-label");
-    const btn = document.querySelector(".add-attn");
-    if (label) label.hidden = false;
-    if (btn) btn.hidden = true;
-    const inp = label && label.querySelector("input");
-    if (inp) inp.focus();
+  if (e.target.id === "cust-delete-btn") {
+    const nameEl = document.querySelector("[name='buyer_name']");
+    const name = nameEl ? nameEl.value.trim() : "";
+    if (!name) return;
+    const m = document.getElementById("cust-delete-modal");
+    const n = document.getElementById("cust-del-name");
+    if (n) n.textContent = name;
+    if (m) m.hidden = false;
+    return;
+  }
+  if (e.target.id === "cust-delete-cancel" || e.target.id === "cust-delete-modal") {
+    const m = document.getElementById("cust-delete-modal");
+    if (m) m.hidden = true;
     return;
   }
   const unitTrigger = e.target.closest(".unitsel-btn, .unitsel .combo-caret");
@@ -906,7 +1010,13 @@ document.addEventListener("click", (e) => {
   const caret = e.target.closest(".combo-caret");
   if (caret) {
     const input = caret.parentElement.querySelector(".combo-input");
-    if (input) {
+    if (input && input.classList.contains("cust-name")) {
+      if (custInput === input && custMenu && !custMenu.hidden) closeCustMenu();
+      else {
+        input.focus();
+        openCustMenu(input);
+      }
+    } else if (input) {
       if (comboInput === input && comboMenu && !comboMenu.hidden) closeComboMenu();
       else {
         input.focus();
@@ -1010,6 +1120,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     const d = document.getElementById("preview-drawer");
     if (d && !d.hidden) closePreviewDrawer();
+    const m = document.getElementById("cust-delete-modal");
+    if (m && !m.hidden) m.hidden = true;
   }
 });
 
@@ -1018,7 +1130,6 @@ applyProfile();
 updateTaxnrHint();
 validateMasterData();
 toggleRefFields();
-syncAttnField();
 updateStateField();
 syncItemPeriods();
 syncItemDiscounts();

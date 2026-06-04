@@ -508,14 +508,18 @@ def customers_save():
 
 @app.route("/customers/delete", methods=["POST"])
 def customers_delete():
+    name = request.form.get("buyer_name", "").strip()
     customers = load_customers()
-    idx = request.form.get("saved_customer", "")
-    if idx.isdigit() and int(idx) < len(customers):
-        removed = customers.pop(int(idx))
+    match = next(
+        (c for c in customers if c.get("name", "").strip().lower() == name.lower()),
+        None,
+    ) if name else None
+    if match:
+        customers.remove(match)
         save_customers(customers)
-        flash(f"Kunde „{removed['name']}“ gelöscht.", "ok")
+        flash(f"Kunde „{match['name']}“ gelöscht.", "ok")
     else:
-        flash("Kein Kunde ausgewählt.", "err")
+        flash("Kein gespeicherter Kunde mit diesem Namen.", "err")
     return redirect(url_for("index"))
 
 

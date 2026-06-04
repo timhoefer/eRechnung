@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=39">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=40">
 </head>
 <body>
 <header>
@@ -115,25 +115,18 @@
 
   <div class="card">
     <h2>{{ t.customer }}</h2>
-    <div class="customer-bar">
-      <label class="wide">{{ t.saved_customer }}
-        <select id="saved_customer" name="saved_customer">
-          <option value="">{{ t.new_customer }}</option>
-          {% for c in customers %}<option value="{{ loop.index0 }}">{{ c.name }}</option>{% endfor %}
-        </select>
+    <div class="grid grid-3">
+      <label class="span-2">{{ t.name }}
+        <div class="combo">
+          <input name="buyer_name" class="combo-input cust-name" required autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="{{ t.customer_search_ph }}">
+          <span class="combo-caret" aria-hidden="true"></span>
+        </div>
       </label>
-      <button type="submit" class="secondary" formaction="{{ url_for('customers_save') }}" formnovalidate>{{ t.save_customer }}</button>
-      <button type="submit" class="secondary danger" formaction="{{ url_for('customers_delete') }}" formnovalidate>{{ t.delete }}</button>
-    </div>
-    <div class="grid">
-      <label class="span-3">{{ t.name }}<input name="buyer_name" required></label>
       <label>{{ t.vat_id }}<input name="buyer_vat_id" placeholder="ATU12345678"></label>
-      <button type="button" class="add-attn wide">{{ t.attn_add }}</button>
-      <label class="attn-label wide" hidden>{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
       <label>{{ t.street }}<input name="buyer_address_line"></label>
       <label>{{ t.postcode }}<input name="buyer_postcode"></label>
       <label>{{ t.city }}<input name="buyer_city"></label>
-      <label class="new-row">{{ t.country }}
+      <label>{{ t.country }}
         <select name="buyer_country" id="buyer_country">
           {% for code, label in countries %}
             <option value="{{ code }}" {{ 'selected' if code == 'DE' else '' }}>{{ loc(label, lang) }}</option>
@@ -141,8 +134,27 @@
         </select>
       </label>
       <label id="buyer-state-field" hidden>{{ t.state }}<select name="buyer_state" id="buyer_state"></select></label>
-      <label class="span-2"><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_email" type="email" data-xr-required></label>
-      <label class="wide"><span class="label-row"><span class="lbl" data-zug="{{ t.buyer_reference }}" data-xr="{{ t.buyer_reference_xr }}">{{ t.buyer_reference }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_reference" data-xr-required></label>
+    </div>
+    <div class="grid grid-3">
+      <label>{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
+      <label><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_email" type="email" data-xr-required></label>
+      <label><span class="label-row"><span class="lbl" data-zug="{{ t.buyer_reference }}" data-xr="{{ t.buyer_reference_xr }}">{{ t.buyer_reference }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_reference" data-xr-required></label>
+    </div>
+    <div class="customer-bar">
+      <span class="spacer"></span>
+      <button type="button" class="secondary danger" id="cust-delete-btn">{{ t.delete }}</button>
+      <button type="submit" class="secondary" formaction="{{ url_for('customers_save') }}" formnovalidate>{{ t.save_customer }}</button>
+    </div>
+
+    <div class="modal-backdrop" id="cust-delete-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cust-del-title">
+        <h3 id="cust-del-title">{{ t.confirm_cust_delete_title }}</h3>
+        <p><strong id="cust-del-name"></strong> {{ t.confirm_cust_delete_text }}</p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" id="cust-delete-cancel">{{ t.cancel }}</button>
+          <button type="submit" class="danger" formaction="{{ url_for('customers_delete') }}" formnovalidate>{{ t.delete }}</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -299,6 +311,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=28"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=31"></script>
 </body>
 </html>
