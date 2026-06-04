@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=33">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=35">
 </head>
 <body>
 <header>
@@ -33,7 +33,8 @@
 <details class="card" {% if not seller.name %}open{% endif %}>
   <summary>
     <span class="summary-text"><strong>{{ t.master }}</strong> &mdash; {{ t.master_hint }}</span>
-    {% if seller.name %}<span class="ok-check" title="{{ t.master_saved }}" aria-label="{{ t.master_saved }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>{% endif %}
+    <span class="ok-check" title="{{ t.master_saved }}" aria-label="{{ t.master_saved }}" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
+    <span class="warn-badge" title="{{ t.master_incomplete }}" aria-label="{{ t.master_incomplete }}" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
     <span class="details-chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
   </summary>
   <form method="post" action="{{ url_for('settings') }}" id="settings-form" class="grid grid-3">
@@ -52,8 +53,8 @@
     </label>
 
     <h3 class="form-section">{{ t.sec_contact }}</h3>
-    <label>{{ t.phone }}<input name="phone" value="{{ seller.phone or '' }}" placeholder="+49 …"></label>
-    <label>{{ t.email }}<input name="email" type="email" value="{{ seller.email or '' }}"></label>
+    <label><span class="label-row"><span class="lbl">{{ t.phone }}</span><span class="req-mark" hidden> *</span></span><input name="phone" value="{{ seller.phone or '' }}" placeholder="+49 …" data-xr-mark></label>
+    <label><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="email" type="email" value="{{ seller.email or '' }}" data-xr-mark></label>
     <label>{{ t.web }}<input name="web" value="{{ seller.web or '' }}" placeholder="machineandfolk.com"></label>
 
     <h3 class="form-section">{{ t.sec_tax }}</h3>
@@ -67,13 +68,23 @@
     <label>{{ t.bic }}<input name="bic" value="{{ seller.bic or '' }}"></label>
     <label>{{ t.bank_name }}<input name="bank_name" value="{{ seller.bank_name or '' }}"></label>
     <label>{{ t.account_holder }}<input name="account_name" value="{{ seller.account_name or '' }}"></label>
-    <label class="wide">{{ t.default_terms }}<input name="default_payment_terms" value="{{ seller.default_payment_terms or 'Zahlbar innerhalb von 14 Tagen ohne Abzug.' }}"></label>
+    <label>{{ t.payment_term_days }}<input name="payment_term_days" type="number" min="0" step="1" value="{{ seller.payment_term_days or 14 }}"></label>
 
     <div class="wide"><button type="submit" class="secondary">{{ t.save_master }}</button></div>
   </form>
 </details>
 
 <form method="post" action="{{ url_for('generate') }}" id="invoice-form">
+  <div class="format-bar">
+    <span class="format-label">{{ t.profile }}</span>
+    <div class="format-tabs" role="tablist" aria-label="{{ t.profile }}">
+      <button type="button" class="format-tab" role="tab" data-profile="en16931">{{ t.profile_en16931 }}</button>
+      <button type="button" class="format-tab" role="tab" data-profile="xrechnung">{{ t.profile_xrechnung }}</button>
+    </div>
+    <input type="hidden" name="profile" id="profile" value="en16931">
+    <p class="hint" id="profile-hint" hidden>{{ t.profile_hint }}</p>
+  </div>
+
   <div class="card">
     <h2>{{ t.invoice }}</h2>
     <div class="grid grid-3">
@@ -98,13 +109,6 @@
       <label>{{ t.invoice_no }}<input name="number" value="{{ defaults.number }}" required></label>
       <label>{{ t.invoice_date }}<input name="issue_date" type="date" value="{{ defaults.issue_date }}" required></label>
       <label>{{ t.due }}<input name="due_date" type="date" value="{{ defaults.due_date }}"></label>
-      <label>{{ t.profile }}
-        <select name="profile" id="profile">
-          <option value="en16931" selected>{{ t.profile_en16931 }}</option>
-          <option value="xrechnung">{{ t.profile_xrechnung }}</option>
-        </select>
-      </label>
-      <p class="hint wide" id="profile-hint" hidden>{{ t.profile_hint }}</p>
     </div>
   </div>
 
@@ -136,8 +140,8 @@
         </select>
       </label>
       <label id="buyer-state-field" hidden>{{ t.state }}<select name="buyer_state" id="buyer_state"></select></label>
-      <label class="span-2">{{ t.email }}<input name="buyer_email" type="email"></label>
-      <label class="wide">{{ t.buyer_reference }}<input name="buyer_reference"></label>
+      <label class="span-2"><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_email" type="email" data-xr-required></label>
+      <label class="wide"><span class="label-row"><span class="lbl" data-zug="{{ t.buyer_reference }}" data-xr="{{ t.buyer_reference_xr }}">{{ t.buyer_reference }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_reference" data-xr-required></label>
     </div>
   </div>
 
@@ -247,7 +251,7 @@
   <div class="actions">
     <a href="{{ url_for('validate') }}" class="link">{{ t.archive_link }}</a>
     <span class="spacer"></span>
-    <button type="submit">{{ t.generate }}</button>
+    <button type="submit" id="generate-btn" data-zug="{{ t.generate }}" data-xr="{{ t.generate_xr }}">{{ t.generate }}</button>
   </div>
 </form>
 
@@ -294,6 +298,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=25"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=27"></script>
 </body>
 </html>

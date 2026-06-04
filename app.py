@@ -116,7 +116,7 @@ def save_seller(data: dict) -> None:
 SELLER_FIELDS = [
     "name", "subtitle", "address_line", "postcode", "city", "country", "vat_id",
     "tax_number", "email", "phone", "web", "iban", "bic", "bank_name",
-    "account_name", "default_payment_terms",
+    "account_name", "payment_term_days",
 ]
 
 
@@ -127,6 +127,27 @@ def apply_seller_form(seller: dict, form) -> dict:
     # Checkbox: fehlt im abgesendeten Stammdaten-Formular = abgewählt.
     seller["show_tax_number"] = form.get("show_tax_number") is not None
     return seller
+
+
+def payment_terms_text(days: int, lang: str) -> str:
+    """Lokalisierter Zahlungsbedingungs-Satz aus dem Zahlungsziel (Tage)."""
+    if lang == "en":
+        unit = "day" if days == 1 else "days"
+        return f"Payable within {days} {unit} net."
+    unit = "Tag" if days == 1 else "Tagen"
+    return f"Zahlbar innerhalb von {days} {unit} ohne Abzug."
+
+
+def payment_days(form):
+    """Zahlungsziel in Tagen aus Fällig − Rechnungsdatum (None, wenn kein Fällig-Datum)."""
+    issue, due = form.get("issue_date"), form.get("due_date")
+    if not issue or not due:
+        return None
+    try:
+        d = (date.fromisoformat(due) - date.fromisoformat(issue)).days
+    except ValueError:
+        return None
+    return d if d >= 0 else None
 
 
 def xrechnung_missing(seller: dict, buyer: dict) -> list:
@@ -332,6 +353,7 @@ def _assemble(form):
     seller = load_seller()
     items = parse_items(form)
     inv_lang = form.get("language", "") or get_ui_lang(request)
+    _pay_days = payment_days(form)
     inv = {
         "number": form.get("number", "").strip(),
         "issue_date": form.get("issue_date"),
@@ -343,12 +365,10 @@ def _assemble(form):
         "language": inv_lang,
         "profile": form.get("profile", "en16931"),
         "note": form.get("note", "").strip() or None,
-        # Kein Rechnungs-Override gesetzt? Dann die Standard-Zahlungsbedingung
-        # aus den Stammdaten verwenden (erscheint im PDF-Schluss + BT-20).
+        # Zahlungsbedingung aus dem Fälligkeitsdatum ableiten und in der
+        # Rechnungssprache formulieren (erscheint im PDF-Schluss + BT-20).
         "payment_terms": (
-            form.get("payment_terms", "").strip()
-            or (seller.get("default_payment_terms") or "").strip()
-            or None
+            payment_terms_text(_pay_days, inv_lang) if _pay_days is not None else None
         ),
         "doc_type": form.get("doc_type", "380") or "380",
         "ref_number": form.get("ref_number", "").strip() or None,
@@ -402,13 +422,14 @@ def _assemble(form):
 def index():
     seller = load_seller()
     today = date.today()
+    try:
+        term_days = int(seller.get("payment_term_days") or 14)
+    except (TypeError, ValueError):
+        term_days = 14
     defaults = {
         "number": suggest_invoice_number(seller),
         "issue_date": today.isoformat(),
-        "due_date": (today + timedelta(days=14)).isoformat(),
-        "payment_terms": seller.get(
-            "default_payment_terms", "Zahlbar innerhalb von 14 Tagen ohne Abzug."
-        ),
+        "due_date": (today + timedelta(days=term_days)).isoformat(),
     }
     draft = load_draft(request.args.get("from"))
     return render_template(

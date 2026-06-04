@@ -17,6 +17,7 @@
   --accent-d: #2457bf;
   --ok: #15803d;
   --err: #b91c1c;
+  --warn: #d97706;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }  /* schlägt display:flex von .period/label */
@@ -52,6 +53,23 @@ details.card summary { display: flex; align-items: center; gap: 10px; cursor: po
 }
 details[open] .details-chevron { transform: rotate(180deg); }
 details.card summary::-webkit-details-marker { display: none; }
+
+/* Format-Umschalter (ZUGFeRD / XRechnung) oben im Rechnungsformular */
+.format-bar { margin: 16px 0 4px; }
+.format-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.format-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.format-tab {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  background: #fff; color: var(--muted); border: none; border-radius: 0; padding: 9px 18px;
+}
+.format-tab + .format-tab { border-left: 1px solid var(--line); }
+.format-tab.active { background: var(--accent); color: #fff; }
+.format-tab:hover:not(.active) { background: #f5f6f8; color: var(--ink); }
+#profile-hint { margin: 8px 0 0; }
+.req-mark { color: var(--err); font-weight: 700; }
+.warn-badge { flex: 0 0 auto; display: inline-flex; align-items: center; color: var(--warn); }
+.field-error input, .field-error select { border-color: var(--err); background: #fef5f5; }
+.field-error input:focus, .field-error select:focus { outline-color: var(--err); border-color: var(--err); }
 h2 { margin: 0 0 14px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 14px; margin-top: 14px; }
 .grid.grid-3 { grid-template-columns: repeat(3, 1fr); }

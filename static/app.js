@@ -98,10 +98,38 @@ function syncAttnField() {
   btn.hidden = has;
 }
 
-function showProfileHint() {
-  const profile = document.querySelector("#profile");
-  const hint = document.querySelector("#profile-hint");
-  if (profile && hint) hint.hidden = profile.value !== "xrechnung";
+function currentProfile() {
+  const el = document.getElementById("profile");
+  return el ? el.value : "en16931";
+}
+// Format-Tabs, Hinweis, Pflichtfelder und Labels an das gewählte Format anpassen.
+function applyProfile() {
+  const xr = currentProfile() === "xrechnung";
+  document.querySelectorAll(".format-tab").forEach((b) => {
+    const active = b.dataset.profile === currentProfile();
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  const hint = document.getElementById("profile-hint");
+  if (hint) hint.hidden = !xr;
+  // Pflichtfelder (native required) + Markierung
+  document.querySelectorAll("[data-xr-required]").forEach((inp) => {
+    inp.required = xr;
+    const m = inp.closest("label") && inp.closest("label").querySelector(".req-mark");
+    if (m) m.hidden = !xr;
+  });
+  // Nur Markierung (kein native required – z. B. Stammdaten)
+  document.querySelectorAll("[data-xr-mark]").forEach((inp) => {
+    const m = inp.closest("label") && inp.closest("label").querySelector(".req-mark");
+    if (m) m.hidden = !xr;
+  });
+  // Label-Texte umschalten (z. B. Kundenreferenz <-> Leitweg-ID)
+  document.querySelectorAll(".lbl[data-xr]").forEach((s) => {
+    s.textContent = xr ? s.dataset.xr : s.dataset.zug;
+  });
+  // Erzeugen-Button beschriften
+  const gen = document.getElementById("generate-btn");
+  if (gen && gen.dataset.xr) gen.textContent = xr ? gen.dataset.xr : gen.dataset.zug;
 }
 
 // Hinweis, wenn USt-IdNr. UND Steuernummer gesetzt sind (Steuernummer dann optional).
@@ -112,6 +140,33 @@ function updateTaxnrHint() {
   const vat = form.querySelector("[name='vat_id']");
   const tax = form.querySelector("[name='tax_number']");
   hint.hidden = !(vat && tax && vat.value.trim() && tax.value.trim());
+}
+
+// Pflichtangaben der Stammdaten prüfen: grüner Haken vs. Warnung + Feldmarkierung.
+const MASTER_REQUIRED = ["name", "address_line", "postcode", "city", "iban"];
+const MASTER_EITHER = ["vat_id", "tax_number"]; // mindestens eines
+function markField(el, bad) {
+  const label = el && el.closest("label");
+  if (label) label.classList.toggle("field-error", !!bad);
+}
+function validateMasterData() {
+  const form = document.getElementById("settings-form");
+  if (!form) return;
+  let complete = true;
+  MASTER_REQUIRED.forEach((n) => {
+    const el = form.querySelector(`[name="${n}"]`);
+    const ok = el && el.value.trim();
+    markField(el, !ok);
+    if (!ok) complete = false;
+  });
+  const eitherEls = MASTER_EITHER.map((n) => form.querySelector(`[name="${n}"]`));
+  const anyFilled = eitherEls.some((el) => el && el.value.trim());
+  eitherEls.forEach((el) => markField(el, !anyFilled));
+  if (!anyFilled) complete = false;
+  const check = document.querySelector(".ok-check");
+  const warn = document.querySelector(".warn-badge");
+  if (check) check.hidden = !complete;
+  if (warn) warn.hidden = complete;
 }
 
 // Bezugsfelder (Storno/Korrektur) nur bei Belegart != 380 (normale Rechnung) zeigen.
@@ -723,6 +778,7 @@ document.addEventListener("input", (e) => {
   if (e.target.closest("#settings-form")) {
     scheduleSellerSave();
     if (e.target.name === "vat_id" || e.target.name === "tax_number") updateTaxnrHint();
+    validateMasterData();
     return;
   }
   recalc();
@@ -798,7 +854,6 @@ window.addEventListener("scroll", repositionMenus, true);
 window.addEventListener("resize", repositionMenus);
 document.addEventListener("change", (e) => {
   if (e.target.id === "tax_treatment") showNote();
-  if (e.target.id === "profile") showProfileHint();
   if (e.target.id === "doc_type") toggleRefFields();
   if (e.target.classList.contains("disc-type")) recalc();
   if (e.target.name === "currency") updateDiscTypeLabels();
@@ -825,6 +880,14 @@ document.addEventListener("click", (e) => {
     const form = document.getElementById("invoice-form");
     if (form) sessionStorage.setItem("erechnung:lang", JSON.stringify(snapshotForm(form)));
     return; // Navigation zum Sprachwechsel zulassen
+  }
+  const fmtTab = e.target.closest(".format-tab");
+  if (fmtTab) {
+    const el = document.getElementById("profile");
+    if (el) el.value = fmtTab.dataset.profile;
+    applyProfile();
+    schedulePreview();
+    return;
   }
   if (e.target.closest(".add-attn")) {
     const label = document.querySelector(".attn-label");
@@ -955,8 +1018,9 @@ document.addEventListener("keydown", (e) => {
 });
 
 showNote();
-showProfileHint();
+applyProfile();
 updateTaxnrHint();
+validateMasterData();
 toggleRefFields();
 syncAttnField();
 updateStateField();
