@@ -288,6 +288,19 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
   .preview-pane { flex: none; width: 100%; position: static; max-height: none; }
 }
 
+/* Sehr enge Viewports: alle Grids einspaltig (ein Feld pro Zeile) */
+@media (max-width: 600px) {
+  .grid, .grid.grid-3 { grid-template-columns: 1fr; }
+  .grid .span-2, .grid .span-3, .grid .new-row, #taxnr-hint { grid-column: 1 / -1; }
+  .layout { padding: 0 14px; }
+  /* Positionstabelle: schmalere Zahlenspalten, damit nichts überläuft */
+  #items th:nth-child(2), #items td:nth-child(2),
+  #items th:nth-child(3), #items td:nth-child(3),
+  #items th:nth-child(4), #items td:nth-child(4),
+  #items th:nth-child(5), #items td:nth-child(5) { width: 70px; }
+  #items th, #items td { padding: 3px 3px; }
+}
+
 /* Vorschau-Drawer in Originalgröße (A4 100%) */
 .drawer-backdrop {
   position: fixed; inset: 0; background: rgba(28,32,36,0.5);
