@@ -74,7 +74,7 @@ h2 { margin: 0 0 14px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 14px; margin-top: 14px; }
 .grid.grid-3 { grid-template-columns: repeat(3, 1fr); }
 label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
-label.wide { grid-column: 1 / -1; }
+.wide { grid-column: 1 / -1; }
 label.span-2 { grid-column: span 2; }
 label.span-3 { grid-column: span 3; }
 label.new-row { grid-column: 1; }  /* erzwingt Zeilenumbruch im Grid */
@@ -88,7 +88,19 @@ input, select {
   border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%;
 }
 input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
-label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); cursor: pointer; }
+label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); cursor: pointer; align-self: end; padding-bottom: 8px; }
+/* Callout-Box mit Pfeil zur Checkbox (zeigt nach oben auf Spalte 3) */
+.callout {
+  grid-column: 1 / -1; position: relative; margin-top: 12px;
+  background: #f5f7fb; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; font-size: 12px; color: var(--ink);
+}
+.callout::before, .callout::after {
+  content: ""; position: absolute; bottom: 100%; width: 0; height: 0;
+  border: solid transparent; pointer-events: none;
+}
+.callout::before { left: 68%; margin-left: -8px; border-width: 8px; border-bottom-color: var(--line); }
+.callout::after { left: 68%; margin-left: -7px; border-width: 7px; border-bottom-color: #f5f7fb; }
 label.check input[type="checkbox"] { width: auto; padding: 0; margin: 0; accent-color: var(--accent); cursor: pointer; }
 select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;

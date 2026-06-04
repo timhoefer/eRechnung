@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=35">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=39">
 </head>
 <body>
 <header>
@@ -29,6 +29,15 @@
 
 <div class="layout">
 <div class="form-pane">
+
+<div class="format-bar">
+  <span class="format-label">{{ t.profile }}</span>
+  <div class="format-tabs" role="tablist" aria-label="{{ t.profile }}">
+    <button type="button" class="format-tab" role="tab" data-profile="en16931">{{ t.profile_en16931 }}</button>
+    <button type="button" class="format-tab" role="tab" data-profile="xrechnung">{{ t.profile_xrechnung }}</button>
+  </div>
+  <p class="hint" id="profile-hint" hidden>{{ t.profile_hint }}</p>
+</div>
 
 <details class="card" {% if not seller.name %}open{% endif %}>
   <summary>
@@ -60,8 +69,8 @@
     <h3 class="form-section">{{ t.sec_tax }}</h3>
     <label>{{ t.vat_id }}<input name="vat_id" value="{{ seller.vat_id or '' }}" placeholder="DE123456789"></label>
     <label>{{ t.tax_number }}<input name="tax_number" value="{{ seller.tax_number or '' }}"></label>
-    <label class="wide check"><input type="checkbox" name="show_tax_number" {{ 'checked' if seller.get('show_tax_number', True) else '' }}> {{ t.show_tax_number }}</label>
-    <p class="hint wide" id="taxnr-hint" {{ '' if (seller.vat_id and seller.tax_number) else 'hidden' }}>{{ t.taxnr_hint }}</p>
+    <label class="check"><input type="checkbox" name="hide_tax_number" {{ 'checked' if not seller.get('show_tax_number', True) else '' }}> {{ t.hide_tax_number }}</label>
+    <div class="callout" id="taxnr-hint" {{ '' if (seller.vat_id and seller.tax_number) else 'hidden' }}>{{ t.taxnr_hint }}</div>
 
     <h3 class="form-section">{{ t.sec_payment }}</h3>
     <label>{{ t.iban }}<input name="iban" value="{{ seller.iban or '' }}"></label>
@@ -75,15 +84,7 @@
 </details>
 
 <form method="post" action="{{ url_for('generate') }}" id="invoice-form">
-  <div class="format-bar">
-    <span class="format-label">{{ t.profile }}</span>
-    <div class="format-tabs" role="tablist" aria-label="{{ t.profile }}">
-      <button type="button" class="format-tab" role="tab" data-profile="en16931">{{ t.profile_en16931 }}</button>
-      <button type="button" class="format-tab" role="tab" data-profile="xrechnung">{{ t.profile_xrechnung }}</button>
-    </div>
-    <input type="hidden" name="profile" id="profile" value="en16931">
-    <p class="hint" id="profile-hint" hidden>{{ t.profile_hint }}</p>
-  </div>
+  <input type="hidden" name="profile" id="profile" value="en16931">
 
   <div class="card">
     <h2>{{ t.invoice }}</h2>
@@ -298,6 +299,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=27"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=28"></script>
 </body>
 </html>

@@ -124,8 +124,8 @@ def apply_seller_form(seller: dict, form) -> dict:
     for field in SELLER_FIELDS:
         if field in form:
             seller[field] = form.get(field, "").strip()
-    # Checkbox: fehlt im abgesendeten Stammdaten-Formular = abgewählt.
-    seller["show_tax_number"] = form.get("show_tax_number") is not None
+    # Checkbox "Steuernummer ausblenden": aktiv -> show_tax_number = False.
+    seller["show_tax_number"] = form.get("hide_tax_number") is None
     return seller
 
 

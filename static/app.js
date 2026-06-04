@@ -143,8 +143,8 @@ function updateTaxnrHint() {
 }
 
 // Pflichtangaben der Stammdaten prüfen: grüner Haken vs. Warnung + Feldmarkierung.
-const MASTER_REQUIRED = ["name", "address_line", "postcode", "city", "iban"];
-const MASTER_EITHER = ["vat_id", "tax_number"]; // mindestens eines
+// USt-IdNr. ist Pflicht (EN16931 BR-CO-26); Steuernummer ist optional.
+const MASTER_REQUIRED = ["name", "address_line", "postcode", "city", "vat_id", "iban"];
 function markField(el, bad) {
   const label = el && el.closest("label");
   if (label) label.classList.toggle("field-error", !!bad);
@@ -159,10 +159,6 @@ function validateMasterData() {
     markField(el, !ok);
     if (!ok) complete = false;
   });
-  const eitherEls = MASTER_EITHER.map((n) => form.querySelector(`[name="${n}"]`));
-  const anyFilled = eitherEls.some((el) => el && el.value.trim());
-  eitherEls.forEach((el) => markField(el, !anyFilled));
-  if (!anyFilled) complete = false;
   const check = document.querySelector(".ok-check");
   const warn = document.querySelector(".warn-badge");
   if (check) check.hidden = !complete;
