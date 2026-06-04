@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=30">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=33">
 </head>
 <body>
 <header>
@@ -31,8 +31,12 @@
 <div class="form-pane">
 
 <details class="card" {% if not seller.name %}open{% endif %}>
-  <summary><strong>{{ t.master }}</strong> &mdash; {{ t.master_hint }}</summary>
-  <form method="post" action="{{ url_for('settings') }}" id="settings-form" class="grid">
+  <summary>
+    <span class="summary-text"><strong>{{ t.master }}</strong> &mdash; {{ t.master_hint }}</span>
+    {% if seller.name %}<span class="ok-check" title="{{ t.master_saved }}" aria-label="{{ t.master_saved }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>{% endif %}
+    <span class="details-chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
+  </summary>
+  <form method="post" action="{{ url_for('settings') }}" id="settings-form" class="grid grid-3">
     <h3 class="form-section">{{ t.sec_address }}</h3>
     <label>{{ t.name }}<input name="name" value="{{ seller.name or '' }}" required></label>
     <label>{{ t.subtitle }}<input name="subtitle" value="{{ seller.subtitle or '' }}" placeholder="z. B. Design"></label>
@@ -56,6 +60,7 @@
     <label>{{ t.vat_id }}<input name="vat_id" value="{{ seller.vat_id or '' }}" placeholder="DE123456789"></label>
     <label>{{ t.tax_number }}<input name="tax_number" value="{{ seller.tax_number or '' }}"></label>
     <label class="wide check"><input type="checkbox" name="show_tax_number" {{ 'checked' if seller.get('show_tax_number', True) else '' }}> {{ t.show_tax_number }}</label>
+    <p class="hint wide" id="taxnr-hint" {{ '' if (seller.vat_id and seller.tax_number) else 'hidden' }}>{{ t.taxnr_hint }}</p>
 
     <h3 class="form-section">{{ t.sec_payment }}</h3>
     <label>{{ t.iban }}<input name="iban" value="{{ seller.iban or '' }}"></label>
@@ -289,6 +294,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=24"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=25"></script>
 </body>
 </html>

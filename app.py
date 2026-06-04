@@ -343,7 +343,13 @@ def _assemble(form):
         "language": inv_lang,
         "profile": form.get("profile", "en16931"),
         "note": form.get("note", "").strip() or None,
-        "payment_terms": form.get("payment_terms", "").strip() or None,
+        # Kein Rechnungs-Override gesetzt? Dann die Standard-Zahlungsbedingung
+        # aus den Stammdaten verwenden (erscheint im PDF-Schluss + BT-20).
+        "payment_terms": (
+            form.get("payment_terms", "").strip()
+            or (seller.get("default_payment_terms") or "").strip()
+            or None
+        ),
         "doc_type": form.get("doc_type", "380") or "380",
         "ref_number": form.get("ref_number", "").strip() or None,
         "ref_date": form.get("ref_date") or None,

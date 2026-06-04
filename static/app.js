@@ -104,6 +104,16 @@ function showProfileHint() {
   if (profile && hint) hint.hidden = profile.value !== "xrechnung";
 }
 
+// Hinweis, wenn USt-IdNr. UND Steuernummer gesetzt sind (Steuernummer dann optional).
+function updateTaxnrHint() {
+  const form = document.getElementById("settings-form");
+  const hint = document.getElementById("taxnr-hint");
+  if (!form || !hint) return;
+  const vat = form.querySelector("[name='vat_id']");
+  const tax = form.querySelector("[name='tax_number']");
+  hint.hidden = !(vat && tax && vat.value.trim() && tax.value.trim());
+}
+
 // Bezugsfelder (Storno/Korrektur) nur bei Belegart != 380 (normale Rechnung) zeigen.
 function toggleRefFields() {
   const sel = document.querySelector("#doc_type");
@@ -712,6 +722,7 @@ function scheduleCustomerSave() {
 document.addEventListener("input", (e) => {
   if (e.target.closest("#settings-form")) {
     scheduleSellerSave();
+    if (e.target.name === "vat_id" || e.target.name === "tax_number") updateTaxnrHint();
     return;
   }
   recalc();
@@ -945,6 +956,7 @@ document.addEventListener("keydown", (e) => {
 
 showNote();
 showProfileHint();
+updateTaxnrHint();
 toggleRefFields();
 syncAttnField();
 updateStateField();

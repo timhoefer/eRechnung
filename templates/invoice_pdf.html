@@ -171,10 +171,11 @@
     {# Hinweis bereits oben in den Summen gezeigt #}
   {% endif %}
 
+  {% if inv.payment_terms %}
   <div class="closing">
-    {% if inv.payment_terms %}<p style="margin:0 0 2mm">{{ inv.payment_terms }}</p>{% endif %}
-    <p style="margin:0">{{ ti.letter_closing }}</p>
+    <p style="margin:0">{{ inv.payment_terms }}</p>
   </div>
+  {% endif %}
 
   {% if seller.iban %}
   <div class="pay">

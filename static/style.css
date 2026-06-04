@@ -38,7 +38,19 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
   max-width: 920px; margin: 16px auto; padding: 20px 22px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
 }
-details.card summary { cursor: pointer; font-size: 15px; list-style: none; }
+details.card summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; list-style: none; }
+.summary-text { flex: 1; min-width: 0; }
+.ok-check {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ok); color: #fff; font-size: 12px; font-weight: 700; line-height: 1;
+}
+.details-chevron {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  color: var(--muted); transition: transform .15s ease;
+}
+details[open] .details-chevron { transform: rotate(180deg); }
 details.card summary::-webkit-details-marker { display: none; }
 h2 { margin: 0 0 14px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 14px; margin-top: 14px; }
