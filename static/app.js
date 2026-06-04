@@ -188,6 +188,38 @@ function validateMasterData() {
   if (warn) warn.hidden = complete;
 }
 
+// Leistungszeitraum: weiche Pflicht. Warnung zeigen, wenn weder ein Zeitraum
+// (gesamt oder je Position) noch "entspricht Rechnungsdatum" gesetzt ist.
+function updatePeriodWarning() {
+  const warn = document.getElementById("period-warning");
+  if (!warn) return;
+  const s = document.querySelector('#invoice-form [name="service_start"]');
+  const e = document.querySelector('#invoice-form [name="service_end"]');
+  const eq = document.getElementById("service-eq-issue");
+  const hasOverall = !!(s && e && s.value && e.value && !s.disabled);
+  let hasLine = false;
+  document.querySelectorAll("#items .period-label").forEach((pl) => {
+    if (pl.hidden) return;
+    const st = pl.querySelector('[name="item_start"]');
+    const en = pl.querySelector('[name="item_end"]');
+    if (st && en && st.value && en.value) hasLine = true;
+  });
+  warn.hidden = hasOverall || hasLine || (eq && eq.checked);
+}
+
+// "entspricht Rechnungsdatum": Zeitraumfelder sperren (Werte bleiben erhalten,
+// werden aber nicht gesendet -> BT-72 = Rechnungsdatum, PDF zeigt Hinweis).
+function syncServicePeriod() {
+  const eq = document.getElementById("service-eq-issue");
+  const s = document.querySelector('#invoice-form [name="service_start"]');
+  const en = document.querySelector('#invoice-form [name="service_end"]');
+  if (eq && s && en) {
+    s.disabled = eq.checked;
+    en.disabled = eq.checked;
+  }
+  updatePeriodWarning();
+}
+
 // Bezugsfelder (Storno/Korrektur) nur bei Belegart != 380 (normale Rechnung) zeigen.
 function toggleRefFields() {
   const sel = document.querySelector("#doc_type");
@@ -886,9 +918,16 @@ document.addEventListener("input", (e) => {
   }
   recalc();
   schedulePreview();
+  if (["service_start", "service_end", "item_start", "item_end"].includes(e.target.name)) updatePeriodWarning();
   if (e.target.name && e.target.name.startsWith("buyer_")) scheduleCustomerSave();
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
   if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
+});
+document.addEventListener("change", (e) => {
+  if (e.target.id === "service-eq-issue") {
+    syncServicePeriod();
+    schedulePreview();
+  }
 });
 document.addEventListener("focusin", (e) => {
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
@@ -1171,6 +1210,7 @@ updateTaxnrHint();
 validateMasterData();
 toggleRefFields();
 updateStateField();
+syncServicePeriod();
 syncItemPeriods();
 syncItemDiscounts();
 updateDiscTypeLabels();

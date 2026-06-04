@@ -152,9 +152,13 @@ table#items input { padding: 7px 8px; }
 .totals, .line-sum, table.summary td:last-child { font-variant-numeric: tabular-nums; }
 .period { display: flex; align-items: center; gap: 8px; }
 .period-sep { color: var(--muted); }
+.period-overall { margin-top: 14px; }
 .period-overall .period { display: flex; }
 .period-overall .period input { flex: 1; }
-#period-overall-hint { margin: 4px 0 16px; }
+#service-eq-issue-wrap { align-self: start; padding-bottom: 0; margin-top: 10px; }
+#period-overall-hint { margin: 4px 0 6px; }
+.field-warning { color: #b45309; font-size: 12px; margin: 4px 0 16px; }
+#period-overall-hint + .field-warning[hidden] { display: none; }
 .line-disc { display: flex; align-items: center; gap: 8px; }
 .disc-input { width: 84px; }
 .disc-type { width: 76px; }
