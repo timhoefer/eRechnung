@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=29">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=30">
 </head>
 <body>
 <header>
@@ -71,7 +71,7 @@
 <form method="post" action="{{ url_for('generate') }}" id="invoice-form">
   <div class="card">
     <h2>{{ t.invoice }}</h2>
-    <div class="grid">
+    <div class="grid grid-3">
       <label>{{ t.doc_type }}
         <select name="doc_type" id="doc_type">
           <option value="380">{{ t.doc_type_invoice }}</option>
@@ -79,13 +79,6 @@
           <option value="384">{{ t.doc_type_correction }}</option>
         </select>
       </label>
-      <label class="ref-field" hidden>{{ t.ref_number }}<input name="ref_number"></label>
-      <label class="ref-field" hidden>{{ t.ref_date }}<input name="ref_date" type="date"></label>
-      <p class="hint wide ref-field" id="ref-hint" hidden>{{ t.ref_hint }}</p>
-      <label>{{ t.invoice_no }}<input name="number" value="{{ defaults.number }}" required></label>
-      <label>{{ t.invoice_date }}<input name="issue_date" type="date" value="{{ defaults.issue_date }}" required></label>
-      <label>{{ t.due }}<input name="due_date" type="date" value="{{ defaults.due_date }}"></label>
-      <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
       <label>{{ t.invoice_language }}
         <select name="language">
           {% for code, name in languages.items() %}
@@ -93,7 +86,14 @@
           {% endfor %}
         </select>
       </label>
-      <label class="wide">{{ t.profile }}
+      <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
+      <label class="ref-field" hidden>{{ t.ref_number }}<input name="ref_number"></label>
+      <label class="ref-field" hidden>{{ t.ref_date }}<input name="ref_date" type="date"></label>
+      <p class="hint wide ref-field" id="ref-hint" hidden>{{ t.ref_hint }}</p>
+      <label>{{ t.invoice_no }}<input name="number" value="{{ defaults.number }}" required></label>
+      <label>{{ t.invoice_date }}<input name="issue_date" type="date" value="{{ defaults.issue_date }}" required></label>
+      <label>{{ t.due }}<input name="due_date" type="date" value="{{ defaults.due_date }}"></label>
+      <label>{{ t.profile }}
         <select name="profile" id="profile">
           <option value="en16931" selected>{{ t.profile_en16931 }}</option>
           <option value="xrechnung">{{ t.profile_xrechnung }}</option>
