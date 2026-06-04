@@ -26,7 +26,7 @@ body {
   font: 15px/1.5 var(--font);
 }
 header { padding: 26px 24px 14px; max-width: 1500px; margin: 0 auto; }
-header h1 { margin: 0; font-size: 24px; }
+header h1 { margin: 0; font-size: 24px; display: flex; align-items: center; flex-wrap: wrap; }
 header .sub { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .header-row { display: flex; justify-content: space-between; align-items: flex-start; }
 .langswitch { display: flex; gap: 4px; }
@@ -54,18 +54,16 @@ details.card summary { display: flex; align-items: center; gap: 10px; cursor: po
 details[open] .details-chevron { transform: rotate(180deg); }
 details.card summary::-webkit-details-marker { display: none; }
 
-/* Format-Umschalter (ZUGFeRD / XRechnung) oben im Rechnungsformular */
-.format-bar { margin: 16px 0 4px; }
-.format-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.format-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
-.format-tab {
-  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
-  background: #fff; color: var(--muted); border: none; border-radius: 0; padding: 9px 18px;
+/* Format-Umschalter (ZUGFeRD / XRechnung) im Titel – dezente Dropdown-Pille */
+.title-format {
+  font: inherit; font-size: 0.68em; font-weight: 600; color: var(--ink); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  margin-left: 8px; margin-top: 3px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 9px;
+  background: #f3f5f9; transition: background .12s ease, border-color .12s ease;
 }
-.format-tab + .format-tab { border-left: 1px solid var(--line); }
-.format-tab.active { background: var(--accent); color: #fff; }
-.format-tab:hover:not(.active) { background: #f5f6f8; color: var(--ink); }
-#profile-hint { margin: 8px 0 0; }
+.title-format:hover { background: #e9edf4; border-color: #cfd6e0; }
+.title-format:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.title-caret { color: var(--muted); flex: 0 0 auto; }
 .req-mark { color: var(--err); font-weight: 700; }
 .warn-badge { flex: 0 0 auto; display: inline-flex; align-items: center; color: var(--warn); }
 .field-error input, .field-error select { border-color: var(--err); background: #fef5f5; }

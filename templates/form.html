@@ -4,14 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=40">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=45">
 </head>
 <body>
 <header>
   <div class="header-row">
     <div>
-      <h1>{{ t.app_title }}</h1>
-      <p class="sub">{{ t.app_sub }}</p>
+      <h1>{{ t.app_title_base }} <button type="button" id="format-trigger" class="title-format" aria-haspopup="listbox" aria-expanded="false"><span class="fmt-name">ZUGFeRD</span><svg class="title-caret" width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 2l4.5 4 4.5-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></h1>
+      <p class="sub">{{ t.app_sub }}<span id="profile-hint" hidden> · {{ t.profile_hint }}</span></p>
+      <div id="format-menu" class="combo-menu" role="listbox" hidden>
+        <div class="combo-opt" role="option" data-profile="en16931"><span class="combo-opt-desc">ZUGFeRD</span><span class="combo-opt-price">{{ t.fmt_zugferd_desc }}</span></div>
+        <div class="combo-opt" role="option" data-profile="xrechnung"><span class="combo-opt-desc">XRechnung</span><span class="combo-opt-price">{{ t.fmt_xrechnung_desc }}</span></div>
+      </div>
     </div>
     <nav class="langswitch">
       {% for code, name in languages.items() %}
@@ -29,15 +33,6 @@
 
 <div class="layout">
 <div class="form-pane">
-
-<div class="format-bar">
-  <span class="format-label">{{ t.profile }}</span>
-  <div class="format-tabs" role="tablist" aria-label="{{ t.profile }}">
-    <button type="button" class="format-tab" role="tab" data-profile="en16931">{{ t.profile_en16931 }}</button>
-    <button type="button" class="format-tab" role="tab" data-profile="xrechnung">{{ t.profile_xrechnung }}</button>
-  </div>
-  <p class="hint" id="profile-hint" hidden>{{ t.profile_hint }}</p>
-</div>
 
 <details class="card" {% if not seller.name %}open{% endif %}>
   <summary>
@@ -311,6 +306,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=31"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=33"></script>
 </body>
 </html>

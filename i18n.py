@@ -7,6 +7,9 @@ LANG = {
     "de": {
         # Kopf / allgemein
         "app_title": "E-Rechnung (ZUGFeRD)",
+        "app_title_base": "E-Rechnung",
+        "fmt_zugferd_desc": "für B2B",
+        "fmt_xrechnung_desc": "für Behörden (B2G)",
         "app_sub": "Lokal erzeugt · EN 16931 · PDF/A-3 mit eingebettetem XML",
         # Stammdaten
         "master": "Stammdaten (Absender)",
@@ -195,6 +198,9 @@ LANG = {
     },
     "en": {
         "app_title": "E-Invoice (ZUGFeRD)",
+        "app_title_base": "E-Invoice",
+        "fmt_zugferd_desc": "for B2B",
+        "fmt_xrechnung_desc": "for public authorities (B2G)",
         "app_sub": "Generated locally · EN 16931 · PDF/A-3 with embedded XML",
         "master": "Master data (sender)",
         "master_hint": "save once, reuse every time",

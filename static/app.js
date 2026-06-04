@@ -95,11 +95,9 @@ function currentProfile() {
 // Format-Tabs, Hinweis, Pflichtfelder und Labels an das gewählte Format anpassen.
 function applyProfile() {
   const xr = currentProfile() === "xrechnung";
-  document.querySelectorAll(".format-tab").forEach((b) => {
-    const active = b.dataset.profile === currentProfile();
-    b.classList.toggle("active", active);
-    b.setAttribute("aria-selected", active ? "true" : "false");
-  });
+  // Titel-Schalter beschriften (ggf. nach Wiederherstellung).
+  const name = document.querySelector("#format-trigger .fmt-name");
+  if (name) name.textContent = xr ? "XRechnung" : "ZUGFeRD";
   const hint = document.getElementById("profile-hint");
   if (hint) hint.hidden = !xr;
   // Pflichtfelder (native required) + Markierung
@@ -120,6 +118,41 @@ function applyProfile() {
   // Erzeugen-Button beschriften
   const gen = document.getElementById("generate-btn");
   if (gen && gen.dataset.xr) gen.textContent = xr ? gen.dataset.xr : gen.dataset.zug;
+}
+
+// Format-Dropdown im Titel (gestylt wie die Combobox).
+function positionFormatMenu() {
+  const t = document.getElementById("format-trigger");
+  const m = document.getElementById("format-menu");
+  if (!t || !m) return;
+  const r = t.getBoundingClientRect();
+  m.style.left = r.left + "px";
+  m.style.top = r.bottom + 6 + "px";
+  m.style.width = "240px";
+}
+function openFormatMenu() {
+  const m = document.getElementById("format-menu");
+  const t = document.getElementById("format-trigger");
+  if (!m || !t) return;
+  positionFormatMenu();
+  m.querySelectorAll(".combo-opt").forEach((o) =>
+    o.classList.toggle("active", o.dataset.profile === currentProfile())
+  );
+  m.hidden = false;
+  t.setAttribute("aria-expanded", "true");
+}
+function closeFormatMenu() {
+  const m = document.getElementById("format-menu");
+  const t = document.getElementById("format-trigger");
+  if (m) m.hidden = true;
+  if (t) t.setAttribute("aria-expanded", "false");
+}
+function chooseFormat(profile) {
+  const el = document.getElementById("profile");
+  if (el) el.value = profile;
+  closeFormatMenu();
+  applyProfile();
+  schedulePreview();
 }
 
 // Hinweis, wenn USt-IdNr. UND Steuernummer gesetzt sind (Steuernummer dann optional).
@@ -918,6 +951,7 @@ document.addEventListener("mousedown", (e) => {
   if (!e.target.closest(".unitsel") && !inMenu) closeUnitMenu();
   const inCustCombo = combo && combo.querySelector(".cust-name");
   if (!inCustCombo && !inMenu) closeCustMenu();
+  if (!e.target.closest("#format-trigger") && !e.target.closest("#format-menu")) closeFormatMenu();
 });
 // Tastaturbedienung des Einheiten-Dropdowns.
 document.addEventListener("keydown", (e) => {
@@ -947,6 +981,8 @@ document.addEventListener("keydown", (e) => {
 function repositionMenus() {
   if (comboInput && comboMenu && !comboMenu.hidden) positionComboMenu(comboInput);
   if (custInput && custMenu && !custMenu.hidden) positionCustMenu(custInput);
+  const fm = document.getElementById("format-menu");
+  if (fm && !fm.hidden) positionFormatMenu();
   if (unitSelectEl && unitMenu && !unitMenu.hidden) {
     const btn = unitSelectEl.parentElement.querySelector(".unitsel-btn");
     if (btn) positionUnitMenu(btn);
@@ -975,12 +1011,15 @@ document.addEventListener("click", (e) => {
     if (form) sessionStorage.setItem("erechnung:lang", JSON.stringify(snapshotForm(form)));
     return; // Navigation zum Sprachwechsel zulassen
   }
-  const fmtTab = e.target.closest(".format-tab");
-  if (fmtTab) {
-    const el = document.getElementById("profile");
-    if (el) el.value = fmtTab.dataset.profile;
-    applyProfile();
-    schedulePreview();
+  if (e.target.closest("#format-trigger")) {
+    const m = document.getElementById("format-menu");
+    if (m && m.hidden) openFormatMenu();
+    else closeFormatMenu();
+    return;
+  }
+  const fmtOpt = e.target.closest("#format-menu .combo-opt");
+  if (fmtOpt) {
+    chooseFormat(fmtOpt.dataset.profile);
     return;
   }
   if (e.target.id === "cust-delete-btn") {
@@ -1122,6 +1161,7 @@ document.addEventListener("keydown", (e) => {
     if (d && !d.hidden) closePreviewDrawer();
     const m = document.getElementById("cust-delete-modal");
     if (m && !m.hidden) m.hidden = true;
+    closeFormatMenu();
   }
 });
 
