@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=47">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=48">
 </head>
 <body>
 <header>
@@ -256,11 +256,6 @@
     </div>
   </div>
 
-  <div class="actions">
-    <a href="{{ url_for('validate') }}" class="link">{{ t.archive_link }}</a>
-    <span class="spacer"></span>
-    <button type="submit" id="generate-btn" data-zug="{{ t.generate }}" data-xr="{{ t.generate_xr }}">{{ t.generate }}</button>
-  </div>
 </form>
 
 </div><!-- /form-pane -->
@@ -276,6 +271,10 @@
     <div class="preview-frame-inner">
       <iframe id="preview-frame" title="{{ t.live_preview }}" scrolling="no"></iframe>
     </div>
+  </div>
+  <div class="preview-actions">
+    <button type="submit" form="invoice-form" id="generate-btn" data-zug="{{ t.generate }}" data-xr="{{ t.generate_xr }}">{{ t.generate }}</button>
+    <a href="{{ url_for('validate') }}" class="btn-secondary">{{ t.settings }}</a>
   </div>
 </aside>
 </div><!-- /layout -->

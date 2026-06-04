@@ -283,6 +283,17 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
 }
 .preview-expand:hover { color: var(--accent); border-color: var(--accent); }
 .preview-frame-wrap { flex: 0 1 auto; overflow: auto; background: #fff; }
+.preview-actions {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px; border-top: 1px solid var(--line); background: #fafafa;
+}
+.preview-actions #generate-btn { width: 100%; padding: 12px 18px; font-size: 15px; }
+.preview-actions .btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center; width: 100%;
+  padding: 10px 18px; border-radius: 9px; font-weight: 600; font-size: 14px;
+  background: #eceef2; color: var(--ink); text-decoration: none; cursor: pointer;
+}
+.preview-actions .btn-secondary:hover { background: #e0e3e9; }
 .preview-frame-inner { position: relative; width: 100%; }
 #preview-frame { position: absolute; top: 0; left: 0; transform-origin: top left;
   border: none; background: #fff; }

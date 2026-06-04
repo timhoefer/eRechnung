@@ -111,6 +111,7 @@ LANG = {
         "total": "Gesamt",
         # Aktionen
         "archive_link": "Rechnungen prüfen / Archiv →",
+        "settings": "Einstellungen",
         "pdf_preview": "PDF-Vorschau",
         "live_preview": "Live-Vorschau",
         "preview_expand": "In Originalgröße öffnen",
@@ -311,6 +312,7 @@ LANG = {
         "vat": "VAT",
         "total": "Total",
         "archive_link": "Check invoices / archive →",
+        "settings": "Settings",
         "pdf_preview": "PDF preview",
         "live_preview": "Live preview",
         "preview_expand": "Open at full size",
