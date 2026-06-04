@@ -8,8 +8,17 @@
 </head>
 <body>
 <header>
-  <h1>{{ t.validate_title }}</h1>
-  <p class="sub">{{ t.validate_sub }}</p>
+  <div class="header-row">
+    <div>
+      <h1>{{ t.validate_title }}</h1>
+      <p class="sub">{{ t.validate_sub }}</p>
+    </div>
+    <nav class="langswitch">
+      {% for code, name in languages.items() %}
+        <a href="{{ url_for('setlang', code=code) }}" class="{{ 'active' if code == lang else '' }}">{{ code|upper }}</a>
+      {% endfor %}
+    </nav>
+  </div>
 </header>
 
 {% with messages = get_flashed_messages(with_categories=true) %}

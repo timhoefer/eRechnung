@@ -1,5 +1,7 @@
 """Übersetzungen für UI und Rechnungs-PDF (Deutsch / Englisch)."""
 
+import re
+
 LANGUAGES = {"de": "Deutsch", "en": "English"}
 DEFAULT_LANG = "de"
 
@@ -418,3 +420,128 @@ def get_ui_lang(request) -> str:
 
 def t(lang: str) -> dict:
     return LANG.get(lang, LANG[DEFAULT_LANG])
+
+
+# --- Deutsche Texte für EN16931-Schematron-Regeln -------------------------
+# Die offiziellen EN16931-Regeln liegen nur auf Englisch vor; hier eine eigene
+# deutsche Fassung der häufigen Regeln (USt-Kategorien S/E/Z/AE/G/O, Kern- und
+# BR-CO-Regeln). Nicht enthaltene Codes werden unverändert (englisch) angezeigt.
+# XRechnung-BR-DE-Regeln sind bereits deutsch und bleiben unangetastet.
+RULE_DE = {
+    # Kernregeln
+    "BR-01": "Eine Rechnung muss eine Spezifikationskennung (BT-24) enthalten.",
+    "BR-02": "Eine Rechnung muss eine Rechnungsnummer (BT-1) enthalten.",
+    "BR-03": "Eine Rechnung muss ein Rechnungsdatum (BT-2) enthalten.",
+    "BR-04": "Eine Rechnung muss einen Rechnungstyp-Code (BT-3) enthalten.",
+    "BR-05": "Eine Rechnung muss einen Währungscode (BT-5) enthalten.",
+    "BR-06": "Eine Rechnung muss den Namen des Verkäufers (BT-27) enthalten.",
+    "BR-07": "Eine Rechnung muss den Namen des Käufers (BT-44) enthalten.",
+    "BR-08": "Eine Rechnung muss die Postanschrift des Verkäufers (BG-5) enthalten.",
+    "BR-09": "Die Postanschrift des Verkäufers muss einen Ländercode (BT-40) enthalten.",
+    "BR-10": "Eine Rechnung muss die Postanschrift des Käufers (BG-8) enthalten.",
+    "BR-11": "Die Postanschrift des Käufers muss einen Ländercode (BT-55) enthalten.",
+    "BR-12": "Eine Rechnung muss die Summe der Nettobeträge der Positionen (BT-106) enthalten.",
+    "BR-13": "Eine Rechnung muss den Gesamtbetrag ohne USt (BT-109) enthalten.",
+    "BR-14": "Eine Rechnung muss den Gesamtbetrag inkl. USt (BT-112) enthalten.",
+    "BR-15": "Eine Rechnung muss den fälligen Zahlbetrag (BT-115) enthalten.",
+    "BR-16": "Eine Rechnung muss mindestens eine Rechnungsposition (BG-25) enthalten.",
+    # Berechnungs-/Bedingungsregeln
+    "BR-CO-09": "Die USt-IdNr von Verkäufer, Steuervertreter und Käufer muss mit einem Länder-Präfix beginnen.",
+    "BR-CO-10": "Die Summe der Positions-Nettobeträge (BT-106) muss der Summe aller Positionsbeträge entsprechen.",
+    "BR-CO-11": "Die Summe der Nachlässe auf Dokumentebene (BT-107) muss der Summe aller Dokument-Nachlässe entsprechen.",
+    "BR-CO-12": "Die Summe der Zuschläge auf Dokumentebene (BT-108) muss der Summe aller Dokument-Zuschläge entsprechen.",
+    "BR-CO-13": "Der Gesamtbetrag ohne USt (BT-109) = Summe der Positionen − Nachlässe + Zuschläge.",
+    "BR-CO-14": "Die Gesamt-USt (BT-110) muss der Summe der USt-Beträge je Kategorie entsprechen.",
+    "BR-CO-15": "Der Gesamtbetrag inkl. USt (BT-112) = Betrag ohne USt + Gesamt-USt.",
+    "BR-CO-16": "Der fällige Zahlbetrag (BT-115) = Betrag inkl. USt − bereits gezahlt + Rundung.",
+    "BR-CO-17": "Der USt-Betrag je Kategorie = steuerpflichtiger Betrag × Satz / 100 (kaufmännisch gerundet).",
+    "BR-CO-26": "Damit der Käufer den Lieferanten automatisch erkennen kann, muss mindestens eine Verkäufer-Kennung vorhanden sein: Verkäufer-ID (BT-29), rechtliche Registernummer (BT-30) und/oder USt-IdNr (BT-31).",
+    # Standardsatz (S)
+    "BR-S-01": "Bei Verwendung der USt-Kategorie „Standardsatz“ muss genau eine USt-Aufschlüsselung mit dieser Kategorie vorhanden sein.",
+    "BR-S-02": "Eine Position mit USt-Kategorie „Standardsatz“ erfordert die USt-IdNr des Verkäufers oder seines Steuervertreters.",
+    "BR-S-03": "Ein Dokument-Nachlass mit Kategorie „Standardsatz“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-S-04": "Ein Dokument-Zuschlag mit Kategorie „Standardsatz“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-S-05": "Bei Kategorie „Standardsatz“ muss der Positions-USt-Satz (BT-152) größer als 0 sein.",
+    "BR-S-06": "Bei einem Dokument-Nachlass „Standardsatz“ muss der USt-Satz größer als 0 sein.",
+    "BR-S-07": "Bei einem Dokument-Zuschlag „Standardsatz“ muss der USt-Satz größer als 0 sein.",
+    "BR-S-08": "In der USt-Aufschlüsselung „Standardsatz“ muss der steuerpflichtige Betrag der Summe der zugehörigen Beträge entsprechen.",
+    "BR-S-09": "In der USt-Aufschlüsselung „Standardsatz“ muss der USt-Betrag = steuerpflichtiger Betrag × Satz sein.",
+    "BR-S-10": "Eine USt-Aufschlüsselung „Standardsatz“ darf keinen Befreiungsgrund enthalten.",
+    # Steuerbefreit (E)
+    "BR-E-01": "Bei Verwendung der USt-Kategorie „Steuerbefreit“ muss genau eine USt-Aufschlüsselung mit dieser Kategorie vorhanden sein.",
+    "BR-E-02": "Eine Position „Steuerbefreit“ erfordert die USt-IdNr des Verkäufers oder seines Steuervertreters.",
+    "BR-E-03": "Ein Dokument-Nachlass „Steuerbefreit“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-E-04": "Ein Dokument-Zuschlag „Steuerbefreit“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-E-05": "Bei Kategorie „Steuerbefreit“ muss der Positions-USt-Satz 0 sein.",
+    "BR-E-06": "Bei einem Dokument-Nachlass „Steuerbefreit“ muss der USt-Satz 0 sein.",
+    "BR-E-07": "Bei einem Dokument-Zuschlag „Steuerbefreit“ muss der USt-Satz 0 sein.",
+    "BR-E-08": "In der USt-Aufschlüsselung „Steuerbefreit“ muss der steuerpflichtige Betrag der Summe entsprechen.",
+    "BR-E-09": "In der USt-Aufschlüsselung „Steuerbefreit“ muss der USt-Betrag 0 sein.",
+    "BR-E-10": "Eine USt-Aufschlüsselung „Steuerbefreit“ muss einen Befreiungsgrund (Code oder Text) enthalten.",
+    # Nullsatz (Z)
+    "BR-Z-01": "Bei Verwendung der USt-Kategorie „Nullsatz“ muss genau eine USt-Aufschlüsselung mit dieser Kategorie vorhanden sein.",
+    "BR-Z-02": "Eine Position „Nullsatz“ erfordert die USt-IdNr des Verkäufers oder seines Steuervertreters.",
+    "BR-Z-03": "Ein Dokument-Nachlass „Nullsatz“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-Z-04": "Ein Dokument-Zuschlag „Nullsatz“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-Z-05": "Bei Kategorie „Nullsatz“ muss der Positions-USt-Satz 0 sein.",
+    "BR-Z-06": "Bei einem Dokument-Nachlass „Nullsatz“ muss der USt-Satz 0 sein.",
+    "BR-Z-07": "Bei einem Dokument-Zuschlag „Nullsatz“ muss der USt-Satz 0 sein.",
+    "BR-Z-08": "In der USt-Aufschlüsselung „Nullsatz“ muss der steuerpflichtige Betrag der Summe entsprechen.",
+    "BR-Z-09": "In der USt-Aufschlüsselung „Nullsatz“ muss der USt-Betrag 0 sein.",
+    "BR-Z-10": "Eine USt-Aufschlüsselung „Nullsatz“ darf keinen Befreiungsgrund enthalten.",
+    # Reverse Charge (AE)
+    "BR-AE-01": "Bei Verwendung der USt-Kategorie „Reverse Charge“ muss genau eine USt-Aufschlüsselung mit dieser Kategorie vorhanden sein.",
+    "BR-AE-02": "Eine Position „Reverse Charge“ erfordert sowohl die USt-IdNr des Verkäufers (oder Steuervertreters) als auch die des Käufers.",
+    "BR-AE-03": "Ein Dokument-Nachlass „Reverse Charge“ erfordert die USt-IdNr von Verkäufer (oder Steuervertreter) und Käufer.",
+    "BR-AE-04": "Ein Dokument-Zuschlag „Reverse Charge“ erfordert die USt-IdNr von Verkäufer (oder Steuervertreter) und Käufer.",
+    "BR-AE-05": "Bei Kategorie „Reverse Charge“ muss der Positions-USt-Satz 0 sein.",
+    "BR-AE-06": "Bei einem Dokument-Nachlass „Reverse Charge“ muss der USt-Satz 0 sein.",
+    "BR-AE-07": "Bei einem Dokument-Zuschlag „Reverse Charge“ muss der USt-Satz 0 sein.",
+    "BR-AE-08": "In der USt-Aufschlüsselung „Reverse Charge“ muss der steuerpflichtige Betrag der Summe entsprechen.",
+    "BR-AE-09": "In der USt-Aufschlüsselung „Reverse Charge“ muss der USt-Betrag 0 sein.",
+    "BR-AE-10": "Eine USt-Aufschlüsselung „Reverse Charge“ muss einen Befreiungsgrund (Code oder Text) enthalten.",
+    # Ausfuhr Drittland (G)
+    "BR-G-01": "Bei Verwendung der USt-Kategorie „Ausfuhr außerhalb der EU“ muss genau eine USt-Aufschlüsselung mit dieser Kategorie vorhanden sein.",
+    "BR-G-02": "Eine Position „Ausfuhr außerhalb der EU“ erfordert die USt-IdNr des Verkäufers oder seines Steuervertreters.",
+    "BR-G-03": "Ein Dokument-Nachlass „Ausfuhr außerhalb der EU“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-G-04": "Ein Dokument-Zuschlag „Ausfuhr außerhalb der EU“ erfordert die USt-IdNr des Verkäufers oder Steuervertreters.",
+    "BR-G-05": "Bei Kategorie „Ausfuhr außerhalb der EU“ muss der Positions-USt-Satz 0 sein.",
+    "BR-G-06": "Bei einem Dokument-Nachlass „Ausfuhr außerhalb der EU“ muss der USt-Satz 0 sein.",
+    "BR-G-07": "Bei einem Dokument-Zuschlag „Ausfuhr außerhalb der EU“ muss der USt-Satz 0 sein.",
+    "BR-G-08": "In der USt-Aufschlüsselung „Ausfuhr außerhalb der EU“ muss der steuerpflichtige Betrag der Summe entsprechen.",
+    "BR-G-09": "In der USt-Aufschlüsselung „Ausfuhr außerhalb der EU“ muss der USt-Betrag 0 sein.",
+    "BR-G-10": "Eine USt-Aufschlüsselung „Ausfuhr außerhalb der EU“ muss einen Befreiungsgrund (Code oder Text) enthalten.",
+    # Nicht steuerbar / nicht USt-pflichtig (O)
+    "BR-O-01": "Bei Verwendung der USt-Kategorie „Nicht steuerbar“ muss genau eine USt-Aufschlüsselung mit dieser Kategorie vorhanden sein und keine andere.",
+    "BR-O-02": "Eine Rechnung mit einer Position der Kategorie „Nicht steuerbar“ darf weder die USt-IdNr des Verkäufers (BT-31), die des Steuervertreters (BT-63) noch die des Käufers (BT-48) enthalten.",
+    "BR-O-03": "Ein Dokument-Nachlass „Nicht steuerbar“ darf keine USt-IdNr von Verkäufer, Steuervertreter oder Käufer enthalten.",
+    "BR-O-04": "Ein Dokument-Zuschlag „Nicht steuerbar“ darf keine USt-IdNr von Verkäufer, Steuervertreter oder Käufer enthalten.",
+    "BR-O-05": "Eine Position der Kategorie „Nicht steuerbar“ darf keinen Positions-USt-Satz (BT-152) enthalten.",
+    "BR-O-06": "Ein Dokument-Nachlass „Nicht steuerbar“ darf keinen USt-Satz enthalten.",
+    "BR-O-07": "Ein Dokument-Zuschlag „Nicht steuerbar“ darf keinen USt-Satz enthalten.",
+    "BR-O-08": "In der USt-Aufschlüsselung „Nicht steuerbar“ muss der steuerpflichtige Betrag der Summe entsprechen.",
+    "BR-O-09": "In der USt-Aufschlüsselung „Nicht steuerbar“ muss der USt-Betrag 0 sein.",
+    "BR-O-10": "Eine USt-Aufschlüsselung „Nicht steuerbar“ muss einen Befreiungsgrund (Code oder Text) enthalten.",
+    "BR-O-11": "Eine Rechnung mit einer USt-Aufschlüsselung „Nicht steuerbar“ darf keine weitere USt-Aufschlüsselung enthalten.",
+    "BR-O-12": "Eine Rechnung mit einer USt-Aufschlüsselung „Nicht steuerbar“ darf keine Position einer anderen USt-Kategorie enthalten.",
+    "BR-O-13": "Eine Rechnung mit einer USt-Aufschlüsselung „Nicht steuerbar“ darf keinen Dokument-Nachlass einer anderen Kategorie enthalten.",
+    "BR-O-14": "Eine Rechnung mit einer USt-Aufschlüsselung „Nicht steuerbar“ darf keinen Dokument-Zuschlag einer anderen Kategorie enthalten.",
+}
+
+_RULE_RE = re.compile(r"^\[([A-Z0-9-]+)\]\s*[-–—]?\s*(.*?)\s*(\(×\d+\))?$", re.S)
+
+
+def localize_rule(msg: str, lang: str) -> str:
+    """Schematron-Meldung an die UI-Sprache anpassen. Bei 'de' werden bekannte
+    EN16931-Regeln durch deutsche Texte ersetzt; alles andere bleibt unverändert
+    (englische EN16931-Texte als Fallback, deutsche BR-DE-Regeln unangetastet)."""
+    if lang != "de":
+        return msg
+    m = _RULE_RE.match(msg or "")
+    if not m:
+        return msg
+    code, _orig, count = m.group(1), m.group(2), m.group(3)
+    de = RULE_DE.get(code)
+    if not de:
+        return msg
+    return f"[{code}] {de}" + (f" {count}" if count else "")

@@ -20,7 +20,7 @@ from flask import (
 )
 
 from countries import COUNTRIES
-from i18n import LANGUAGES, get_ui_lang
+from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
 from zugferd import (
     TAX_TREATMENTS,
@@ -847,6 +847,11 @@ def validate():
     result = None
     if request.method == "POST":
         result = _validate_request()
+        lang = get_ui_lang(request)
+        sch = result.get("sch") if result else None
+        if sch and sch.get("available"):
+            sch["errors"] = [localize_rule(m, lang) for m in sch["errors"]]
+            sch["warnings"] = [localize_rule(m, lang) for m in sch["warnings"]]
 
     archive = []
     for p in sorted(OUTPUT_DIR.glob("*.pdf"), reverse=True):
