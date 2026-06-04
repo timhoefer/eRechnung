@@ -1,3 +1,4 @@
 flask
 drafthorse
 weasyprint
+saxonche  # EN16931-Schematron-Prüfung (XSLT 2.0)

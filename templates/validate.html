@@ -23,8 +23,33 @@
   <strong>{{ '✓' if result.ok else '✗' }} {{ result.label }}</strong>
   {% if result.ok %}
     <p>{{ t.validate_ok_text }}</p>
+  {% endif %}
+
+  {# XSD-Struktur #}
+  {% if result.xsd_messages %}
+    <p style="margin:10px 0 2px"><strong>{{ t.val_xsd }}: ✗</strong></p>
+    <ul>{% for m in result.xsd_messages %}<li>{{ m }}</li>{% endfor %}</ul>
+  {% elif not result.ok %}
+    <p style="margin:10px 0 2px">{{ t.val_xsd }}: ✓</p>
+  {% endif %}
+
+  {# Schematron-Geschäftsregeln #}
+  {% if result.sch is none %}
+  {% elif not result.sch.available %}
+    <p class="hint" style="margin:10px 0 0">{{ t.val_sch_unavailable }}</p>
+  {% elif result.sch.error %}
+    <p class="hint" style="margin:10px 0 0">{{ t.val_sch_error }}: {{ result.sch.error }}</p>
   {% else %}
-    <ul>{% for m in result.messages %}<li>{{ m }}</li>{% endfor %}</ul>
+    {% if result.sch.errors %}
+      <p style="margin:10px 0 2px"><strong>{{ t.val_sch }}: ✗</strong></p>
+      <ul>{% for m in result.sch.errors %}<li>{{ m }}</li>{% endfor %}</ul>
+    {% elif not result.ok %}
+      <p style="margin:10px 0 2px">{{ t.val_sch }}: ✓</p>
+    {% endif %}
+    {% if result.sch.warnings %}
+      <p style="margin:10px 0 2px">{{ t.val_sch_warnings }}:</p>
+      <ul>{% for m in result.sch.warnings %}<li>{{ m }}</li>{% endfor %}</ul>
+    {% endif %}
   {% endif %}
 </div>
 {% endif %}

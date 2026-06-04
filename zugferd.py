@@ -453,6 +453,116 @@ def validate_xml_bytes(xml: bytes):
     return ok, messages
 
 
+# --- Schematron: Geschäftsregeln (BR-*), die das XSD nicht prüft ------------
+_SCH_STATE: dict = {}  # Cache: "proc" + je XSLT-Pfad das kompilierte Stylesheet
+_SCH_LOCK = None
+_SCH_EN16931 = "EN16931-CII-validation.xslt"  # EN-16931-Kernregeln
+_SCH_XRECHNUNG = "XRechnung-CII-validation.xsl"  # zusätzliche BR-DE-Regeln
+
+
+def _schematron_dir() -> str:
+    import os
+
+    return os.path.join(os.path.dirname(__file__), "schematron")
+
+
+def schematron_available() -> bool:
+    """True, wenn EN16931-XSLT vorhanden und saxonche installiert ist."""
+    import os
+
+    if not os.path.exists(os.path.join(_schematron_dir(), _SCH_EN16931)):
+        return False
+    try:
+        import saxonche  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _run_schematron(xslt_path: str, xml: bytes):
+    """Ein Stylesheet ausführen -> (errors:list[str], warnings:list[str])."""
+    import threading
+
+    from lxml import etree
+    from saxonche import PySaxonProcessor
+
+    global _SCH_LOCK
+    if _SCH_LOCK is None:
+        _SCH_LOCK = threading.Lock()
+
+    with _SCH_LOCK:
+        if "proc" not in _SCH_STATE:
+            _SCH_STATE["proc"] = PySaxonProcessor(license=False)
+        proc = _SCH_STATE["proc"]
+        if xslt_path not in _SCH_STATE:
+            _SCH_STATE[xslt_path] = proc.new_xslt30_processor().compile_stylesheet(
+                stylesheet_file=xslt_path
+            )
+        node = proc.parse_xml(xml_text=xml.decode("utf-8"))
+        svrl = _SCH_STATE[xslt_path].transform_to_string(xdm_node=node)
+
+    root = etree.fromstring(svrl.encode("utf-8"))
+    ns = {"svrl": "http://purl.oclc.org/dsdl/svrl"}
+    errs, warns = [], []
+    for fa in root.findall(".//svrl:failed-assert", ns):
+        flag = (fa.get("flag") or fa.get("role") or "fatal").lower()
+        text_el = fa.find("svrl:text", ns)
+        msg = " ".join((text_el.text or "").split()) if text_el is not None else "(ohne Text)"
+        (warns if flag in ("warning", "info") else errs).append(msg)
+    return errs, warns
+
+
+def validate_schematron(xml: bytes) -> dict:
+    """Geschäftsregeln per Schematron prüfen (EN 16931 + ggf. XRechnung BR-DE).
+
+    Das XRechnung-Profil wird automatisch an der Spec-ID im XML erkannt; dann
+    laufen zusätzlich die BR-DE-Regeln. Rückgabe:
+    {"available", "ok", "errors", "warnings", "error", "xrechnung"}.
+    Robust: fehlt saxonche/XSLT oder wirft Saxon, bleibt die Seite heil.
+    """
+    import os
+
+    out = {"available": False, "ok": None, "errors": [], "warnings": [], "error": None, "xrechnung": False}
+    d = _schematron_dir()
+    en_path = os.path.join(d, _SCH_EN16931)
+    if not os.path.exists(en_path):
+        return out
+    try:
+        import saxonche  # noqa: F401
+    except ImportError:
+        return out
+
+    paths = [en_path]
+    is_xr = b"xrechnung" in xml.lower()  # Spec-ID enthält "...:xrechnung_3.0"
+    if is_xr:
+        xr_path = os.path.join(d, _SCH_XRECHNUNG)
+        if os.path.exists(xr_path):
+            paths.append(xr_path)
+
+    err_counts: dict = {}
+    warn_counts: dict = {}
+    try:
+        for p in paths:
+            errs, warns = _run_schematron(p, xml)
+            for m in errs:
+                err_counts[m] = err_counts.get(m, 0) + 1
+            for m in warns:
+                warn_counts[m] = warn_counts.get(m, 0) + 1
+    except Exception as exc:  # Saxon-/Parse-Fehler dürfen die Seite nicht killen
+        out["error"] = str(exc)
+        return out
+
+    def _fmt(counts):
+        return [m + (f" (×{c})" if c > 1 else "") for m, c in counts.items()]
+
+    out["available"] = True
+    out["xrechnung"] = is_xr
+    out["errors"] = _fmt(err_counts)
+    out["warnings"] = _fmt(warn_counts)
+    out["ok"] = not err_counts
+    return out
+
+
 def extract_xml_from_pdf(pdf_bytes: bytes):
     """Eingebettetes ZUGFeRD-/Factur-X-XML aus einem PDF herausziehen."""
     import io

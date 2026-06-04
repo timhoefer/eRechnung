@@ -18,8 +18,16 @@
     <p>{{ t.valid_ok_text }}</p>
   {% else %}
     <strong>&#10007; {{ t.valid_err }}</strong>
-    <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+    {% if messages %}
+      <p style="margin:10px 0 2px"><strong>{{ t.val_xsd }}:</strong></p>
+      <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if sch and sch.available and sch.errors %}
+      <p style="margin:10px 0 2px"><strong>{{ t.val_sch }}:</strong></p>
+      <ul>{% for m in sch.errors %}<li>{{ m }}</li>{% endfor %}</ul>
+    {% endif %}
   {% endif %}
+  {% if sch and not sch.available %}<p class="hint">{{ t.val_sch_unavailable }}</p>{% endif %}
   <p class="hint">{{ t.valid_hint }}</p>
 </div>
 

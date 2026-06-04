@@ -29,6 +29,8 @@ from zugferd import (
     extract_xml_from_pdf,
     fmt_money,
     loc,
+    schematron_available,
+    validate_schematron,
     validate_xml_bytes,
 )
 
@@ -552,9 +554,12 @@ def generate():
         json.dumps(sidecar, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    # Validierung des eingebetteten XML (Round-Trip aus dem fertigen PDF)
+    # Validierung des eingebetteten XML (Round-Trip aus dem fertigen PDF):
+    # XSD-Struktur + EN16931-Geschäftsregeln (Schematron).
     embedded = extract_xml_from_pdf(pdf)
     ok, messages = validate_xml_bytes(embedded) if embedded else (False, ["Kein XML im PDF gefunden."])
+    sch = validate_schematron(embedded) if embedded else None
+    valid = ok and (not sch or not sch["available"] or sch["ok"])
 
     # Letzte Rechnungsnummer merken
     seller["last_invoice_number"] = inv_number
@@ -566,8 +571,9 @@ def generate():
         inv=data["invoice"],
         buyer=data["buyer"],
         totals=totals,
-        valid=ok,
+        valid=valid,
         messages=messages,
+        sch=sch,
     )
 
 
@@ -696,9 +702,17 @@ def _validate_request():
 
     xml = raw if raw.lstrip().startswith(b"<") else extract_xml_from_pdf(raw)
     if not xml:
-        return {"label": label, "ok": False, "messages": ["Kein eingebettetes XML gefunden."]}
-    ok, messages = validate_xml_bytes(xml)
-    return {"label": label, "ok": ok, "messages": messages}
+        return {"label": label, "ok": False, "xsd_messages": ["Kein eingebettetes XML gefunden."], "sch": None}
+    xsd_ok, xsd_messages = validate_xml_bytes(xml)
+    sch = validate_schematron(xml)
+    overall = xsd_ok and (not sch["available"] or sch["ok"])
+    return {
+        "label": label,
+        "ok": overall,
+        "xsd_ok": xsd_ok,
+        "xsd_messages": xsd_messages,
+        "sch": sch,
+    }
 
 
 if __name__ == "__main__":
