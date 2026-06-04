@@ -15,3 +15,6 @@ customers.json
 
 # Erzeugte Rechnungen (PDF + Sidecar-JSON)
 output/
+
+# Lokaler Datenordner-Pfad (kein Commit)
+config.json

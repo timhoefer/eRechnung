@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -35,10 +36,84 @@ from zugferd import (
 )
 
 BASE = Path(__file__).parent
-SELLER_FILE = BASE / "seller.json"
-CUSTOMERS_FILE = BASE / "customers.json"
-OUTPUT_DIR = BASE / "output"
-OUTPUT_DIR.mkdir(exist_ok=True)
+CONFIG_FILE = BASE / "config.json"  # merkt sich den gewählten Datenordner
+
+
+def _load_app_config() -> dict:
+    try:
+        return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _resolve_data_dir() -> Path:
+    """Datenordner aus config.json (vom Nutzer wählbar, z. B. Dropbox);
+    Fallback auf den App-Ordner. App bleibt offline – nur dieser Ordner zählt."""
+    raw = (_load_app_config().get("data_dir") or "").strip()
+    if raw:
+        p = Path(raw).expanduser()
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except OSError:
+            pass
+    return BASE
+
+
+DATA_DIR = _resolve_data_dir()
+SELLER_FILE = DATA_DIR / "seller.json"
+CUSTOMERS_FILE = DATA_DIR / "customers.json"
+OUTPUT_DIR = DATA_DIR / "output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def set_data_dir(raw: str):
+    """Datenordner umstellen: prüfen, vorhandene Daten kopieren (ohne zu
+    überschreiben), Pfad speichern, globale Pfade aktualisieren. -> (ok, key)."""
+    global DATA_DIR, SELLER_FILE, CUSTOMERS_FILE, OUTPUT_DIR
+    import shutil
+
+    raw = (raw or "").strip()
+    target = BASE if not raw else Path(raw).expanduser()
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        probe = target / ".write_test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError:
+        return False, "data_dir_err_write"
+
+    old = DATA_DIR
+    if target.resolve() != old.resolve():
+        # Vorhandene Daten in den neuen Ordner übernehmen, aber nichts
+        # überschreiben (Recovery-Fall: Zielordner enthält schon Daten).
+        (target / "output").mkdir(exist_ok=True)
+        for name in ("seller.json", "customers.json"):
+            src, dst = old / name, target / name
+            if src.exists() and not dst.exists():
+                shutil.copy2(src, dst)
+        src_out = old / "output"
+        if src_out.is_dir():
+            for f in src_out.iterdir():
+                dst = target / "output" / f.name
+                if f.is_file() and not dst.exists():
+                    shutil.copy2(f, dst)
+
+    cfg = _load_app_config()
+    cfg["data_dir"] = "" if target.resolve() == BASE.resolve() else str(target)
+    try:
+        CONFIG_FILE.write_text(
+            json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError:
+        return False, "data_dir_err_save"
+
+    DATA_DIR = target
+    SELLER_FILE = target / "seller.json"
+    CUSTOMERS_FILE = target / "customers.json"
+    OUTPUT_DIR = target / "output"
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    return True, "data_dir_ok"
 
 app = Flask(__name__)
 app.secret_key = "erechnung-local"  # nur für Flash-Messages, rein lokal
@@ -713,7 +788,40 @@ def validate():
         result=result,
         archive=archive,
         depinfo=drafthorse_version_info(),
+        data_dir=str(DATA_DIR),
+        data_dir_custom=DATA_DIR.resolve() != BASE.resolve(),
+        can_browse=(sys.platform == "darwin"),
     )
+
+
+@app.route("/data-dir", methods=["POST"])
+def data_dir_set():
+    ok, key = set_data_dir(request.form.get("data_dir", ""))
+    ui = translate(get_ui_lang(request))
+    flash(ui.get(key, key), "ok" if ok else "err")
+    return redirect(url_for("validate"))
+
+
+@app.route("/data-dir/browse", methods=["POST"])
+def data_dir_browse():
+    """Nativen Ordner-Dialog öffnen (lokal, macOS) und gewählten Pfad zurückgeben."""
+    import subprocess
+
+    if sys.platform != "darwin":
+        return {"ok": False, "error": "unsupported"}
+    script = (
+        'POSIX path of (choose folder with prompt "Datenordner wählen" '
+        "default location (path to home folder))"
+    )
+    try:
+        r = subprocess.run(
+            ["osascript", "-e", script], capture_output=True, text=True, timeout=600
+        )
+    except Exception:
+        return {"ok": False, "error": "failed"}
+    if r.returncode != 0:  # vom Nutzer abgebrochen
+        return {"ok": True, "path": None}
+    return {"ok": True, "path": r.stdout.strip() or None}
 
 
 def _validate_request():

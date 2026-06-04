@@ -92,6 +92,21 @@
   {% endif %}
 </div>
 
+<div class="card">
+  <h2>{{ t.datadir_title }}</h2>
+  <p class="hint">{{ t.datadir_hint }}</p>
+  <form method="post" action="{{ url_for('data_dir_set') }}" class="datadir-form">
+    <label class="wide">{{ t.datadir_label }}
+      <input name="data_dir" id="data-dir-input" value="{{ data_dir if data_dir_custom else '' }}" placeholder="{{ data_dir }}">
+    </label>
+    <div style="margin-top:12px">
+      {% if can_browse %}<button type="button" class="secondary" id="dd-browse">{{ t.datadir_browse }}</button>{% endif %}
+      <button type="submit" class="secondary">{{ t.datadir_save }}</button>
+    </div>
+  </form>
+  <p class="hint" style="margin-top:10px">{{ t.datadir_current }} <code>{{ data_dir }}</code></p>
+</div>
+
 <div class="card status {{ 'ok' if depinfo.current and not depinfo.update_available and not depinfo.error else '' }}">
   <strong>{{ t.dep_title }}</strong>
   <table class="summary" style="margin-top:8px">
@@ -141,6 +156,19 @@
     document.getElementById("del-cancel").addEventListener("click", close);
     modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+    const browseBtn = document.getElementById("dd-browse");
+    if (browseBtn) {
+      const ddInput = document.getElementById("data-dir-input");
+      browseBtn.addEventListener("click", () => {
+        browseBtn.disabled = true;
+        fetch("{{ url_for('data_dir_browse') }}", { method: "POST" })
+          .then((r) => r.json())
+          .then((d) => { if (d.ok && d.path) ddInput.value = d.path; })
+          .catch(() => {})
+          .finally(() => { browseBtn.disabled = false; });
+      });
+    }
   })();
 </script>
 </body>
