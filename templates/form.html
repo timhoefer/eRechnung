@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=23">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=29">
 </head>
 <body>
 <header>
@@ -85,13 +85,6 @@
       <label>{{ t.invoice_no }}<input name="number" value="{{ defaults.number }}" required></label>
       <label>{{ t.invoice_date }}<input name="issue_date" type="date" value="{{ defaults.issue_date }}" required></label>
       <label>{{ t.due }}<input name="due_date" type="date" value="{{ defaults.due_date }}"></label>
-      <label class="wide">{{ t.service_period }}
-        <span class="period">
-          <input name="service_start" type="date" aria-label="{{ t.service_from }}">
-          <span class="period-sep">–</span>
-          <input name="service_end" type="date" aria-label="{{ t.service_to }}">
-        </span>
-      </label>
       <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
       <label>{{ t.invoice_language }}
         <select name="language">
@@ -107,7 +100,6 @@
         </select>
       </label>
       <p class="hint wide" id="profile-hint" hidden>{{ t.profile_hint }}</p>
-      <label class="wide">{{ t.extra_note }}<input name="note" placeholder="{{ t.extra_note_ph }}"></label>
     </div>
   </div>
 
@@ -124,12 +116,14 @@
       <button type="submit" class="secondary danger" formaction="{{ url_for('customers_delete') }}" formnovalidate>{{ t.delete }}</button>
     </div>
     <div class="grid">
-      <label class="wide">{{ t.name }}<input name="buyer_name" required></label>
-      <label class="wide">{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
-      <label class="wide">{{ t.street }}<input name="buyer_address_line"></label>
+      <label class="span-3">{{ t.name }}<input name="buyer_name" required></label>
+      <label>{{ t.vat_id }}<input name="buyer_vat_id" placeholder="ATU12345678"></label>
+      <button type="button" class="add-attn wide">{{ t.attn_add }}</button>
+      <label class="attn-label wide" hidden>{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
+      <label>{{ t.street }}<input name="buyer_address_line"></label>
       <label>{{ t.postcode }}<input name="buyer_postcode"></label>
       <label>{{ t.city }}<input name="buyer_city"></label>
-      <label>{{ t.country }}
+      <label class="new-row">{{ t.country }}
         <select name="buyer_country" id="buyer_country">
           {% for code, label in countries %}
             <option value="{{ code }}" {{ 'selected' if code == 'DE' else '' }}>{{ loc(label, lang) }}</option>
@@ -137,10 +131,14 @@
         </select>
       </label>
       <label id="buyer-state-field" hidden>{{ t.state }}<select name="buyer_state" id="buyer_state"></select></label>
-      <label>{{ t.vat_id }}<input name="buyer_vat_id" placeholder="ATU12345678"></label>
-      <label>{{ t.email }}<input name="buyer_email" type="email"></label>
+      <label class="span-2">{{ t.email }}<input name="buyer_email" type="email"></label>
       <label class="wide">{{ t.buyer_reference }}<input name="buyer_reference"></label>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>{{ t.note_section }}</h2>
+    <label class="wide">{{ t.extra_note }}<input name="note" placeholder="{{ t.extra_note_ph }}"></label>
   </div>
 
   <div class="card">
@@ -158,6 +156,14 @@
 
   <div class="card">
     <h2>{{ t['items'] }}</h2>
+    <label class="period-overall">{{ t.service_period_overall }}
+      <span class="period">
+        <input name="service_start" type="date" aria-label="{{ t.service_from }}">
+        <span class="period-sep">–</span>
+        <input name="service_end" type="date" aria-label="{{ t.service_to }}">
+      </span>
+    </label>
+    <p class="hint" id="period-overall-hint">{{ t.service_period_hint }}</p>
     <table id="items">
       <thead>
         <tr><th>{{ t.description }}</th><th>{{ t.quantity }}</th><th>{{ t.unit }}</th><th>{{ t.unit_price }}</th><th>{{ t.amount }}</th><th></th></tr>
@@ -283,6 +289,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=23"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=24"></script>
 </body>
 </html>

@@ -44,6 +44,9 @@ h2 { margin: 0 0 14px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 14px; margin-top: 14px; }
 label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
 label.wide { grid-column: 1 / -1; }
+label.span-2 { grid-column: span 2; }
+label.span-3 { grid-column: span 3; }
+label.new-row { grid-column: 1; }  /* erzwingt Zeilenumbruch im Grid */
 .form-section {
   grid-column: 1 / -1; margin: 16px 0 2px; font-size: 13px; font-weight: 600;
   color: var(--ink); padding-bottom: 7px; border-bottom: 1px solid var(--line);
@@ -108,16 +111,20 @@ table#items input { padding: 7px 8px; }
 .totals, .line-sum, table.summary td:last-child { font-variant-numeric: tabular-nums; }
 .period { display: flex; align-items: center; gap: 8px; }
 .period-sep { color: var(--muted); }
+.period-overall .period { display: flex; }
+.period-overall .period input { flex: 1; }
+#period-overall-hint { margin: 4px 0 16px; }
 .line-disc { display: flex; align-items: center; gap: 8px; }
 .disc-input { width: 84px; }
 .disc-type { width: 76px; }
 /* Toggle-Zeile: „+ Leistungszeitraum“ und „+ Rabatt“ nebeneinander, umbruchfähig. */
 .extra-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin-bottom: 14px; }
-.add-period, .add-discount {
+.add-period, .add-discount, .add-attn {
   width: fit-content; padding: 0; border: none; background: none; color: var(--accent);
   font-size: 12px; font-weight: 600;
 }
-.add-period:hover, .add-discount:hover { background: none; color: var(--accent-d); text-decoration: underline; }
+.add-period:hover, .add-discount:hover, .add-attn:hover { background: none; color: var(--accent-d); text-decoration: underline; }
+.add-attn { justify-self: start; margin: 2px 0; }
 .item-extra td { padding: 2px 4px 28px; }
 .period-label, .discount-label { margin: 0; }
 .period-label .period, .discount-label .line-disc { margin-top: 4px; }

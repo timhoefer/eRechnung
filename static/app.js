@@ -87,6 +87,17 @@ function autoSelectTreatment() {
   showNote();
 }
 
+// "z.Hd. / c/o" ein-/ausklappen (analog zum Leistungszeitraum bei den Positionen).
+function syncAttnField() {
+  const label = document.querySelector(".attn-label");
+  const btn = document.querySelector(".add-attn");
+  const inp = document.querySelector("[name='buyer_contact']");
+  if (!label || !btn || !inp) return;
+  const has = !!inp.value.trim();
+  label.hidden = !has;
+  btn.hidden = has;
+}
+
 function showProfileHint() {
   const profile = document.querySelector("#profile");
   const hint = document.querySelector("#profile-hint");
@@ -789,6 +800,7 @@ document.addEventListener("change", (e) => {
       fillCustomer(e.target.value);
       autoSelectTreatment();
     } else lastSavedCustomerName = "";
+    syncAttnField();
     refreshSavedItems();
   }
   if (e.target.matches('#items [name="description"]')) {
@@ -802,6 +814,15 @@ document.addEventListener("click", (e) => {
     const form = document.getElementById("invoice-form");
     if (form) sessionStorage.setItem("erechnung:lang", JSON.stringify(snapshotForm(form)));
     return; // Navigation zum Sprachwechsel zulassen
+  }
+  if (e.target.closest(".add-attn")) {
+    const label = document.querySelector(".attn-label");
+    const btn = document.querySelector(".add-attn");
+    if (label) label.hidden = false;
+    if (btn) btn.hidden = true;
+    const inp = label && label.querySelector("input");
+    if (inp) inp.focus();
+    return;
   }
   const unitTrigger = e.target.closest(".unitsel-btn, .unitsel .combo-caret");
   if (unitTrigger) {
@@ -925,6 +946,7 @@ document.addEventListener("keydown", (e) => {
 showNote();
 showProfileHint();
 toggleRefFields();
+syncAttnField();
 updateStateField();
 syncItemPeriods();
 syncItemDiscounts();
