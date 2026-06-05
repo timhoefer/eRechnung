@@ -52,13 +52,42 @@ function recalc() {
   document.querySelector("#t-tax-label").textContent = rate > 0 ? vatLabel + " " + rate + " %" : vatLabel;
 }
 
+// Passt die gewählte Behandlung zum Land des Rechnungsempfängers?
+// Kleinunternehmer hängt am Verkäuferstatus und ist immer zulässig.
+function isTreatmentCompatible(treatment, country) {
+  if (treatment === "kleinunternehmer") return true;
+  country = (country || "DE").toUpperCase();
+  if (country === "DE") return treatment === "de_19" || treatment === "de_7";
+  if (EU_COUNTRIES.has(country)) return treatment === "eu_reverse";
+  return treatment === "non_eu" || treatment === "non_eu_g";
+}
+// Erklärungs-/Warnbox unter dem Dropdown aktualisieren.
 function showNote() {
   const sel = document.querySelector("#tax_treatment");
+  if (!sel) return;
   const opt = sel.querySelector("option:checked");
-  document.querySelector("#tax-note").textContent = opt.dataset.note || "";
-  // Reminder zum Nachweis der Unternehmereigenschaft nur bei Drittland-Fällen.
-  const proof = document.querySelector("#proof-hint");
-  if (proof) proof.hidden = !(sel.value === "non_eu" || sel.value === "non_eu_g");
+  const explain = document.querySelector("#tax-explain");
+  const warn = document.querySelector("#tax-warn");
+  const cc = document.querySelector("[name='buyer_country']");
+  const country = cc ? cc.value : "DE";
+  const ok = isTreatmentCompatible(sel.value, country);
+  // Erklärung der GEWÄHLTEN Behandlung immer zeigen (auch bei Mismatch);
+  // die Warnung erscheint zusätzlich darüber.
+  if (explain) {
+    explain.textContent = opt.dataset.explain || "";
+    explain.hidden = !opt.dataset.explain;
+  }
+  if (warn) {
+    if (ok) {
+      warn.hidden = true;
+    } else {
+      const wantOpt = sel.querySelector('option[value="' + deriveTreatment(country) + '"]');
+      const wantLabel = wantOpt ? wantOpt.textContent.trim() : "";
+      const tmpl = window.MSG_TAX_MISMATCH || "{suggested}";
+      warn.textContent = tmpl.replace("{suggested}", wantLabel);
+      warn.hidden = false;
+    }
+  }
 }
 
 // EU-Mitgliedstaaten (ISO-3166-1 alpha-2) für die automatische Steuer-Vorauswahl.

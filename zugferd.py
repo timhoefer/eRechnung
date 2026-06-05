@@ -43,6 +43,10 @@ TAX_TREATMENTS = {
         "label": {"de": "Inland 19 % USt", "en": "Domestic 19% VAT"},
         "note": {"de": None, "en": None},
         "reason": {"de": None, "en": None},
+        "explain": {
+            "de": "Kunde in Deutschland → steuerbare Inlandsleistung mit 19 % USt.",
+            "en": "Customer in Germany → domestic supply with 19% VAT.",
+        },
     },
     "de_7": {
         "category": "S",
@@ -50,6 +54,10 @@ TAX_TREATMENTS = {
         "label": {"de": "Inland 7 % USt (ermäßigt)", "en": "Domestic 7% VAT (reduced)"},
         "note": {"de": None, "en": None},
         "reason": {"de": None, "en": None},
+        "explain": {
+            "de": "Ermäßigter Inlandssatz (7 %) – nur für bestimmte Leistungen; manuell zu wählen.",
+            "en": "Reduced domestic rate (7%) – only for certain supplies; choose manually.",
+        },
     },
     "non_eu": {
         # Kategorie AE (Reverse Charge) für Drittland-B2B (z. B. UK): der
@@ -78,6 +86,20 @@ TAX_TREATMENTS = {
         "reason": {
             "de": "Nicht steuerbare sonstige Leistung (§ 3a Abs. 2 UStG)",
             "en": "Non-taxable other service (Section 3a (2) UStG)",
+        },
+        "explain": {
+            "de": (
+                "Kunde im Drittland (z. B. UK), B2B → nicht im Inland steuerbar "
+                "(§ 3a Abs. 2 UStG); Reverse Charge nach dem Recht des Kundenlandes. "
+                "Voraussetzung: Kunde ist Unternehmer (Nachweis aufbewahren, z. B. UK: "
+                "Certificate of Residence) und dessen USt-IdNr liegt vor."
+            ),
+            "en": (
+                "Customer in a third country (e.g. UK), B2B → not subject to German VAT "
+                "(Sec. 3a(2) UStG); reverse charge under the customer's rules. "
+                "Requires: customer is a business (keep proof, e.g. UK Certificate of "
+                "Residence) and their VAT ID is available."
+            ),
         },
     },
     "non_eu_g": {
@@ -108,6 +130,16 @@ TAX_TREATMENTS = {
             "de": "Nicht steuerbare sonstige Leistung (§ 3a Abs. 2 UStG)",
             "en": "Non-taxable other service (Section 3a (2) UStG)",
         },
+        "explain": {
+            "de": (
+                "Drittland-Kunde ohne USt-IdNr → als nicht steuerbare Leistung "
+                "behandelt; es genügt deine eigene USt-IdNr (keine Kunden-USt-IdNr nötig)."
+            ),
+            "en": (
+                "Third-country customer without VAT ID → treated as a non-taxable "
+                "supply; only your own VAT ID is required (no customer VAT ID needed)."
+            ),
+        },
     },
     "eu_reverse": {
         "category": "AE",
@@ -124,6 +156,18 @@ TAX_TREATMENTS = {
             ),
         },
         "reason": {"de": "Reverse charge", "en": "Reverse charge"},
+        "explain": {
+            "de": (
+                "Kunde im EU-Ausland, B2B → Reverse Charge: der Kunde schuldet die USt "
+                "in seinem Land (Art. 196 MwStSystRL, § 13b UStG). Voraussetzung: "
+                "gültige USt-IdNr des Kunden."
+            ),
+            "en": (
+                "Customer in another EU country, B2B → reverse charge: the customer owes "
+                "VAT in their country (Art. 196 EU VAT Directive, Sec. 13b UStG). "
+                "Requires the customer's valid VAT ID."
+            ),
+        },
     },
     "kleinunternehmer": {
         "category": "E",
@@ -145,6 +189,16 @@ TAX_TREATMENTS = {
         "reason": {
             "de": "Steuerbefreiung gemäß § 19 UStG",
             "en": "VAT exemption pursuant to Section 19 UStG",
+        },
+        "explain": {
+            "de": (
+                "Du als Kleinunternehmer (§ 19 UStG) → es wird keine USt ausgewiesen, "
+                "unabhängig vom Kundenland."
+            ),
+            "en": (
+                "You as a small business (Sec. 19 UStG) → no VAT is charged, regardless "
+                "of the customer's country."
+            ),
         },
     },
 }

@@ -99,6 +99,10 @@ label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13p
 }
 .callout::before { left: 68%; margin-left: -8px; border-width: 8px; border-bottom-color: var(--line); }
 .callout::after { left: 68%; margin-left: -7px; border-width: 7px; border-bottom-color: #f5f7fb; }
+/* Erklärungs-Box unter der steuerlichen Behandlung: Pfeil zeigt links nach oben */
+.callout-why::before, .callout-why::after { left: 26px; }
+.callout-disclaimer { display: block; margin-top: 7px; color: var(--muted); font-style: italic; }
+.callout-warn { display: block; margin-bottom: 6px; color: var(--warn); font-weight: 600; }
 label.check input[type="checkbox"] { width: auto; padding: 0; margin: 0; accent-color: var(--accent); cursor: pointer; }
 select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
