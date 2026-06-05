@@ -343,7 +343,9 @@ def build_xml(data) -> bytes:
             if it.get("disc_type") == "pct" and it.get("disc_val"):
                 lac.calculation_percent = it["disc_val"]  # BT-138
                 lac.basis_amount = it["gross"]  # BT-137
-            lac.reason = "Rabatt" if lang != "en" else "Discount"  # BT-139
+            lac.reason = it.get("item_discount_reason") or (  # BT-139
+                "Rabatt" if lang != "en" else "Discount"
+            )
             li.settlement.allowance_charge.add(lac)
         li.settlement.monetary_summation.total_amount = it["net"]
         doc.trade.items.add(li)

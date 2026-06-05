@@ -198,10 +198,10 @@ function updatePeriodWarning() {
   const eq = document.getElementById("service-eq-issue");
   const hasOverall = !!(s && e && s.value && e.value && !s.disabled);
   let hasLine = false;
-  document.querySelectorAll("#items .period-label").forEach((pl) => {
-    if (pl.hidden) return;
-    const st = pl.querySelector('[name="item_start"]');
-    const en = pl.querySelector('[name="item_end"]');
+  document.querySelectorAll("#items .extra-row").forEach((er) => {
+    if (er.hidden) return;
+    const st = er.querySelector('[name="item_start"]');
+    const en = er.querySelector('[name="item_end"]');
     if (st && en && st.value && en.value) hasLine = true;
   });
   warn.hidden = hasOverall || hasLine || (eq && eq.checked);
@@ -283,76 +283,79 @@ function updateStateField(desired) {
 
 function addRow() {
   const container = document.querySelector("#items");
-  const firstPos = container.querySelector(".position");
-  const clonePos = firstPos.cloneNode(true);
+  const firstRow = container.querySelector(".position-row");
+  const cloneRow = firstRow.cloneNode(true);
   // Alle Felder der geklonten Position zurücksetzen.
-  clonePos.querySelectorAll("input").forEach((i) => {
+  cloneRow.querySelectorAll("input").forEach((i) => {
     if (i.classList.contains("qty")) i.value = "1";
     else if (i.classList.contains("price")) i.value = "0";
     else if (i.classList.contains("disc-input")) i.value = "0";
     else i.value = "";
   });
-  const unit = clonePos.querySelector(".unit");
+  const unit = cloneRow.querySelector(".unit");
   if (unit) {
     unit.selectedIndex = 0;
     syncUnitDisplay(unit);
   }
-  const dType = clonePos.querySelector(".disc-type");
+  const dType = cloneRow.querySelector(".disc-type");
   if (dType) dType.value = "pct";
-  clonePos.querySelector(".line-sum").textContent = fmt(0);
-  container.appendChild(clonePos);
-  const clone = clonePos.querySelector(".item");
-  showItemPeriod(clone, false); // neue Position startet ohne Leistungszeitraum
-  showItemDiscount(clone, false); // … und ohne Rabatt
+  cloneRow.querySelector(".line-sum").textContent = fmt(0);
+  container.appendChild(cloneRow);
+  const clone = cloneRow.querySelector(".item");
+  showExtras(clone, false); // neue Position startet ohne Zusatzfelder
   updateDiscTypeLabels();
 }
 
+// Inhalt einer Position leeren (für die letzte/einzige Position statt Entfernen).
+function clearPosition(positionRow) {
+  const item = positionRow.querySelector(".item");
+  if (!item) return;
+  const desc = item.querySelector('[name="description"]');
+  if (desc) desc.value = "";
+  const qty = item.querySelector(".qty");
+  if (qty) qty.value = "1";
+  const unit = item.querySelector(".unit");
+  if (unit) { unit.selectedIndex = 0; syncUnitDisplay(unit); }
+  const price = item.querySelector(".price");
+  if (price) price.value = "0";
+  const sum = item.querySelector(".line-sum");
+  if (sum) sum.textContent = fmt(0);
+  showExtras(item, false); // Zusatzfelder einklappen + leeren
+}
+
 // Leistungszeitraum einer Position ein-/ausblenden; beim Entfernen Datumsfelder leeren.
-function showItemPeriod(row, show) {
+// Optionale Zusatzfelder (Leistungszeitraum + Rabatt + Rabattgrund) einer Zeile
+// gemeinsam ein-/ausblenden; beim Entfernen alle Werte zurücksetzen.
+function showExtras(row, show) {
   const extra = row.nextElementSibling; // .item-extra (immer vorhanden)
   if (!extra) return;
-  const addBtn = extra.querySelector(".add-period");
-  const periodLabel = extra.querySelector(".period-label");
-  if (!addBtn || !periodLabel) return;
+  const addBtn = extra.querySelector(".add-extras");
+  const fields = extra.querySelector(".extra-row");
+  if (!addBtn || !fields) return;
   addBtn.hidden = show;
-  periodLabel.hidden = !show;
-  extra.classList.toggle("show-period", show); // steuert den Abstand zur Trennlinie
-  if (!show) periodLabel.querySelectorAll("input").forEach((i) => (i.value = ""));
-}
-
-// Beim Laden/Wiederherstellen: Zeitraum nur dort zeigen, wo bereits Daten stehen.
-function syncItemPeriods() {
-  document.querySelectorAll("#items .item").forEach((row) => {
-    const extra = row.nextElementSibling;
-    const pl = extra ? extra.querySelector(".period-label") : null;
-    const has = pl ? [...pl.querySelectorAll("input")].some((i) => i.value) : false;
-    showItemPeriod(row, has);
-  });
-}
-
-// Positions-Rabatt einer Zeile ein-/ausblenden; beim Entfernen Wert zurücksetzen.
-function showItemDiscount(row, show) {
-  const extra = row.nextElementSibling;
-  if (!extra) return;
-  const addBtn = extra.querySelector(".add-discount");
-  const label = extra.querySelector(".discount-label");
-  if (!addBtn || !label) return;
-  addBtn.hidden = show;
-  label.hidden = !show;
+  fields.hidden = !show;
   if (!show) {
-    const inp = label.querySelector(".disc-input");
+    fields.querySelectorAll('input[type="date"]').forEach((i) => (i.value = ""));
+    const inp = fields.querySelector(".disc-input");
     if (inp) inp.value = "0";
-    const sel = label.querySelector(".disc-type");
+    const sel = fields.querySelector(".disc-type");
     if (sel) { sel.selectedIndex = 0; syncUnitDisplay(sel); }
+    const reason = fields.querySelector(".disc-reason");
+    if (reason) reason.value = "";
   }
 }
 
-// Beim Laden/Wiederherstellen: Rabatt nur dort zeigen, wo ein Wert > 0 steht.
-function syncItemDiscounts() {
+// Beim Laden/Wiederherstellen: Zusatzfelder zeigen, wenn irgendein Wert gesetzt ist.
+function syncItemExtras() {
   document.querySelectorAll("#items .item").forEach((row) => {
     const extra = row.nextElementSibling;
-    const inp = extra ? extra.querySelector(".disc-input") : null;
-    showItemDiscount(row, !!(inp && num(inp.value) > 0));
+    if (!extra) return;
+    const hasPeriod = [...extra.querySelectorAll('input[type="date"]')].some((i) => i.value);
+    const dInp = extra.querySelector(".disc-input");
+    const hasDisc = dInp && num(dInp.value) > 0;
+    const reason = extra.querySelector(".disc-reason");
+    const hasReason = reason && reason.value.trim();
+    showExtras(row, !!(hasPeriod || hasDisc || hasReason));
   });
 }
 
@@ -730,7 +733,15 @@ function syncUnitDisplay(select) {
   if (!select) return;
   const opt = select.options[select.selectedIndex];
   const span = select.parentElement.querySelector(".unitsel-label");
-  if (span) span.textContent = opt ? opt.text : "";
+  if (!span || !opt) return;
+  let text = opt.text;
+  // Plural anzeigen, wenn es eine Mengen-Einheit ist und die Menge > 1 ist.
+  const qtyunit = select.closest(".qtyunit");
+  if (qtyunit && opt.dataset.plural) {
+    const qty = qtyunit.querySelector(".qty");
+    if (qty && num(qty.value) > 1) text = opt.dataset.plural;
+  }
+  span.textContent = text;
 }
 function syncAllUnitDisplays(scope) {
   (scope || document).querySelectorAll(".unitsel select.unit").forEach(syncUnitDisplay);
@@ -918,6 +929,10 @@ document.addEventListener("input", (e) => {
   }
   recalc();
   schedulePreview();
+  if (e.target.classList.contains("qty")) {
+    const qu = e.target.closest(".qtyunit");
+    if (qu) syncUnitDisplay(qu.querySelector(".unit")); // Plural/Singular nachziehen
+  }
   if (["service_start", "service_end", "item_start", "item_end"].includes(e.target.name)) updatePeriodWarning();
   if (e.target.name && e.target.name.startsWith("buyer_")) scheduleCustomerSave();
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
@@ -1108,36 +1123,26 @@ document.addEventListener("click", (e) => {
     schedulePreview();
   }
   if (e.target.id === "save-items") saveCustomerItems();
-  const addP = e.target.closest(".add-period");
-  if (addP) {
-    const extra = addP.closest(".item-extra");
-    if (extra) showItemPeriod(extra.previousElementSibling, true);
+  const addX = e.target.closest(".add-extras");
+  if (addX) {
+    const extra = addX.closest(".item-extra");
+    if (extra) showExtras(extra.previousElementSibling, true);
     schedulePreview();
   }
-  const delP = e.target.closest(".del-period");
-  if (delP) {
-    const extra = delP.closest(".item-extra");
-    if (extra) showItemPeriod(extra.previousElementSibling, false);
-    schedulePreview();
-  }
-  const addD = e.target.closest(".add-discount");
-  if (addD) {
-    const extra = addD.closest(".item-extra");
-    if (extra) showItemDiscount(extra.previousElementSibling, true);
-    schedulePreview();
-  }
-  const delD = e.target.closest(".del-discount");
-  if (delD) {
-    const extra = delD.closest(".item-extra");
-    if (extra) showItemDiscount(extra.previousElementSibling, false);
+  const delX = e.target.closest(".del-extras");
+  if (delX) {
+    const extra = delX.closest(".item-extra");
+    if (extra) showExtras(extra.previousElementSibling, false);
     recalc();
     schedulePreview();
   }
   if (e.target.closest(".del")) {
-    const positions = document.querySelectorAll("#items .position");
-    if (positions.length > 1) {
-      const pos = e.target.closest(".position");
-      if (pos) pos.remove();
+    const rows = document.querySelectorAll("#items .position-row");
+    const row = e.target.closest(".position-row");
+    if (rows.length > 1) {
+      if (row) row.remove(); // mehrere Positionen: entfernen, Rest rückt nach
+    } else if (row) {
+      clearPosition(row); // einzige Position: nur Inhalt leeren
     }
     recalc();
     schedulePreview();
@@ -1209,8 +1214,7 @@ validateMasterData();
 toggleRefFields();
 updateStateField();
 syncServicePeriod();
-syncItemPeriods();
-syncItemDiscounts();
+syncItemExtras();
 syncAllUnitDisplays();
 updateDiscTypeLabels();
 refreshSavedItems();

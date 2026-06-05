@@ -67,7 +67,7 @@ details.card summary::-webkit-details-marker { display: none; }
 .req-mark { color: var(--err); font-weight: 700; }
 .warn-badge { flex: 0 0 auto; display: inline-flex; align-items: center; color: var(--warn); }
 .field-error input, .field-error select { border-color: var(--err); background: #fef5f5; }
-.field-error input:focus, .field-error select:focus { outline-color: var(--err); border-color: var(--err); }
+.field-error input:focus, .field-error select:focus { border-color: var(--err); box-shadow: 0 0 0 2px var(--err); }
 h2 { margin: 0 0 14px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 14px; margin-top: 14px; }
 .grid.grid-3 { grid-template-columns: repeat(3, 1fr); }
@@ -85,7 +85,7 @@ input, select {
   font: inherit; font-size: 14px; color: var(--ink); padding: 8px 10px;
   border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%;
 }
-input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); cursor: pointer; align-self: end; padding-bottom: 8px; }
 /* Callout-Box mit Pfeil zur Checkbox (zeigt nach oben auf Spalte 3) */
 .callout {
@@ -111,7 +111,7 @@ select {
 #items { margin-bottom: 12px; }
 .item {
   display: grid; gap: 10px 8px; align-items: end;
-  grid-template-columns: 50% minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 36px;
+  grid-template-columns: 50% minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 .item > * { min-width: 0; }
 .item > label { margin: 0; min-width: 0; }
@@ -122,19 +122,27 @@ select {
   display: flex; align-items: stretch; overflow: hidden;
   border: 1px solid var(--line); border-radius: 8px; background: #fff;
 }
-.qtyunit:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.qtyunit:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .qtyunit .qty {
-  border: none; background: transparent; flex: 0 0 auto; width: 58px; padding: 7px 20px 7px 10px;
+  border: none; background: transparent; flex: 0 0 auto; width: 64px; padding: 7px 2px 7px 8px; text-align: right;
 }
-.qtyunit .qty:focus { outline: none; }
+.qtyunit .qty:focus { outline: none; box-shadow: none; }
+/* Abstand zwischen Zahl und den nativen Hoch/Runter-Pfeilen */
+.qtyunit .qty::-webkit-inner-spin-button,
+.qtyunit .qty::-webkit-outer-spin-button { margin-left: 10px; }
 .qtyunit .unitsel { flex: 1; min-width: 0; }
 .qtyunit .unitsel-btn { border: none; border-radius: 0; background: transparent; text-align: right; padding: 7px 20px 7px 6px; }
 .qtyunit .unitsel-btn:focus { outline: none; }
 .qtyunit .combo-caret { width: 18px; }
+/* Eine Position = Box + Löschen-Button rechts daneben (außerhalb der Box). */
+.position-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
 .position {
+  flex: 1; min-width: 0;
   border: 1px solid var(--line); border-radius: 12px; background: #fafafa;
-  padding: 14px 16px; margin-bottom: 12px;
+  padding: 14px 16px;
 }
+/* Löschen oben verankert, auf Höhe der Eingabefelder: Box-Padding (14) + Label-Bereich (22). */
+.position-row > .del { flex: 0 0 auto; align-self: flex-start; margin-top: 36px; }
 .item-extra { margin-top: 12px; }
 /* Einheiten-Dropdown: optisch identisch zur Beschreibungs-Combobox */
 .unitsel { position: relative; }
@@ -180,64 +188,68 @@ select {
 .field-warning { color: #b45309; font-size: 12px; margin: 4px 0 16px; }
 #period-overall-hint + .field-warning[hidden] { display: none; }
 .line-disc { display: flex; align-items: center; gap: 8px; }
+.disc-reason { min-width: 0; }
 /* Leistungszeitraum als EIN Feld: zwei native Datumsfelder randlos in einer Box */
 .daterange {
   display: inline-flex; align-items: center; gap: 4px;
   border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 0 8px;
 }
-.daterange:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.daterange:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .daterange input[type="date"] {
   border: none; background: transparent; width: auto; padding: 7px 2px;
 }
-.daterange input[type="date"]:focus { outline: none; }
+.daterange input[type="date"]:focus { outline: none; box-shadow: none; }
 /* Rabatt als EIN Feld: Zahl links, Einheit (%/€) als Dropdown rechts – wie das Mengenfeld */
 .discfield {
-  display: flex; align-items: stretch; overflow: hidden; width: 124px;
+  display: flex; align-items: stretch; overflow: hidden; width: 100%;
   border: 1px solid var(--line); border-radius: 8px; background: #fff;
 }
-.discfield:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.discfield:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .discfield .disc-input {
   border: none; background: transparent; flex: 0 0 auto; width: 58px; padding: 7px 8px; text-align: right;
 }
-.discfield .disc-input:focus { outline: none; }
+.discfield .disc-input:focus { outline: none; box-shadow: none; }
 .discfield .unitsel { flex: 1; min-width: 0; }
 .discfield .unitsel-btn { border: none; border-radius: 0; background: transparent; text-align: right; }
 .discfield .unitsel-btn:focus { outline: none; }
-/* Toggle-/Zusatzzeile einer Position: am Spaltenraster der Hauptzeile ausgerichtet.
-   Leistungszeitraum füllt die Beschreibungsspalte (Löschen rechtsbündig),
-   Rabatt beginnt bündig am linken Rand der Menge-Spalte. */
-.extra-row {
-  display: grid; align-items: end; gap: 12px 8px; margin-bottom: 0;
-  grid-template-columns: 50% minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 36px;
-}
-.col-period { grid-column: 1; min-width: 0; }
-.col-discount { grid-column: 2 / -1; min-width: 0; }
-.col-period .period-label { width: 100%; }
-.col-period .period { width: 100%; }
-.col-period .daterange { flex: 1; min-width: 0; }
-.col-period .daterange input[type="date"] { flex: 1; min-width: 0; width: auto; }
-.add-period, .add-discount, .add-attn {
+/* Zusatzzeile: ein Toggle öffnet beide optionalen Felder; am Spaltenraster der
+   Hauptzeile ausgerichtet — Leistungszeitraum = Beschreibung, Rabatt = Menge,
+   Rabattgrund = Einzelpreis + Summe; ein Löschen entfernt alles. */
+.add-extras {
   width: fit-content; padding: 0; border: none; background: none; color: var(--accent);
-  font-size: 12px; font-weight: 600;
+  font-size: 12px; font-weight: 600; cursor: pointer;
 }
-.add-period:hover, .add-discount:hover, .add-attn:hover { background: none; color: var(--accent-d); text-decoration: underline; }
-.add-attn { justify-self: start; margin: 2px 0; }
-/* Ausgeklappte Positions-Zusätze: kompaktes Inline-Label + Felder. Die Position
-   ist bereits umrahmt, daher keine eigene Pille mehr – nur dezente Gruppierung. */
-.period-label, .discount-label {
-  margin: 0; display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px;
-  font-size: 12px; color: var(--muted);
+.add-extras:hover { background: none; color: var(--accent-d); text-decoration: underline; }
+.add-attn {
+  width: fit-content; padding: 0; border: none; background: none; color: var(--accent);
+  font-size: 12px; font-weight: 600; cursor: pointer; justify-self: start; margin: 2px 0;
 }
-.period-label[hidden], .discount-label[hidden] { display: none; }
-.period-label .period, .discount-label .line-disc { margin-top: 0; }
-.period-label .period input[type="date"] { padding: 7px 9px; }
-.del-period, .del-discount {
+.add-attn:hover { background: none; color: var(--accent-d); text-decoration: underline; }
+.extra-row {
+  display: grid; align-items: end; gap: 12px 8px;
+  grid-template-columns: 50% minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.extra-row > .period-label { grid-column: 1; }
+.extra-row > .discount-label { grid-column: 2; }
+.extra-row > .reason-label { grid-column: 3 / -1; }
+.period-label, .discount-label, .reason-label {
+  margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  font-size: 12px; color: var(--muted); min-width: 0; width: 100%;
+}
+.period-label .period { display: flex; width: 100%; }
+.period-label .daterange { flex: 1; min-width: 0; }
+.period-label .daterange input[type="date"] { flex: 1; min-width: 0; width: auto; }
+.discount-label .discfield { width: 100%; }
+/* Rabattgrund-Feld + gemeinsames Löschen in einer Zeile */
+.reason-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.reason-row .disc-reason { flex: 1; min-width: 0; }
+.del-extras {
   flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; padding: 0; border: none; border-radius: 6px;
   background: transparent; color: var(--muted); cursor: pointer;
 }
-.del-period:hover, .del-discount:hover { background: #fbeaea; color: var(--err); }
-.del-period svg, .del-discount svg { width: 15px; height: 15px; }
+.del-extras:hover { background: #fbeaea; color: var(--err); }
+.del-extras svg { width: 15px; height: 15px; }
 .line-sum {
   display: block; width: 100%; padding: 7px 8px;
   border: 1px solid var(--line); border-radius: 8px; background: #f5f6f8;
@@ -377,7 +389,6 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
   /* Positionen: Felder bei sehr engen Viewports zweispaltig gestapelt */
   .item { grid-template-columns: 1fr 1fr; }
   .item > .f-desc { grid-column: 1 / -1; }
-  .item > .del { grid-column: 1 / -1; justify-self: end; }
 }
 
 /* Vorschau-Drawer in Originalgröße (A4 100%) */

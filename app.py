@@ -317,13 +317,13 @@ def xrechnung_missing(seller: dict, buyer: dict) -> list:
 
 # Einheiten: menschenlesbares Label (de/en) -> UN/ECE-Code (für das XML).
 UNITS = [
-    ("HUR", {"de": "Stunde", "en": "Hour"}),
-    ("DAY", {"de": "Tag", "en": "Day"}),
-    ("WEE", {"de": "Woche", "en": "Week"}),
-    ("MON", {"de": "Monat", "en": "Month"}),
-    ("ANN", {"de": "Jahr", "en": "Year"}),
-    ("C62", {"de": "Stück", "en": "Piece"}),
-    ("LS", {"de": "Pauschal", "en": "Lump sum"}),
+    ("HUR", {"de": "Stunde", "en": "Hour"}, {"de": "Stunden", "en": "Hours"}),
+    ("DAY", {"de": "Tag", "en": "Day"}, {"de": "Tage", "en": "Days"}),
+    ("WEE", {"de": "Woche", "en": "Week"}, {"de": "Wochen", "en": "Weeks"}),
+    ("MON", {"de": "Monat", "en": "Month"}, {"de": "Monate", "en": "Months"}),
+    ("ANN", {"de": "Jahr", "en": "Year"}, {"de": "Jahre", "en": "Years"}),
+    ("C62", {"de": "Stück", "en": "Piece"}, {"de": "Stück", "en": "Pieces"}),
+    ("LS", {"de": "Pauschal", "en": "Lump sum"}, {"de": "Pauschal", "en": "Lump sum"}),
 ]
 
 
@@ -448,6 +448,7 @@ def parse_items(form) -> list[dict]:
     ends = form.getlist("item_end")
     discounts = form.getlist("item_discount")
     discount_types = form.getlist("item_discount_type")
+    discount_reasons = form.getlist("item_discount_reason")
     for i, (desc, qty, unit, price) in enumerate(
         zip(
             form.getlist("description"),
@@ -468,6 +469,7 @@ def parse_items(form) -> list[dict]:
                 "item_end": (ends[i] if i < len(ends) else "") or None,
                 "item_discount": ((discounts[i] if i < len(discounts) else "0") or "0").replace(",", "."),
                 "item_discount_type": (discount_types[i] if i < len(discount_types) else "pct") or "pct",
+                "item_discount_reason": (discount_reasons[i].strip() if i < len(discount_reasons) else "") or None,
             }
         )
     return items
@@ -534,7 +536,8 @@ def _assemble(form):
     computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
         items, treatment["rate"], Decimal(str(inv["discount"]))
     )
-    unit_labels = {code: loc(label, inv_lang) for code, label in UNITS}
+    unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
+    unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
     mode = form.get("_full")
     body_class = "mini" if mode == "mini" else ("page" if mode else "")
     html = render_template(
@@ -547,6 +550,7 @@ def _assemble(form):
         inv=inv,
         items=computed,
         unit_labels=unit_labels,
+        unit_labels_pl=unit_labels_pl,
         treatment=treatment,
         treatment_note=loc(treatment["note"], inv_lang),
         treatment_label=loc(treatment["label"], inv_lang),
