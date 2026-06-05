@@ -9,7 +9,7 @@ function num(v) {
 function recalc() {
   const rate = num(document.querySelector("#tax_treatment option:checked").dataset.rate);
   let net = 0;
-  document.querySelectorAll("#items tbody .item").forEach((row) => {
+  document.querySelectorAll("#items .item").forEach((row) => {
     const gross = num(row.querySelector(".qty").value) * num(row.querySelector(".price").value);
     const extra = row.nextElementSibling;
     let lineDisc = 0;
@@ -282,29 +282,27 @@ function updateStateField(desired) {
 }
 
 function addRow() {
-  const tbody = document.querySelector("#items tbody");
-  const first = tbody.querySelector(".item");
-  const clone = first.cloneNode(true);
-  clone.querySelectorAll("input").forEach((i) => {
+  const container = document.querySelector("#items");
+  const firstPos = container.querySelector(".position");
+  const clonePos = firstPos.cloneNode(true);
+  // Alle Felder der geklonten Position zurücksetzen.
+  clonePos.querySelectorAll("input").forEach((i) => {
     if (i.classList.contains("qty")) i.value = "1";
     else if (i.classList.contains("price")) i.value = "0";
+    else if (i.classList.contains("disc-input")) i.value = "0";
     else i.value = "";
   });
-  const unit = clone.querySelector(".unit");
+  const unit = clonePos.querySelector(".unit");
   if (unit) {
     unit.selectedIndex = 0;
     syncUnitDisplay(unit);
   }
-  clone.querySelector(".line-sum").textContent = fmt(0);
-  const cloneExtra = first.nextElementSibling.cloneNode(true); // zugehörige Zusatz-Zeile
-  cloneExtra.querySelectorAll("input").forEach((i) => (i.value = ""));
-  const dInp = cloneExtra.querySelector(".disc-input");
-  if (dInp) dInp.value = "0";
-  const dType = cloneExtra.querySelector(".disc-type");
-  if (dType) dType.selectedIndex = 0;
-  tbody.appendChild(clone);
-  tbody.appendChild(cloneExtra);
-  showItemPeriod(clone, false); // neue Zeile startet ohne Leistungszeitraum
+  const dType = clonePos.querySelector(".disc-type");
+  if (dType) dType.value = "pct";
+  clonePos.querySelector(".line-sum").textContent = fmt(0);
+  container.appendChild(clonePos);
+  const clone = clonePos.querySelector(".item");
+  showItemPeriod(clone, false); // neue Position startet ohne Leistungszeitraum
   showItemDiscount(clone, false); // … und ohne Rabatt
   updateDiscTypeLabels();
 }
@@ -324,7 +322,7 @@ function showItemPeriod(row, show) {
 
 // Beim Laden/Wiederherstellen: Zeitraum nur dort zeigen, wo bereits Daten stehen.
 function syncItemPeriods() {
-  document.querySelectorAll("#items tbody .item").forEach((row) => {
+  document.querySelectorAll("#items .item").forEach((row) => {
     const extra = row.nextElementSibling;
     const pl = extra ? extra.querySelector(".period-label") : null;
     const has = pl ? [...pl.querySelectorAll("input")].some((i) => i.value) : false;
@@ -345,13 +343,13 @@ function showItemDiscount(row, show) {
     const inp = label.querySelector(".disc-input");
     if (inp) inp.value = "0";
     const sel = label.querySelector(".disc-type");
-    if (sel) sel.selectedIndex = 0;
+    if (sel) { sel.selectedIndex = 0; syncUnitDisplay(sel); }
   }
 }
 
 // Beim Laden/Wiederherstellen: Rabatt nur dort zeigen, wo ein Wert > 0 steht.
 function syncItemDiscounts() {
-  document.querySelectorAll("#items tbody .item").forEach((row) => {
+  document.querySelectorAll("#items .item").forEach((row) => {
     const extra = row.nextElementSibling;
     const inp = extra ? extra.querySelector(".disc-input") : null;
     showItemDiscount(row, !!(inp && num(inp.value) > 0));
@@ -365,9 +363,11 @@ function currencySymbol(code) {
 function updateDiscTypeLabels() {
   const curEl = document.querySelector("[name='currency']");
   const sym = currencySymbol((curEl ? curEl.value : "EUR").trim().toUpperCase());
-  document.querySelectorAll(".disc-type option[value='abs']").forEach((o) => {
-    o.textContent = sym;
+  // €-Option am Währungssymbol ausrichten und Button-Label neu setzen.
+  document.querySelectorAll('.disc-type option[value="abs"]').forEach((o) => {
+    o.text = sym;
   });
+  document.querySelectorAll(".disc-type").forEach(syncUnitDisplay);
 }
 
 // Formularzustand sichern/wiederherstellen (z. B. beim Sprachwechsel).
@@ -382,7 +382,7 @@ function restoreForm(form, data) {
   if (!form || !data) return;
   const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end", "item_discount", "item_discount_type"];
   const itemCount = (data.description || []).length;
-  let rows = form.querySelectorAll("#items tbody .item").length;
+  let rows = form.querySelectorAll("#items .item").length;
   while (rows < itemCount) {
     addRow();
     rows++;
@@ -462,7 +462,7 @@ function applyDraft() {
 
   const items = d.items || [];
   if (items.length) {
-    const tbody = document.querySelector("#items tbody");
+    const tbody = document.querySelector("#items");
     while (tbody.querySelectorAll(".item").length < items.length) addRow();
     const rows = tbody.querySelectorAll(".item");
     items.forEach((it, i) => {
@@ -791,7 +791,7 @@ function saveCustomerItems() {
   }
   const fd = new FormData();
   // Positionen zeilenweise (ausgerichtet, leere Beschreibungen filtert der Server).
-  form.querySelectorAll("#items tbody .item").forEach((row) => {
+  form.querySelectorAll("#items .item").forEach((row) => {
     fd.append("description", row.querySelector('[name="description"]').value);
     fd.append("quantity", row.querySelector(".qty").value);
     fd.append("unit", row.querySelector(".unit").value);
@@ -1133,13 +1133,11 @@ document.addEventListener("click", (e) => {
     recalc();
     schedulePreview();
   }
-  if (e.target.classList.contains("del")) {
-    const rows = document.querySelectorAll("#items tbody .item");
-    if (rows.length > 1) {
-      const item = e.target.closest(".item");
-      const extra = item.nextElementSibling;
-      item.remove();
-      if (extra && extra.classList.contains("item-extra")) extra.remove();
+  if (e.target.closest(".del")) {
+    const positions = document.querySelectorAll("#items .position");
+    if (positions.length > 1) {
+      const pos = e.target.closest(".position");
+      if (pos) pos.remove();
     }
     recalc();
     schedulePreview();
@@ -1213,8 +1211,8 @@ updateStateField();
 syncServicePeriod();
 syncItemPeriods();
 syncItemDiscounts();
-updateDiscTypeLabels();
 syncAllUnitDisplays();
+updateDiscTypeLabels();
 refreshSavedItems();
 recalc();
 updatePreview();

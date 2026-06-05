@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=50">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=74">
 </head>
 <body>
 <header>
@@ -186,60 +186,75 @@
 
   <div class="card">
     <h2>{{ t['items'] }}</h2>
-    <table id="items">
-      <thead>
-        <tr><th>{{ t.description }}</th><th>{{ t.quantity }}</th><th>{{ t.unit }}</th><th>{{ t.unit_price }}</th><th>{{ t.amount }}</th><th></th></tr>
-      </thead>
-      <tbody>
-        <tr class="item">
-          <td><div class="combo">
-            <input name="description" class="combo-input" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
-            <span class="combo-caret" aria-hidden="true"></span>
-          </div></td>
-          <td><input type="number" name="quantity" value="1" min="0" step="any" class="num qty"></td>
-          <td>
-            <div class="unitsel">
-              <select name="unit" class="unit" aria-hidden="true" tabindex="-1">
-                {% for code, label in units %}
-                  <option value="{{ code }}" {{ 'selected' if code == 'HUR' else '' }}>{{ loc(label, lang) }}</option>
-                {% endfor %}
-              </select>
-              <button type="button" class="unitsel-btn" role="combobox" aria-haspopup="listbox" aria-expanded="false"><span class="unitsel-label"></span></button>
+    <div id="items">
+      <div class="position">
+        <div class="item">
+          <label class="f-desc">{{ t.description }}
+            <div class="combo">
+              <input name="description" class="combo-input" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
               <span class="combo-caret" aria-hidden="true"></span>
             </div>
-          </td>
-          <td><input name="unit_price" value="0" class="num price"></td>
-          <td class="sum-cell"><span class="line-sum">0,00</span></td>
-          <td><button type="button" class="del" title="{{ t.delete }}" aria-label="{{ t.delete }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button></td>
-        </tr>
-        <tr class="item-extra">
-          <td colspan="6">
-            <div class="extra-row">
+          </label>
+          <label class="f-qtyunit">{{ t.quantity }}
+            <span class="qtyunit">
+              <input type="number" name="quantity" value="1" min="0" step="any" class="num qty">
+              <div class="unitsel">
+                <select name="unit" class="unit" aria-hidden="true" tabindex="-1">
+                  {% for code, label in units %}
+                    <option value="{{ code }}" {{ 'selected' if code == 'HUR' else '' }}>{{ loc(label, lang) }}</option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="unitsel-btn" role="combobox" aria-haspopup="listbox" aria-expanded="false"><span class="unitsel-label"></span></button>
+                <span class="combo-caret" aria-hidden="true"></span>
+              </div>
+            </span>
+          </label>
+          <label class="f-price">{{ t.unit_price }}
+            <input name="unit_price" value="0" class="num price">
+          </label>
+          <label class="f-sum">{{ t.amount }}
+            <span class="line-sum">0,00</span>
+          </label>
+          <button type="button" class="del" title="{{ t.delete }}" aria-label="{{ t.delete }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
+        </div>
+        <div class="item-extra">
+          <div class="extra-row">
+            <div class="extra-col col-period">
               <button type="button" class="add-period">{{ t.add_period }}</button>
               <label class="period-label" hidden>{{ t.service_period }}
                 <span class="period">
-                  <input name="item_start" type="date" aria-label="{{ t.service_from }}">
-                  <span class="period-sep">–</span>
-                  <input name="item_end" type="date" aria-label="{{ t.service_to }}">
+                  <span class="daterange">
+                    <input name="item_start" type="date" aria-label="{{ t.service_from }}">
+                    <span class="period-sep">–</span>
+                    <input name="item_end" type="date" aria-label="{{ t.service_to }}">
+                  </span>
                   <button type="button" class="del-period" title="{{ t.remove_period }}" aria-label="{{ t.remove_period }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
                 </span>
               </label>
+            </div>
+            <div class="extra-col col-discount">
               <button type="button" class="add-discount">{{ t.add_discount }}</button>
               <label class="discount-label" hidden>{{ t.discount }}
                 <span class="line-disc">
-                  <input name="item_discount" class="num disc-input" inputmode="decimal" value="0" aria-label="{{ t.discount }}">
-                  <select name="item_discount_type" class="disc-type" aria-label="{{ t.discount }}">
-                    <option value="pct">%</option>
-                    <option value="abs">€</option>
-                  </select>
+                  <span class="discfield">
+                    <input name="item_discount" class="num disc-input" inputmode="decimal" value="0" aria-label="{{ t.discount }}">
+                    <div class="unitsel">
+                      <select name="item_discount_type" class="disc-type unit" aria-hidden="true" tabindex="-1">
+                        <option value="pct">%</option>
+                        <option value="abs">€</option>
+                      </select>
+                      <button type="button" class="unitsel-btn" role="combobox" aria-haspopup="listbox" aria-expanded="false"><span class="unitsel-label"></span></button>
+                      <span class="combo-caret" aria-hidden="true"></span>
+                    </div>
+                  </span>
                   <button type="button" class="del-discount" title="{{ t.remove_discount }}" aria-label="{{ t.remove_discount }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
                 </span>
               </label>
             </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="customer-bar">
       <button type="button" id="add-row" class="secondary">{{ t.add_item }}</button>
       <span class="spacer"></span>
@@ -310,6 +325,6 @@
   window.MSG_ITEMS_SAVED = {{ t['items_saved']|tojson }};
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=34"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=37"></script>
 </body>
 </html>
