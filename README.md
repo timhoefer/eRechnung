@@ -51,4 +51,18 @@ Das Ergebnis lässt sich mit Validatoren wie dem [KoSIT-Validator] oder Mustang 
 - Dies ist ein Werkzeug, keine Steuerberatung. Die korrekte steuerliche Einordnung im
   Einzelfall liegt bei dir bzw. deinem Steuerberater.
 
+## Lizenz & Haftungsausschluss
+
+Dieser Code steht unter der **Apache License 2.0** – siehe [`LICENSE`](LICENSE).
+Mitgelieferte Drittkomponenten (u. a. die Schematron-Artefakte und die
+IBM-Plex-Schriften) stehen unter eigenen Lizenzen; die vollständige Auflistung
+mit Attribution findest du in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+**Ohne Gewähr.** Dieses Tool wird bereitgestellt „wie besehen", ohne jede
+Gewährleistung. Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder
+rechtliche bzw. steuerliche Konformität der erzeugten Rechnungen übernommen.
+Bitte prüfe jede Rechnung selbst (bei Bedarf mit deinem Steuerberater). Die
+Nutzung erfolgt auf eigenes Risiko.
+
 [KoSIT-Validator]: https://github.com/itplr-kosit/validator
