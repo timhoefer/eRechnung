@@ -22,3 +22,7 @@ config.json
 # PyInstaller Build-Artefakte
 /build/
 /dist/
+
+# Persönliche Notizen – nicht veröffentlichen
+docs/design-case-study.md
+docs/technical-writeup.md
