@@ -7,6 +7,7 @@ import sys
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urlparse
 
 from flask import (
     Flask,
@@ -24,6 +25,7 @@ from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
 from zugferd import (
     TAX_TREATMENTS,
+    _dec,
     build_pdf,
     build_xml,
     compute_totals,
@@ -193,6 +195,43 @@ def data_conflicts() -> list:
 
 app = Flask(__name__)
 app.secret_key = "erechnung-local"  # nur für Flash-Messages, rein lokal
+# Upload-/Form-Größe begrenzen (Schutz vor Speicher-DoS über /validate).
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
+
+# Die App ist ein rein lokales Tool (127.0.0.1). Hostnamen, die als „lokal"
+# gelten – schützt gegen DNS-Rebinding und Cross-Site-Zugriffe von Webseiten.
+LOCAL_HOSTNAMES = {"127.0.0.1", "localhost", "::1"}
+
+
+def _netloc_is_local(netloc: str | None) -> bool:
+    """True, wenn host[:port] auf 127.0.0.1/localhost/::1 zeigt."""
+    if not netloc:
+        return False
+    try:
+        host = urlparse("//" + netloc).hostname
+    except ValueError:
+        return False
+    return host in LOCAL_HOSTNAMES
+
+
+@app.before_request
+def _guard_local_only():
+    """Zwei Schutzschichten für das localhost-Tool:
+    1) Host-Header muss lokal sein  -> blockt DNS-Rebinding.
+    2) Bei zustandsändernden Methoden muss Origin/Referer lokal sein -> blockt
+       CSRF (eine fremde Webseite kann sonst Formulare an 127.0.0.1 senden und
+       z. B. die Bankverbindung in den Stammdaten überschreiben)."""
+    if not _netloc_is_local(request.host):
+        abort(403)
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("Origin")
+        if origin is not None:
+            if not _netloc_is_local(urlparse(origin).netloc):
+                abort(403)
+        else:
+            referer = request.headers.get("Referer")
+            if referer is not None and not _netloc_is_local(urlparse(referer).netloc):
+                abort(403)
 
 
 @app.template_filter("money")
@@ -507,6 +546,17 @@ def _assemble(form):
     items = parse_items(form)
     inv_lang = form.get("language", "") or get_ui_lang(request)
     _pay_days = payment_days(form)
+    # Eingaben gegen erlaubte Werte prüfen, damit manipulierte Formulardaten keine
+    # KeyError/Exception (und damit 500/Debugger) auslösen.
+    tax_treatment = form.get("tax_treatment", "de_19")
+    if tax_treatment not in TAX_TREATMENTS:
+        tax_treatment = "de_19"
+    profile = form.get("profile", "en16931")
+    if profile not in ("en16931", "xrechnung"):
+        profile = "en16931"
+    doc_type = form.get("doc_type", "380") or "380"
+    if doc_type not in ("380", "381", "384"):
+        doc_type = "380"
     inv = {
         "number": form.get("number", "").strip(),
         "issue_date": form.get("issue_date"),
@@ -514,16 +564,16 @@ def _assemble(form):
         "service_start": form.get("service_start") or None,
         "service_end": form.get("service_end") or None,
         "currency": form.get("currency", "EUR"),
-        "tax_treatment": form.get("tax_treatment", "de_19"),
+        "tax_treatment": tax_treatment,
         "language": inv_lang,
-        "profile": form.get("profile", "en16931"),
+        "profile": profile,
         "note": form.get("note", "").strip() or None,
         # Zahlungsbedingung aus dem Fälligkeitsdatum ableiten und in der
         # Rechnungssprache formulieren (erscheint im PDF-Schluss + BT-20).
         "payment_terms": (
             payment_terms_text(_pay_days, inv_lang) if _pay_days is not None else None
         ),
-        "doc_type": form.get("doc_type", "380") or "380",
+        "doc_type": doc_type,
         "ref_number": form.get("ref_number", "").strip() or None,
         "ref_date": form.get("ref_date") or None,
         "discount": (form.get("discount", "0") or "0").replace(",", ".").strip() or "0",
@@ -534,7 +584,7 @@ def _assemble(form):
 
     treatment = TAX_TREATMENTS[inv["tax_treatment"]]
     computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
-        items, treatment["rate"], Decimal(str(inv["discount"]))
+        items, treatment["rate"], _dec(inv["discount"])
     )
     unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
     unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
@@ -925,7 +975,13 @@ def _validate_request():
     else:
         return None
 
-    xml = raw if raw.lstrip().startswith(b"<") else extract_xml_from_pdf(raw)
+    if raw.lstrip().startswith(b"<"):
+        xml = raw
+    else:
+        try:
+            xml = extract_xml_from_pdf(raw)
+        except Exception:  # defektes/manipuliertes PDF darf nicht crashen
+            xml = None
     if not xml:
         return {"label": label, "ok": False, "xsd_messages": ["Kein eingebettetes XML gefunden."], "sch": None}
     xsd_ok, xsd_messages = validate_xml_bytes(xml)
@@ -943,4 +999,8 @@ def _validate_request():
 if __name__ == "__main__":
     import os
 
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5000)), debug=True)
+    # Debugger standardmäßig AUS: der Werkzeug-Debugger erlaubt sonst bei jeder
+    # Exception Code-Ausführung und leakt Quellcode/Variablen (z. B. Bankdaten).
+    # Nur bei Bedarf in der Entwicklung via FLASK_DEBUG=1 einschalten.
+    debug = os.environ.get("FLASK_DEBUG") == "1"
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5000)), debug=debug)

@@ -217,6 +217,16 @@ def _parse_date(value) -> date:
     return datetime.strptime(value, "%Y-%m-%d").date()
 
 
+def _dec(value, default="0") -> Decimal:
+    """Robuste Decimal-Konvertierung: ungültige/leere/NaN/Inf-Eingaben -> default.
+    Verhindert, dass nicht-numerische Formulareingaben eine Exception auslösen."""
+    try:
+        d = Decimal(str(value).strip())
+    except (ArithmeticError, ValueError, TypeError):
+        return Decimal(default)
+    return d if d.is_finite() else Decimal(default)
+
+
 def compute_totals(items, rate: Decimal, discount=Decimal("0")):
     """Zeilensummen, Zwischensumme, Rabatt, Steuerbasis, Steuer und Brutto berechnen.
 
@@ -228,12 +238,12 @@ def compute_totals(items, rate: Decimal, discount=Decimal("0")):
     line_total = Decimal("0")
     computed = []
     for it in items:
-        qty = Decimal(str(it["quantity"]))
-        unit_price = Decimal(str(it["unit_price"]))
+        qty = _dec(it["quantity"])
+        unit_price = _dec(it["unit_price"])
         gross = q(qty * unit_price)
         # Positions-Rabatt (BG-27): Prozent oder fester Betrag, auf [0, gross] begrenzt.
         d_type = it.get("item_discount_type") or "pct"
-        d_val = Decimal(str(it.get("item_discount") or "0"))
+        d_val = _dec(it.get("item_discount") or "0")
         if d_val < Decimal("0"):
             d_val = Decimal("0")
         if d_type == "abs":
