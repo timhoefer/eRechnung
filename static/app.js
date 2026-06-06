@@ -164,7 +164,10 @@ function positionFormatMenu() {
   const r = t.getBoundingClientRect();
   m.style.left = r.left + "px";
   m.style.top = r.bottom + 6 + "px";
-  m.style.width = "240px";
+  // Breite an den Inhalt anpassen (sprachunabhängig), min. Triggerbreite.
+  // Die Obergrenze (max-width) kommt aus dem CSS (vw), damit nichts abschneidet.
+  m.style.width = "max-content";
+  m.style.minWidth = r.width + "px";
 }
 function openFormatMenu() {
   const m = document.getElementById("format-menu");
@@ -224,25 +227,6 @@ function validateMasterData() {
   if (warn) warn.hidden = complete;
 }
 
-// Leistungszeitraum: weiche Pflicht. Warnung zeigen, wenn weder ein Zeitraum
-// (gesamt oder je Position) noch "entspricht Rechnungsdatum" gesetzt ist.
-function updatePeriodWarning() {
-  const warn = document.getElementById("period-warning");
-  if (!warn) return;
-  const s = document.querySelector('#invoice-form [name="service_start"]');
-  const e = document.querySelector('#invoice-form [name="service_end"]');
-  const eq = document.getElementById("service-eq-issue");
-  const hasOverall = !!(s && e && s.value && e.value && !s.disabled);
-  let hasLine = false;
-  document.querySelectorAll("#items .extra-row").forEach((er) => {
-    if (er.hidden) return;
-    const st = er.querySelector('[name="item_start"]');
-    const en = er.querySelector('[name="item_end"]');
-    if (st && en && st.value && en.value) hasLine = true;
-  });
-  warn.hidden = hasOverall || hasLine || (eq && eq.checked);
-}
-
 // "entspricht Rechnungsdatum": Zeitraumfelder sperren (Werte bleiben erhalten,
 // werden aber nicht gesendet -> BT-72 = Rechnungsdatum, PDF zeigt Hinweis).
 function syncServicePeriod() {
@@ -253,7 +237,6 @@ function syncServicePeriod() {
     s.disabled = eq.checked;
     en.disabled = eq.checked;
   }
-  updatePeriodWarning();
 }
 
 // Bezugsfelder (Storno/Korrektur) nur bei Belegart != 380 (normale Rechnung) zeigen.
@@ -969,7 +952,6 @@ document.addEventListener("input", (e) => {
     const qu = e.target.closest(".qtyunit");
     if (qu) syncUnitDisplay(qu.querySelector(".unit")); // Plural/Singular nachziehen
   }
-  if (["service_start", "service_end", "item_start", "item_end"].includes(e.target.name)) updatePeriodWarning();
   if (e.target.name && e.target.name.startsWith("buyer_")) scheduleCustomerSave();
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
   if (e.target.classList.contains("cust-name")) openCustMenu(e.target);

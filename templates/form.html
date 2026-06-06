@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=94">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=98">
 </head>
 <body>
 <header>
@@ -117,8 +117,7 @@
       <input type="checkbox" name="service_eq_issue" id="service-eq-issue">
       {{ t.service_eq_issue }}
     </label>
-    <p class="hint" id="period-overall-hint">{{ t.service_period_hint }}</p>
-    <p class="field-warning" id="period-warning" hidden>{{ t.service_period_warning }}</p>
+    <div class="callout callout-why">{{ t.service_period_hint }}</div>
   </div>
 
   <div class="card">
@@ -280,6 +279,11 @@
 
 </form>
 
+<details class="disclaimer">
+  <summary>{{ t.disclaimer_link }}</summary>
+  <p>{{ t.disclaimer_full }}</p>
+</details>
+
 </div><!-- /form-pane -->
 
 <aside class="preview-pane">
@@ -328,6 +332,6 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=45"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=47"></script>
 </body>
 </html>
