@@ -26,3 +26,5 @@ config.json
 # Persönliche Notizen – nicht veröffentlichen
 docs/design-case-study.md
 docs/technical-writeup.md
+
+docs/improvement-plan.md

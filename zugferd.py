@@ -503,12 +503,24 @@ def _xsd_path() -> str:
     )
 
 
+def _safe_parser():
+    """Gehärteter lxml-Parser für nicht vertrauenswürdiges (hochgeladenes) XML:
+    keine Entity-Auflösung, kein Netzwerk, keine DTD, keine huge_tree-Expansion.
+    Defense-in-Depth gegen XXE/Billion-Laughs – unabhängig von Library-Defaults."""
+    from lxml import etree
+
+    return etree.XMLParser(
+        resolve_entities=False, no_network=True, load_dtd=False,
+        dtd_validation=False, huge_tree=False,
+    )
+
+
 def validate_xml_bytes(xml: bytes):
     """XML strukturell gegen die EN-16931-XSD prüfen. -> (ok, [meldungen])."""
     from lxml import etree
 
     try:
-        doc = etree.fromstring(xml)
+        doc = etree.fromstring(xml, _safe_parser())
     except etree.XMLSyntaxError as e:
         return False, [f"XML nicht wohlgeformt: {e}"]
     schema = etree.XMLSchema(file=_xsd_path())

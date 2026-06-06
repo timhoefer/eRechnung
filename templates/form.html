@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=100">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=101">
 </head>
 <body>
 <header>
@@ -288,7 +288,7 @@
 
 </div><!-- /form-content -->
 
-<div id="settings-pane" hidden></div>
+<div id="settings-pane" hidden tabindex="-1"></div>
 
 </div><!-- /form-pane -->
 
@@ -306,7 +306,7 @@
   </div>
   <div class="preview-actions">
     <button type="submit" form="invoice-form" id="generate-btn" data-zug="{{ t.generate }}" data-xr="{{ t.generate_xr }}">{{ t.generate }}</button>
-    <button type="button" id="settings-toggle" class="btn-secondary" data-open="{{ t.settings }}" data-close="{{ t.settings_close }}">{{ t.settings }}</button>
+    <button type="button" id="settings-toggle" class="btn-secondary" aria-expanded="false" aria-controls="settings-pane" data-open="{{ t.settings }}" data-close="{{ t.settings_close }}">{{ t.settings }}</button>
   </div>
 </aside>
 </div><!-- /layout -->
@@ -346,6 +346,6 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=53"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=54"></script>
 </body>
 </html>

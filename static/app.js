@@ -1312,8 +1312,16 @@ function openSettings() {
   const btn = document.getElementById("settings-toggle");
   if (!pane || !content) return;
   settingsOpen = true;
-  loadSettingsPanel().then(() => { pane.hidden = false; content.hidden = true; });
-  if (btn) { btn.textContent = btn.dataset.close; btn.classList.add("active"); }
+  loadSettingsPanel().then(() => {
+    pane.hidden = false;
+    content.hidden = true;
+    pane.focus(); // Fokus ins Panel ziehen (Tastatur/Screenreader behalten den Kontext)
+  });
+  if (btn) {
+    btn.textContent = btn.dataset.close;
+    btn.classList.add("active");
+    btn.setAttribute("aria-expanded", "true");
+  }
 }
 
 function closeSettings() {
@@ -1324,7 +1332,12 @@ function closeSettings() {
   lastPreviewUrl = null;
   if (pane) pane.hidden = true;
   if (content) content.hidden = false;
-  if (btn) { btn.textContent = btn.dataset.open; btn.classList.remove("active"); }
+  if (btn) {
+    btn.textContent = btn.dataset.open;
+    btn.classList.remove("active");
+    btn.setAttribute("aria-expanded", "false");
+    btn.focus(); // Fokus zurück auf den Auslöser
+  }
   restoreLivePreview();
 }
 

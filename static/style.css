@@ -17,7 +17,7 @@
   --accent-d: #2457bf;
   --ok: #15803d;
   --err: #b91c1c;
-  --warn: #d97706;
+  --warn: #b45309;  /* AA-Kontrast auf Weiß (>=4.5:1) für Warntexte */
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }  /* schlägt display:flex von .period/label */
