@@ -275,7 +275,6 @@ button.secondary { background: #eceef2; color: var(--ink); }
 button.secondary:hover { background: #e0e3e9; }
 .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
 .hint code { background: #eceef2; padding: 1px 5px; border-radius: 4px; }
-#tax-note { color: var(--accent-d); font-size: 12px; min-height: 1em; }
 .discount-row { display: flex; gap: 12px; align-items: flex-end; margin: 10px 0 4px; }
 .discount-row label:first-child { flex: 0 0 140px; }
 .discount-row label:last-child { flex: 1; }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=93">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=94">
 </head>
 <body>
 <header>
@@ -176,7 +176,7 @@
     <label class="wide">
       <select name="tax_treatment" id="tax_treatment">
         {% for key, tr in treatments.items() %}
-          <option value="{{ key }}" data-rate="{{ tr.rate }}" data-note="{{ loc(tr.note, lang) or '' }}" data-explain="{{ loc(tr.explain, lang) or '' }}">{{ loc(tr.label, lang) }}</option>
+          <option value="{{ key }}" data-rate="{{ tr.rate }}" data-explain="{{ loc(tr.explain, lang) or '' }}">{{ loc(tr.label, lang) }}</option>
         {% endfor %}
       </select>
     </label>
@@ -328,6 +328,6 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=44"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=45"></script>
 </body>
 </html>

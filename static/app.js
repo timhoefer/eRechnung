@@ -56,10 +56,13 @@ function recalc() {
 // Kleinunternehmer hängt am Verkäuferstatus und ist immer zulässig.
 function isTreatmentCompatible(treatment, country) {
   if (treatment === "kleinunternehmer") return true;
-  country = (country || "DE").toUpperCase();
-  if (country === "DE") return treatment === "de_19" || treatment === "de_7";
-  if (EU_COUNTRIES.has(country)) return treatment === "eu_reverse";
-  return treatment === "non_eu" || treatment === "non_eu_g";
+  // Einzige Quelle für die Land→Behandlung-Regel ist deriveTreatment.
+  const want = deriveTreatment(country);
+  if (treatment === want) return true;
+  // Zulässige Alternativen zum Standardvorschlag:
+  if (want === "de_19") return treatment === "de_7"; // ermäßigter Inlandssatz
+  if (want === "non_eu") return treatment === "non_eu_g"; // Drittland ohne USt-IdNr
+  return false;
 }
 // Erklärungs-/Warnbox unter dem Dropdown aktualisieren.
 function showNote() {
@@ -104,15 +107,19 @@ function deriveTreatment(country) {
   return "non_eu";
 }
 // Steuerliche Behandlung passend zum Kundenland vorauswählen.
-// Kleinunternehmer bleibt unangetastet (hängt am Verkäuferstatus, nicht am Land).
 function autoSelectTreatment() {
   const sel = document.querySelector("#tax_treatment");
-  if (!sel || sel.value === "kleinunternehmer") return;
-  const cc = document.querySelector("[name='buyer_country']");
-  const want = deriveTreatment(cc ? cc.value : "DE");
-  if (sel.value === want) return;
-  if (![...sel.options].some((o) => o.value === want)) return;
-  sel.value = want;
+  if (!sel) return;
+  // Kleinunternehmer bleibt unangetastet; alle anderen ggf. an das Land anpassen.
+  if (sel.value !== "kleinunternehmer") {
+    const cc = document.querySelector("[name='buyer_country']");
+    const want = deriveTreatment(cc ? cc.value : "DE");
+    if (sel.value !== want && [...sel.options].some((o) => o.value === want)) {
+      sel.value = want;
+    }
+  }
+  // Immer aktualisieren – auch wenn die Behandlung gleich bleibt, kann sich
+  // die Mismatch-Warnung durch ein geändertes Kundenland ändern.
   showNote();
 }
 
