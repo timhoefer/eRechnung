@@ -528,8 +528,11 @@ _SCH_XRECHNUNG = "XRechnung-CII-validation.xsl"  # zusätzliche BR-DE-Regeln
 
 def _schematron_dir() -> str:
     import os
+    import sys
 
-    return os.path.join(os.path.dirname(__file__), "schematron")
+    # Gebündelt (PyInstaller): Ressourcen liegen unter sys._MEIPASS.
+    base = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
+    return os.path.join(base, "schematron")
 
 
 def schematron_available() -> bool:

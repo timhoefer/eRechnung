@@ -51,6 +51,31 @@ Das Ergebnis lässt sich mit Validatoren wie dem [KoSIT-Validator] oder Mustang 
 - Dies ist ein Werkzeug, keine Steuerberatung. Die korrekte steuerliche Einordnung im
   Einzelfall liegt bei dir bzw. deinem Steuerberater.
 
+## Als macOS-App bauen (optional)
+
+Für eine Doppelklick-App ohne Terminal/Browser (eigenes Fenster via pywebview)
+gibt es einen PyInstaller-Build. Voraussetzung ist Homebrew-Pango (liefert die
+nativen Bibliotheken, die ins Bundle eingebettet werden):
+
+```bash
+brew install pango
+.venv/bin/pip install -r requirements-build.txt
+./build_macos.sh        # -> dist/eRechnung.app
+```
+
+Die App ist self-contained (Pango-Stack + SaxonC sind eingebettet) und legt ihre
+Daten unter `~/Library/Application Support/eRechnung` ab. Ein headless-Selbsttest
+prüft die nativen Bibliotheken:
+
+```bash
+./dist/eRechnung.app/Contents/MacOS/eRechnung --selftest
+```
+
+Die App ist **unsigniert** – beim ersten Öffnen auf einem fremden Mac per
+Rechtsklick › „Öffnen". Für eine Weitergabe ohne Gatekeeper-Warnung sind
+Code-Signing und Notarisierung (Apple Developer Program) nötig. Der klassische
+Start über `run.sh` / `start.command` bleibt unverändert nutzbar.
+
 ## Lizenz & Haftungsausschluss
 
 Dieser Code steht unter der **Apache License 2.0** – siehe [`LICENSE`](LICENSE).

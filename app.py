@@ -37,7 +37,71 @@ from zugferd import (
     validate_xml_bytes,
 )
 
-BASE = Path(__file__).parent
+# Als gebündelte .app (PyInstaller) liegen Code/Ressourcen schreibgeschützt im
+# Bundle (sys._MEIPASS), Nutzerdaten gehören nach ~/Library/Application Support.
+# Im normalen Quell-Start (run.sh / start.command) bleibt alles wie gehabt.
+FROZEN = getattr(sys, "frozen", False)
+if FROZEN:
+    RESOURCE_BASE = Path(sys._MEIPASS)  # gebündelte templates/static/…
+    BASE = Path.home() / "Library" / "Application Support" / "eRechnung"
+    BASE.mkdir(parents=True, exist_ok=True)
+else:
+    RESOURCE_BASE = Path(__file__).parent
+    BASE = Path(__file__).parent
+
+
+def _patch_cffi_dlopen() -> None:
+    """WeasyPrint lädt native Libs per Leaf-Name, z. B. cffi.dlopen('libpango-1.0.dylib').
+    dlopen durchsucht das App-Bundle aber nicht. Wir mappen darum jeden gesuchten
+    Namen, der als Datei im Bundle existiert, auf seinen absoluten Pfad.
+
+    Bewusst OHNE DYLD_*-Variablen gelöst – die werden unter macOS Hardened Runtime
+    (für die spätere Notarisierung nötig) ignoriert. Läuft vor dem ersten Import
+    von WeasyPrint, da dieser erst in build_pdf() erfolgt."""
+    import cffi
+    import os as _os
+
+    libdir = Path(sys._MEIPASS)
+    _dbg = _os.environ.get("ERECHNUNG_DEBUG")
+
+    # WeasyPrint probiert je Lib mehrere Namensvarianten der Reihe nach und nimmt
+    # den ersten Treffer. Damit schon der ERSTE Versuch ins Bundle zeigt (und nicht
+    # zufällig ein systemweit installiertes Homebrew-Pango erwischt), mappen wir
+    # alle Varianten explizit auf die gebündelte Datei.
+    _ALIASES = {
+        "libgobject-2.0.0.dylib": ("libgobject-2.0-0", "gobject-2.0-0", "gobject-2.0"),
+        "libpango-1.0.dylib": ("libpango-1.0-0", "pango-1.0-0", "pango-1.0"),
+        "libharfbuzz.0.dylib": ("libharfbuzz-0", "harfbuzz", "harfbuzz-0.0"),
+        "libharfbuzz-subset.0.dylib": ("libharfbuzz-subset-0", "harfbuzz-subset", "harfbuzz-subset-0.0"),
+        "libfontconfig.1.dylib": ("libfontconfig-1", "fontconfig-1", "fontconfig"),
+        "libpangoft2-1.0.dylib": ("libpangoft2-1.0-0", "pangoft2-1.0-0", "pangoft2-1.0"),
+    }
+    _name_map = {}
+    for _file, _variants in _ALIASES.items():
+        if (libdir / _file).exists():
+            for _v in _variants:
+                _name_map[_v] = str(libdir / _file)
+
+    _orig = cffi.FFI.dlopen
+
+    def _dlopen(self, name=None, *args, **kwargs):
+        if name:
+            if name in _name_map:
+                name = _name_map[name]
+            else:
+                cand = libdir / Path(name).name
+                if cand.exists():
+                    name = str(cand)
+            if _dbg:
+                print(f"[patch] dlopen -> {name}", file=sys.stderr)
+        return _orig(self, name, *args, **kwargs)
+
+    cffi.FFI.dlopen = _dlopen
+
+
+if FROZEN:
+    _patch_cffi_dlopen()
+
 CONFIG_FILE = BASE / "config.json"  # merkt sich den gewählten Datenordner
 
 
@@ -193,7 +257,11 @@ def data_conflicts() -> list:
     return out
 
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=str(RESOURCE_BASE / "templates"),
+    static_folder=str(RESOURCE_BASE / "static"),
+)
 app.secret_key = "erechnung-local"  # nur für Flash-Messages, rein lokal
 # Upload-/Form-Größe begrenzen (Schutz vor Speicher-DoS über /validate).
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB

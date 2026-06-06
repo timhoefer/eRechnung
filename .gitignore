@@ -18,3 +18,7 @@ output/
 
 # Lokaler Datenordner-Pfad (kein Commit)
 config.json
+
+# PyInstaller Build-Artefakte
+/build/
+/dist/
