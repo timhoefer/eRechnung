@@ -1,0 +1,15 @@
+<div class="card status {{ 'ok' if depinfo.current and not depinfo.update_available and not depinfo.error else '' }}">
+  <strong>{{ t.dep_title }}</strong>
+  <table class="summary" style="margin-top:8px">
+    <tr><td>{{ t.dep_drafthorse }} — {{ t.dep_current }}</td><td>{{ depinfo.current or '—' }}</td></tr>
+    {% if depinfo.latest %}<tr><td>{{ t.dep_latest }}</td><td>{{ depinfo.latest }}</td></tr>{% endif %}
+  </table>
+  {% if depinfo.error == 'offline' %}
+    <p class="hint">{{ t.dep_offline }}</p>
+  {% elif depinfo.update_available %}
+    <p style="margin:10px 0 0"><strong>{{ t.dep_update_available }}</strong></p>
+    <p class="hint">{{ t.dep_update_cmd }} <code>pip install -U drafthorse</code></p>
+  {% elif depinfo.current %}
+    <p class="hint">✓ {{ t.dep_uptodate }}</p>
+  {% endif %}
+</div>

@@ -12,6 +12,13 @@
   <p class="sub">{{ inv.number }} &middot; {{ buyer.name }}</p>
 </header>
 
+{% if duplicate %}
+<div class="card status warn">
+  <strong>&#9888; {{ t.dup_number_title }}</strong>
+  <p style="margin:6px 0 0">{{ t.dup_number_text.replace("{number}", inv.number).replace("{filename}", filename) }}</p>
+</div>
+{% endif %}
+
 <div class="card status {{ 'ok' if valid else 'err' }}">
   {% if valid %}
     <strong>&#10003; {{ t.valid_ok }}</strong>

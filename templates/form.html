@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=98">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=100">
 </head>
 <body>
 <header>
@@ -33,6 +33,8 @@
 
 <div class="layout">
 <div class="form-pane">
+
+<div id="form-content">
 
 <details class="card" {% if not seller.name %}open{% endif %}>
   <summary>
@@ -284,6 +286,10 @@
   <p>{{ t.disclaimer_full }}</p>
 </details>
 
+</div><!-- /form-content -->
+
+<div id="settings-pane" hidden></div>
+
 </div><!-- /form-pane -->
 
 <aside class="preview-pane">
@@ -300,7 +306,7 @@
   </div>
   <div class="preview-actions">
     <button type="submit" form="invoice-form" id="generate-btn" data-zug="{{ t.generate }}" data-xr="{{ t.generate_xr }}">{{ t.generate }}</button>
-    <a href="{{ url_for('validate') }}" class="btn-secondary">{{ t.settings }}</a>
+    <button type="button" id="settings-toggle" class="btn-secondary" data-open="{{ t.settings }}" data-close="{{ t.settings_close }}">{{ t.settings }}</button>
   </div>
 </aside>
 </div><!-- /layout -->
@@ -323,6 +329,14 @@
   window.UI_LANG = {{ lang|tojson }};
   window.VAT_LABEL = {{ t.vat|tojson }};
   window.PREVIEW_URL = {{ url_for('preview_html')|tojson }};
+  window.SETTINGS_PANEL_URL = {{ url_for('settings_panel')|tojson }};
+  window.SETTINGS_DEPINFO_URL = {{ url_for('settings_depinfo')|tojson }};
+  window.DATA_DIR_SET_URL = {{ url_for('data_dir_set')|tojson }};
+  window.DATA_DIR_BROWSE_URL = {{ url_for('data_dir_browse')|tojson }};
+  window.ARCHIVE_DELETE_URL = {{ url_for('archive_delete')|tojson }};
+  window.MSG_CONFIRM_DELETE = {{ t['confirm_delete_text']|tojson }};
+  window.MSG_LIVE_PREVIEW = {{ t['live_preview']|tojson }};
+  window.MSG_NO_PREVIEW = {{ t['no_preview']|tojson }};
   window.SELLER_AUTOSAVE_URL = {{ url_for('settings_autosave')|tojson }};
   window.CUSTOMER_AUTOSAVE_URL = {{ url_for('customers_autosave')|tojson }};
   window.CUSTOMER_ITEMS_SAVE_URL = {{ url_for('customers_items_save')|tojson }};
@@ -332,6 +346,6 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=47"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=53"></script>
 </body>
 </html>

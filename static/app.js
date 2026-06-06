@@ -843,6 +843,7 @@ function saveCustomerItems() {
 }
 
 let previewTimer;
+let settingsOpen = false; // true, solange das Einstellungen-Panel offen ist
 const A4_W = 794; // 210 mm bei 96 dpi – logische Breite der Mini-Vorschau
 const A4_H = 1123; // 297 mm bei 96 dpi – A4-Höhe (eine Seite)
 function scaleMiniPreview() {
@@ -858,6 +859,7 @@ function scaleMiniPreview() {
   inner.style.height = A4_H * s + "px";
 }
 function updatePreview() {
+  if (settingsOpen) return; // im Einstellungen-Modus zeigt die Vorschau Archiv-PDFs
   const form = document.getElementById("invoice-form");
   const frame = document.getElementById("preview-frame");
   if (!form || !frame || !window.PREVIEW_URL) return;
@@ -1238,3 +1240,159 @@ updateDiscTypeLabels();
 refreshSavedItems();
 recalc();
 updatePreview();
+
+// === Einstellungen-/Archiv-Panel (In-Place auf der Startseite) ==============
+let lastPreviewUrl = null;
+
+function setPreviewHead(label) {
+  const head = document.querySelector(".preview-head span");
+  if (head && label) head.textContent = label;
+}
+
+// Archiv-Vorschau = dasselbe HTML wie die Live-Vorschau (aus der Sidecar),
+// daher exakt derselbe Look, kein PDF-Viewer, kein dunkler Rand.
+function showInvoicePreview(url, label) {
+  fetch(url)
+    .then((r) => (r.ok ? r.text() : Promise.reject()))
+    .then((html) => {
+      const frame = document.getElementById("preview-frame");
+      if (!frame) return;
+      frame.removeAttribute("src");
+      frame.srcdoc = html;
+      scaleMiniPreview();
+      setPreviewHead(label);
+    })
+    .catch(() => showNoPreview(label));
+}
+
+// Platzhalter für Dateien ohne Sidecar (Fremd-/Altdateien): per Klick noch
+// öffenbar, aber keine Inline-Vorschau.
+function showNoPreview(label) {
+  const frame = document.getElementById("preview-frame");
+  if (!frame) return;
+  const msg = (window.MSG_NO_PREVIEW || "Keine Vorschau vorhanden").replace(/[<>&]/g, "");
+  frame.removeAttribute("src");
+  frame.srcdoc =
+    '<!doctype html><meta charset="utf-8">' +
+    '<body style="margin:0;height:100vh;display:flex;align-items:center;' +
+    'justify-content:center;font:14px -apple-system,BlinkMacSystemFont,sans-serif;' +
+    'color:#9aa0a6;background:#fff">' + msg + "</body>";
+  scaleMiniPreview();
+  setPreviewHead(label);
+}
+
+// Zurück in die Live-HTML-Vorschau.
+function restoreLivePreview() {
+  setPreviewHead(window.MSG_LIVE_PREVIEW);
+  scaleMiniPreview();
+  schedulePreview();
+}
+
+function loadDepsAsync() {
+  const slot = document.getElementById("deps-card");
+  if (!slot || !window.SETTINGS_DEPINFO_URL) return;
+  fetch(window.SETTINGS_DEPINFO_URL)
+    .then((r) => r.text())
+    .then((html) => { slot.innerHTML = html; })
+    .catch(() => {});
+}
+
+function loadSettingsPanel() {
+  const pane = document.getElementById("settings-pane");
+  if (!pane || !window.SETTINGS_PANEL_URL) return Promise.resolve();
+  return fetch(window.SETTINGS_PANEL_URL)
+    .then((r) => r.text())
+    .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
+    .catch(() => {});
+}
+
+function openSettings() {
+  const pane = document.getElementById("settings-pane");
+  const content = document.getElementById("form-content");
+  const btn = document.getElementById("settings-toggle");
+  if (!pane || !content) return;
+  settingsOpen = true;
+  loadSettingsPanel().then(() => { pane.hidden = false; content.hidden = true; });
+  if (btn) { btn.textContent = btn.dataset.close; btn.classList.add("active"); }
+}
+
+function closeSettings() {
+  const pane = document.getElementById("settings-pane");
+  const content = document.getElementById("form-content");
+  const btn = document.getElementById("settings-toggle");
+  settingsOpen = false;
+  lastPreviewUrl = null;
+  if (pane) pane.hidden = true;
+  if (content) content.hidden = false;
+  if (btn) { btn.textContent = btn.dataset.open; btn.classList.remove("active"); }
+  restoreLivePreview();
+}
+
+(function wireSettingsPane() {
+  const pane = document.getElementById("settings-pane");
+  const toggle = document.getElementById("settings-toggle");
+  if (!pane || !toggle) return;
+  toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
+
+  // Hover über eine Archiv-Zeile -> HTML-Vorschau (app-Rechnung mit Sidecar)
+  // bzw. Platzhalter (Fremd-/Altdatei ohne Sidecar).
+  pane.addEventListener("mouseover", (e) => {
+    const row = e.target.closest(".arch-row");
+    if (!row) return;
+    const key = row.dataset.previewUrl || row.dataset.viewUrl;
+    if (!key || key === lastPreviewUrl) return;
+    lastPreviewUrl = key;
+    const fileCell = row.querySelector("td");
+    const label = fileCell ? fileCell.textContent.trim() : "";
+    if (row.dataset.previewUrl) showInvoicePreview(row.dataset.previewUrl, label);
+    else showNoPreview(label);
+  });
+
+  pane.addEventListener("click", (e) => {
+    // Löschen (mit Bestätigung) -> danach Panel neu laden.
+    const del = e.target.closest(".js-delete");
+    if (del) {
+      e.preventDefault();
+      const fn = del.dataset.filename;
+      if (!confirm(fn + "\n\n" + (window.MSG_CONFIRM_DELETE || ""))) return;
+      const fd = new FormData();
+      fd.append("filename", fn);
+      fetch(window.ARCHIVE_DELETE_URL, { method: "POST", body: fd })
+        .then(() => loadSettingsPanel())
+        .catch(() => {});
+      return;
+    }
+    // Datenordner durchsuchen (nativer Dialog).
+    const browse = e.target.closest("#dd-browse");
+    if (browse) {
+      const input = pane.querySelector("#data-dir-input");
+      browse.disabled = true;
+      fetch(window.DATA_DIR_BROWSE_URL, { method: "POST" })
+        .then((r) => r.json())
+        .then((d) => { if (d.ok && d.path && input) input.value = d.path; })
+        .catch(() => {})
+        .finally(() => { browse.disabled = false; });
+      return;
+    }
+    // Klick auf die Zeile (nicht auf Links/Buttons) -> PDF im Tab öffnen.
+    if (e.target.closest("a, button")) return;
+    const row = e.target.closest(".arch-row");
+    if (row && row.dataset.viewUrl) window.open(row.dataset.viewUrl, "_blank");
+  });
+
+  // Formulare im Panel ohne Seitenwechsel abschicken.
+  pane.addEventListener("submit", (e) => {
+    const form = e.target;
+    e.preventDefault();
+    if (form.classList.contains("datadir-form")) {
+      fetch(window.DATA_DIR_SET_URL, { method: "POST", body: new FormData(form) })
+        .then(() => loadSettingsPanel())
+        .catch(() => {});
+    } else { // Datei prüfen / Archiv-Rechnung prüfen -> Panel mit Ergebnis ersetzen
+      fetch(window.SETTINGS_PANEL_URL, { method: "POST", body: new FormData(form) })
+        .then((r) => r.text())
+        .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
+        .catch(() => {});
+    }
+  });
+})();

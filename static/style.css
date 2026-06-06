@@ -287,13 +287,15 @@ button.secondary:hover { background: #e0e3e9; }
 .totals { margin-top: 16px; margin-left: auto; width: 280px; }
 .totals div { display: flex; justify-content: space-between; padding: 5px 4px; font-variant-numeric: tabular-nums; }
 .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: 17px; margin-top: 4px; }
-.actions {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
-  display: flex; justify-content: flex-end; align-items: center; gap: 12px;
-  padding: 12px 24px; margin: 0; max-width: none; border-radius: 0;
-  background: var(--card); border: none; border-top: 1px solid var(--line);
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, .06);
-}
+.back-link { margin: 16px 2px; }
+/* Aktionsleiste der Ergebnisseite (result.html) – im Fluss, nicht sticky */
+.actions { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+.actions .spacer { flex: 1; }
+/* Einstellungen/Archiv als In-Place-Panel in der linken Spalte */
+#settings-toggle.active { background: #dfe3ea; }
+.arch-row { cursor: pointer; }
+.arch-row:hover { background: #f5f7fb; }
+.arch-row td { transition: background .1s; }
 .flash { padding: 12px 18px; font-size: 14px; }
 .flash.ok { border-color: var(--ok); color: var(--ok); background: #f0fdf4; }
 .flash.err { border-color: var(--err); color: var(--err); background: #fef2f2; }

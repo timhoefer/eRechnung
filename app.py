@@ -608,6 +608,44 @@ def load_draft(src: str | None) -> dict | None:
         return None
 
 
+def render_invoice_preview(seller, buyer, inv, items, mode=""):
+    """Rechnungs-HTML rendern – für Live-Vorschau und Archiv-Vorschau gleichermaßen.
+    Rückgabe: (html, (line_total, discount, tax_basis, tax_total, grand_total, treatment))."""
+    inv_lang = inv.get("language") or "de"
+    tt = inv.get("tax_treatment", "de_19")
+    if tt not in TAX_TREATMENTS:
+        tt = "de_19"
+    treatment = TAX_TREATMENTS[tt]
+    computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
+        items, treatment["rate"], _dec(inv.get("discount") or "0")
+    )
+    unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
+    unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
+    body_class = "mini" if mode == "mini" else ("page" if mode else "")
+    html = render_template(
+        "invoice_pdf.html",
+        ti=translate(inv_lang),
+        body_class=body_class,
+        seller=seller,
+        buyer=buyer,
+        buyer_address_lines=format_buyer_address(buyer, inv_lang),
+        inv=inv,
+        items=computed,
+        unit_labels=unit_labels,
+        unit_labels_pl=unit_labels_pl,
+        treatment=treatment,
+        treatment_note=loc(treatment["note"], inv_lang),
+        treatment_label=loc(treatment["label"], inv_lang),
+        line_total=line_total,
+        discount=discount,
+        tax_basis=tax_basis,
+        tax_total=tax_total,
+        grand_total=grand_total,
+        D=Decimal,
+    )
+    return html, (line_total, discount, tax_basis, tax_total, grand_total, treatment)
+
+
 def _assemble(form):
     """Formulardaten -> (data-dict, gerendertes HTML, totals-bundle)."""
     seller = load_seller()
@@ -650,35 +688,8 @@ def _assemble(form):
     buyer = buyer_from_form(form)
     data = {"seller": seller, "buyer": buyer, "invoice": inv, "items": items}
 
-    treatment = TAX_TREATMENTS[inv["tax_treatment"]]
-    computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
-        items, treatment["rate"], _dec(inv["discount"])
-    )
-    unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
-    unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
-    mode = form.get("_full")
-    body_class = "mini" if mode == "mini" else ("page" if mode else "")
-    html = render_template(
-        "invoice_pdf.html",
-        ti=translate(inv_lang),  # Übersetzungen in Rechnungssprache
-        body_class=body_class,
-        seller=seller,
-        buyer=buyer,
-        buyer_address_lines=format_buyer_address(buyer, inv_lang),
-        inv=inv,
-        items=computed,
-        unit_labels=unit_labels,
-        unit_labels_pl=unit_labels_pl,
-        treatment=treatment,
-        treatment_note=loc(treatment["note"], inv_lang),
-        treatment_label=loc(treatment["label"], inv_lang),
-        line_total=line_total,
-        discount=discount,
-        tax_basis=tax_basis,
-        tax_total=tax_total,
-        grand_total=grand_total,
-        D=Decimal,
-    )
+    html, (line_total, discount, tax_basis, tax_total, grand_total, treatment) = \
+        render_invoice_preview(seller, buyer, inv, items, mode=form.get("_full") or "")
     totals = {
         "line_total": line_total,
         "discount": discount,
@@ -848,12 +859,26 @@ def generate():
     xml = build_xml(data)
     pdf = build_pdf(html, xml)
 
-    # Archivieren
-    filename = f"Rechnung_{safe_name(inv_number)}.pdf"
+    # Archivieren – eine vorhandene Datei NIE überschreiben. Wird dieselbe
+    # Rechnungsnummer erneut verwendet (z. B. versehentlich), würde sonst eine
+    # evtl. korrekte Rechnung still zerstört. Bei Kollision eindeutigen Namen
+    # vergeben; beide bleiben im Archiv sichtbar, der Fehler ist korrigierbar.
+    stem = f"Rechnung_{safe_name(inv_number)}"
+    duplicate = (OUTPUT_DIR / f"{stem}.pdf").exists()
+    name, n = stem, 2
+    while (OUTPUT_DIR / f"{name}.pdf").exists():
+        name = f"{stem} ({n})"
+        n += 1
+    filename = f"{name}.pdf"
     (OUTPUT_DIR / filename).write_bytes(pdf)
 
-    # Sidecar mit den Formulardaten – ermöglicht „als Vorlage öffnen".
-    sidecar = {"buyer": data["buyer"], "invoice": data["invoice"], "items": data["items"]}
+    # Sidecar mit den Formulardaten – ermöglicht „als Vorlage öffnen" und die
+    # Archiv-Vorschau. seller wird mitgespeichert, damit die Vorschau dem Stand
+    # zum Erzeugungszeitpunkt entspricht (auch wenn die Stammdaten sich ändern).
+    sidecar = {
+        "seller": seller, "buyer": data["buyer"],
+        "invoice": data["invoice"], "items": data["items"],
+    }
     (OUTPUT_DIR / f"{Path(filename).stem}.json").write_text(
         json.dumps(sidecar, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -878,6 +903,7 @@ def generate():
         valid=valid,
         messages=messages,
         sch=sch,
+        duplicate=duplicate,
     )
 
 
@@ -889,6 +915,21 @@ def download(filename):
 @app.route("/view/<path:filename>")
 def view(filename):
     return _serve(filename, inline=True)
+
+
+@app.route("/archive/preview/<path:filename>")
+def archive_preview(filename):
+    """HTML-Vorschau einer archivierten Rechnung aus ihrer Sidecar-JSON – gleicher
+    Look wie die Live-Vorschau. Nur für app-erzeugte Rechnungen (mit Sidecar)."""
+    draft = load_draft(filename)
+    if not draft:
+        abort(404)
+    seller = draft.get("seller") or load_seller()  # Altbestände ohne seller -> aktuell
+    html, _ = render_invoice_preview(
+        seller, draft.get("buyer") or {}, draft.get("invoice") or {},
+        draft.get("items") or [], mode="mini",
+    )
+    return html
 
 
 @app.route("/archive/delete", methods=["POST"])
@@ -963,18 +1004,8 @@ def drafthorse_version_info() -> dict:
     return info
 
 
-@app.route("/validate", methods=["GET", "POST"])
-def validate():
-    """Prüfseite: erzeugte Rechnungen erneut validieren oder Datei hochladen."""
-    result = None
-    if request.method == "POST":
-        result = _validate_request()
-        lang = get_ui_lang(request)
-        sch = result.get("sch") if result else None
-        if sch and sch.get("available"):
-            sch["errors"] = [localize_rule(m, lang) for m in sch["errors"]]
-            sch["warnings"] = [localize_rule(m, lang) for m in sch["warnings"]]
-
+def _settings_context() -> dict:
+    """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
     for p in sorted(OUTPUT_DIR.glob("*.pdf"), reverse=True):
         archive.append(
@@ -986,16 +1017,52 @@ def validate():
                 "has_draft": (OUTPUT_DIR / f"{p.stem}.json").exists(),
             }
         )
+    return {
+        "archive": archive,
+        "data_dir": str(DATA_DIR),
+        "data_dir_custom": DATA_DIR.resolve() != BASE.resolve(),
+        "can_browse": (sys.platform == "darwin"),
+        "conflicts": data_conflicts(),
+    }
+
+
+def _localized_validation():
+    """Datei-/Archiv-Prüfung auswerten und Schematron-Texte lokalisieren."""
+    result = _validate_request()
+    if result:
+        lang = get_ui_lang(request)
+        sch = result.get("sch")
+        if sch and sch.get("available"):
+            sch["errors"] = [localize_rule(m, lang) for m in sch["errors"]]
+            sch["warnings"] = [localize_rule(m, lang) for m in sch["warnings"]]
+    return result
+
+
+@app.route("/validate", methods=["GET", "POST"])
+def validate():
+    """Prüfseite (Vollseite, Fallback). Erzeugte Rechnungen prüfen oder Datei hochladen."""
+    result = _localized_validation() if request.method == "POST" else None
     return render_template(
-        "validate.html",
-        result=result,
-        archive=archive,
-        depinfo=drafthorse_version_info(),
-        data_dir=str(DATA_DIR),
-        data_dir_custom=DATA_DIR.resolve() != BASE.resolve(),
-        can_browse=(sys.platform == "darwin"),
-        conflicts=data_conflicts(),
+        "validate.html", result=result, depinfo=drafthorse_version_info(),
+        **_settings_context(),
     )
+
+
+@app.route("/settings/panel", methods=["GET", "POST"])
+def settings_panel():
+    """Einstellungen/Archiv als HTML-Fragment für das In-Place-Panel auf der Startseite.
+    Die Versionsprüfung (PyPI, langsam) wird separat per /settings/depinfo nachgeladen."""
+    result = _localized_validation() if request.method == "POST" else None
+    return render_template(
+        "settings_panel.html", result=result, lazy_deps=True, inplace=True,
+        **_settings_context(),
+    )
+
+
+@app.route("/settings/depinfo")
+def settings_depinfo():
+    """Nur die Versions-Karte (wird vom Panel asynchron nachgeladen)."""
+    return render_template("_deps_card.html", depinfo=drafthorse_version_info())
 
 
 @app.route("/data-dir", methods=["POST"])
