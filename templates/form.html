@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=101">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=102">
 </head>
 <body>
 <header>
@@ -104,9 +104,10 @@
       <label class="ref-field" hidden>{{ t.ref_number }}<input name="ref_number"></label>
       <label class="ref-field" hidden>{{ t.ref_date }}<input name="ref_date" type="date"></label>
       <p class="hint wide ref-field" id="ref-hint" hidden>{{ t.ref_hint }}</p>
-      <label>{{ t.invoice_no }}<input name="number" value="{{ defaults.number }}" required></label>
+      <label>{{ t.invoice_no }}<input name="number" id="invoice-number" value="{{ defaults.number }}" required></label>
       <label>{{ t.invoice_date }}<input name="issue_date" type="date" value="{{ defaults.issue_date }}" required></label>
       <label>{{ t.due }}<input name="due_date" type="date" value="{{ defaults.due_date }}"></label>
+      <p class="hint wide warn-hint" id="number-warning" hidden>{{ t.number_in_use }}</p>
     </div>
     <label class="period-overall">{{ t.service_period_overall }}
       <span class="period">
@@ -337,6 +338,8 @@
   window.MSG_CONFIRM_DELETE = {{ t['confirm_delete_text']|tojson }};
   window.MSG_LIVE_PREVIEW = {{ t['live_preview']|tojson }};
   window.MSG_NO_PREVIEW = {{ t['no_preview']|tojson }};
+  window.USED_NUMBERS = {{ used_numbers|tojson }};
+  window.MSG_NUMBER_IN_USE = {{ t['number_in_use']|tojson }};
   window.SELLER_AUTOSAVE_URL = {{ url_for('settings_autosave')|tojson }};
   window.CUSTOMER_AUTOSAVE_URL = {{ url_for('customers_autosave')|tojson }};
   window.CUSTOMER_ITEMS_SAVE_URL = {{ url_for('customers_items_save')|tojson }};
@@ -346,6 +349,6 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=54"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=55"></script>
 </body>
 </html>

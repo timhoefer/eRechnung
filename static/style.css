@@ -288,6 +288,7 @@ button.secondary:hover { background: #e0e3e9; }
 .totals div { display: flex; justify-content: space-between; padding: 5px 4px; font-variant-numeric: tabular-nums; }
 .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: 17px; margin-top: 4px; }
 .back-link { margin: 16px 2px; }
+.warn-hint { color: var(--warn); font-weight: 600; }
 /* Aktionsleiste der Ergebnisseite (result.html) – im Fluss, nicht sticky */
 .actions { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
 .actions .spacer { flex: 1; }

@@ -702,6 +702,25 @@ def _assemble(form):
 
 
 # --- Routen ----------------------------------------------------------------
+def used_invoice_numbers() -> list[str]:
+    """Bereits vergebene Rechnungsnummern im Archiv (für den Live-Hinweis im Formular).
+    Quelle ist primär die Sidecar-JSON (exakt), sonst der Dateiname."""
+    nums = set()
+    for p in OUTPUT_DIR.glob("*.pdf"):
+        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+        num = None
+        if sidecar.exists():
+            try:
+                num = (json.loads(sidecar.read_text(encoding="utf-8")).get("invoice") or {}).get("number")
+            except (ValueError, OSError):
+                num = None
+        if not num and p.stem.startswith("Rechnung_"):
+            num = p.stem[len("Rechnung_"):]
+        if num:
+            nums.add(num.strip())
+    return sorted(nums)
+
+
 @app.route("/")
 def index():
     seller = load_seller()
@@ -724,6 +743,7 @@ def index():
         customers=load_customers(),
         units=UNITS,
         draft=draft,
+        used_numbers=used_invoice_numbers(),
     )
 
 

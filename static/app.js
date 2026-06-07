@@ -1409,3 +1409,19 @@ function closeSettings() {
     }
   });
 })();
+
+// === Hinweis bei bereits vergebener Rechnungsnummer (blockiert NICHT) ========
+// Doppelte Nummern bleiben erlaubt (z. B. Korrekturrechnungen) – wir weisen nur hin.
+function checkInvoiceNumber() {
+  const input = document.getElementById("invoice-number");
+  const warn = document.getElementById("number-warning");
+  if (!input || !warn) return;
+  const used = Array.isArray(window.USED_NUMBERS) ? window.USED_NUMBERS : [];
+  warn.hidden = !used.includes(input.value.trim());
+}
+(function initInvoiceNumberCheck() {
+  const input = document.getElementById("invoice-number");
+  if (!input) return;
+  input.addEventListener("input", checkInvoiceNumber);
+  checkInvoiceNumber();
+})();
