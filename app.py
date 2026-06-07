@@ -617,7 +617,8 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
         tt = "de_19"
     treatment = TAX_TREATMENTS[tt]
     computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
-        items, treatment["rate"], _dec(inv.get("discount") or "0")
+        items, treatment["rate"], _dec(inv.get("discount") or "0"),
+        inv.get("discount_type") or "abs",
     )
     unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
     unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
@@ -683,6 +684,7 @@ def _assemble(form):
         "ref_number": form.get("ref_number", "").strip() or None,
         "ref_date": form.get("ref_date") or None,
         "discount": (form.get("discount", "0") or "0").replace(",", ".").strip() or "0",
+        "discount_type": "abs" if form.get("discount_type") == "abs" else "pct",
         "discount_reason": form.get("discount_reason", "").strip() or None,
     }
     buyer = buyer_from_form(form)

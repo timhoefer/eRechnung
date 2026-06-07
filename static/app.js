@@ -27,9 +27,14 @@ function recalc() {
     net += lineNet;
   });
   const discEl = document.querySelector("#discount");
+  const discType = document.querySelector('[name="discount_type"]');
   let discount = discEl ? num(discEl.value) : 0;
   if (discount < 0) discount = 0;
-  if (discount > net) discount = net;
+  if (discType && discType.value === "pct") {
+    discount = (net * Math.min(discount, 100)) / 100;
+  } else if (discount > net) {
+    discount = net;
+  }
   const basis = net - discount;
   const tax = (basis * rate) / 100;
   const subRow = document.querySelector("#t-sub-row");
@@ -494,6 +499,16 @@ function applyDraft() {
   set("language", inv.language);
   set("tax_treatment", inv.tax_treatment);
   set("profile", inv.profile);
+  // Gesamtrabatt wiederherstellen und ggf. ausklappen.
+  set("discount", inv.discount);
+  set("discount_reason", inv.discount_reason);
+  const dt = form.querySelector('[name="discount_type"]');
+  if (dt && inv.discount_type) { dt.value = inv.discount_type; syncUnitDisplay(dt); }
+  if (num(inv.discount) > 0 || (inv.discount_reason || "").trim()) {
+    const add = document.getElementById("add-discount");
+    const row = document.getElementById("discount-row");
+    if (add && row) { row.hidden = false; add.hidden = true; }
+  }
 
   const items = d.items || [];
   if (items.length) {
@@ -1439,4 +1454,32 @@ function checkInvoiceNumber() {
   if (!input) return;
   input.addEventListener("input", checkInvoiceNumber);
   checkInvoiceNumber();
+})();
+
+// === Gesamtrabatt ein-/ausklappen (analog zu den Positions-Zusatzfeldern) ====
+(function initOverallDiscount() {
+  const add = document.getElementById("add-discount");
+  const row = document.getElementById("discount-row");
+  const del = document.getElementById("del-discount");
+  if (!add || !row) return;
+  add.addEventListener("click", () => {
+    row.hidden = false;
+    add.hidden = true;
+    const inp = document.getElementById("discount");
+    if (inp) inp.focus();
+  });
+  if (del) {
+    del.addEventListener("click", () => {
+      row.hidden = true;
+      add.hidden = false;
+      const inp = document.getElementById("discount");
+      if (inp) inp.value = "0";
+      const reason = row.querySelector('[name="discount_reason"]');
+      if (reason) reason.value = "";
+      const dt = row.querySelector('[name="discount_type"]');
+      if (dt) { dt.selectedIndex = 0; syncUnitDisplay(dt); }
+      recalc();
+      schedulePreview();
+    });
+  }
 })();

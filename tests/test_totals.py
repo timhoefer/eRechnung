@@ -70,6 +70,24 @@ def test_multiple_items_sum():
     assert line == Decimal("130.00")  # 100 + 30
 
 
+def test_overall_discount_pct():
+    _, line, disc, basis, *_ = compute_totals([item("1", "100")], Decimal("0"), Decimal("10"), "pct")
+    assert disc == Decimal("10.00")
+    assert basis == Decimal("90.00")
+
+
+def test_overall_discount_pct_capped_at_100():
+    _, _, disc, basis, *_ = compute_totals([item("1", "100")], Decimal("0"), Decimal("150"), "pct")
+    assert disc == Decimal("100.00")
+    assert basis == Decimal("0.00")
+
+
+def test_overall_discount_abs_is_default():
+    _, _, disc, basis, *_ = compute_totals([item("1", "100")], Decimal("0"), Decimal("10"))
+    assert disc == Decimal("10.00")  # ohne discount_type -> fester Betrag
+    assert basis == Decimal("90.00")
+
+
 def test_dec_robust_against_garbage():
     assert _dec("abc") == Decimal("0")
     assert _dec("") == Decimal("0")

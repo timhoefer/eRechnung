@@ -266,9 +266,29 @@
     </div>
     <p class="hint" id="items-status">{{ t.unit_hint }}</p>
 
-    <div class="discount-row">
-      <label>{{ t.discount }}<input name="discount" id="discount" class="num" inputmode="decimal" placeholder="0,00"></label>
-      <label>{{ t.discount_reason }}<input name="discount_reason" placeholder="{{ t.discount_reason_ph }}"></label>
+    <div class="discount-extra">
+      <button type="button" class="add-extras" id="add-discount">{{ t.total_discount_add }}</button>
+      <div class="discount-row" id="discount-row" hidden>
+        <label>{{ t.discount }}
+          <span class="discfield">
+            <input name="discount" id="discount" class="num disc-input" inputmode="decimal" value="0" aria-label="{{ t.discount }}">
+            <div class="unitsel">
+              <select name="discount_type" class="disc-type unit" aria-hidden="true" tabindex="-1">
+                <option value="pct">%</option>
+                <option value="abs">€</option>
+              </select>
+              <button type="button" class="unitsel-btn" role="combobox" aria-haspopup="listbox" aria-expanded="false"><span class="unitsel-label"></span></button>
+              <span class="combo-caret" aria-hidden="true"></span>
+            </div>
+          </span>
+        </label>
+        <label>{{ t.discount_reason }}
+          <span class="reason-row">
+            <input name="discount_reason" class="disc-reason" placeholder="{{ t.discount_reason_ph }}" aria-label="{{ t.discount_reason }}">
+            <button type="button" class="del-extras" id="del-discount" title="{{ t.remove_extras }}" aria-label="{{ t.remove_extras }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
+          </span>
+        </label>
+      </div>
     </div>
 
     <div class="totals">
@@ -349,6 +369,6 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=56"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=57"></script>
 </body>
 </html>

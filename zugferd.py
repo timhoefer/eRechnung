@@ -227,13 +227,14 @@ def _dec(value, default="0") -> Decimal:
     return d if d.is_finite() else Decimal(default)
 
 
-def compute_totals(items, rate: Decimal, discount=Decimal("0")):
+def compute_totals(items, rate: Decimal, discount=Decimal("0"), discount_type="abs"):
     """Zeilensummen, Zwischensumme, Rabatt, Steuerbasis, Steuer und Brutto berechnen.
 
     Rückgabe: (computed, line_total, discount, tax_basis, tax_total, grand_total)
       line_total  – Summe der Positionen (BT-106)
-      discount    – Gesamt-Nachlass (BT-107), auf [0, line_total] begrenzt
+      discount    – Gesamt-Nachlass (BT-107) als Betrag, auf [0, line_total] begrenzt
       tax_basis   – Steuerbasis = line_total − discount (BT-109)
+    discount_type: "abs" (fester Betrag) oder "pct" (Prozent der Positionssumme).
     """
     line_total = Decimal("0")
     computed = []
@@ -262,11 +263,18 @@ def compute_totals(items, rate: Decimal, discount=Decimal("0")):
             "net": net,
         })
     line_total = q(line_total)
-    discount = q(discount)
-    if discount < Decimal("0"):
-        discount = Decimal("0.00")
-    if discount > line_total:
-        discount = line_total
+    # Gesamt-Nachlass (BT-107): Prozent der Positionssumme oder fester Betrag.
+    dval = _dec(discount)
+    if dval < Decimal("0"):
+        dval = Decimal("0")
+    if discount_type == "pct":
+        if dval > Decimal("100"):
+            dval = Decimal("100")
+        discount = q(line_total * dval / Decimal("100"))
+    else:
+        discount = q(dval)
+        if discount > line_total:
+            discount = line_total
     tax_basis = q(line_total - discount)
     tax_total = q(tax_basis * rate / Decimal("100"))
     grand_total = q(tax_basis + tax_total)
@@ -286,7 +294,7 @@ def build_xml(data) -> bytes:
 
     discount_in = Decimal(str(inv.get("discount") or "0"))
     computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
-        data["items"], rate, discount_in
+        data["items"], rate, discount_in, inv.get("discount_type") or "abs"
     )
     currency = inv.get("currency", "EUR")
     profile = inv.get("profile", "en16931")
