@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ t.app_title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=102">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=103">
 </head>
 <body>
 <header>
@@ -107,7 +107,7 @@
       <label>{{ t.invoice_no }}<input name="number" id="invoice-number" value="{{ defaults.number }}" required></label>
       <label>{{ t.invoice_date }}<input name="issue_date" type="date" value="{{ defaults.issue_date }}" required></label>
       <label>{{ t.due }}<input name="due_date" type="date" value="{{ defaults.due_date }}"></label>
-      <p class="hint wide warn-hint" id="number-warning" hidden>{{ t.number_in_use }}</p>
+      <div class="callout callout-why" id="number-warning" hidden>{{ t.number_in_use }}</div>
     </div>
     <label class="period-overall">{{ t.service_period_overall }}
       <span class="period">
