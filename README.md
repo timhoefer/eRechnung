@@ -1,8 +1,14 @@
-# E-Rechnung (ZUGFeRD)
+# E-Rechnung (ZUGFeRD & XRechnung)
 
-Lokale Web-App zur Erstellung von E-Rechnungen im **ZUGFeRD**-Format (PDF/A-3 mit
-eingebettetem EN-16931-XML). Läuft komplett lokal — keine Cloud, keine Daten verlassen
-den Rechner.
+Lokale Web-App zur Erstellung von E-Rechnungen (**ZUGFeRD / Factur-X** und
+**XRechnung 3.0**, EN 16931) als PDF/A-3 mit eingebettetem XML. Läuft komplett
+lokal — keine Cloud, keine Daten verlassen den Rechner. Optional als
+macOS-Doppelklick-App.
+
+> **Status:** Persönliches Projekt, bereitgestellt **„wie besehen" (as is)**, ohne
+> aktive Wartung oder Support. Der E-Rechnungs-Standard ändert sich jährlich —
+> bitte jede erzeugte Rechnung selbst prüfen (siehe Haftungsausschluss unten).
+> Forks willkommen.
 
 ## Start
 
@@ -20,8 +26,9 @@ werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 | Auswahl | EN-16931-Code | Verwendung |
 |---|---|---|
 | Inland 19 % / 7 % | `S` | Normale Inlandsrechnung |
-| **Nicht steuerbar – Drittland** | `O` | Dienstleistung an Nicht-EU-Kunden (§ 3a Abs. 2 UStG), 0 % mit Begründung |
-| Reverse Charge – EU B2B | `AE` | Leistung an EU-Unternehmen |
+| Reverse Charge – EU B2B | `AE` | Leistung an EU-Unternehmen (USt-IdNr des Kunden nötig) |
+| Reverse Charge – Drittland | `AE` | Dienstleistung an Nicht-EU-Unternehmer (§ 3a Abs. 2 UStG), 0 % mit Begründung |
+| Nicht steuerbar – Drittland (ohne USt-IdNr) | `G` | Drittland-Kunde ohne USt-IdNr, 0 % mit Begründung |
 | Kleinunternehmer § 19 | `E` | Keine USt nach § 19 UStG |
 
 Bei den 0-%-Varianten wird der gesetzlich erforderliche **Begründungstext** automatisch
