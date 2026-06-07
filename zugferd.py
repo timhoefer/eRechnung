@@ -13,7 +13,6 @@ from drafthorse.models.document import Document
 from drafthorse.models.note import IncludedNote
 from drafthorse.models.party import TaxRegistration
 from drafthorse.models.payment import PaymentMeans, PaymentTerms
-from drafthorse.models.references import InvoiceReferencedDocument
 from drafthorse.models.tradelines import LineItem
 
 TWO = Decimal("0.01")

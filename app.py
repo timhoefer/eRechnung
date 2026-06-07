@@ -32,7 +32,6 @@ from zugferd import (
     extract_xml_from_pdf,
     fmt_money,
     loc,
-    schematron_available,
     validate_schematron,
     validate_xml_bytes,
 )
