@@ -120,7 +120,7 @@
       <input type="checkbox" name="service_eq_issue" id="service-eq-issue">
       {{ t.service_eq_issue }}
     </label>
-    <div class="callout callout-why">{{ t.service_period_hint }}</div>
+    <div class="callout callout-why" id="period-hint">{{ t.service_period_hint }}</div>
   </div>
 
   <div class="card">
@@ -349,6 +349,6 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
-<script src="{{ url_for('static', filename='app.js') }}?v=55"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=56"></script>
 </body>
 </html>

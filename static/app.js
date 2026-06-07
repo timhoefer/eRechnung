@@ -237,6 +237,19 @@ function syncServicePeriod() {
     s.disabled = eq.checked;
     en.disabled = eq.checked;
   }
+  updatePeriodHint();
+}
+
+// Den Pflicht-Hinweis nur zeigen, solange die Angabe noch fehlt. Sobald ein
+// Zeitraum eingetragen ODER "entspricht Rechnungsdatum" gewählt ist, ausblenden.
+function updatePeriodHint() {
+  const hint = document.getElementById("period-hint");
+  if (!hint) return;
+  const eq = document.getElementById("service-eq-issue");
+  const s = document.querySelector('#invoice-form [name="service_start"]');
+  const en = document.querySelector('#invoice-form [name="service_end"]');
+  const filled = !!(s && en && s.value && en.value);
+  hint.hidden = filled || (eq && eq.checked);
 }
 
 // Bezugsfelder (Storno/Korrektur) nur bei Belegart != 380 (normale Rechnung) zeigen.
@@ -955,6 +968,7 @@ document.addEventListener("input", (e) => {
     if (qu) syncUnitDisplay(qu.querySelector(".unit")); // Plural/Singular nachziehen
   }
   if (e.target.name && e.target.name.startsWith("buyer_")) scheduleCustomerSave();
+  if (e.target.name === "service_start" || e.target.name === "service_end") updatePeriodHint();
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
   if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
 });
@@ -963,6 +977,7 @@ document.addEventListener("change", (e) => {
     syncServicePeriod();
     schedulePreview();
   }
+  if (e.target.name === "service_start" || e.target.name === "service_end") updatePeriodHint();
 });
 document.addEventListener("focusin", (e) => {
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
