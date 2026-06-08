@@ -75,7 +75,9 @@
 
   /* Drawer-Vorschau: echtes A4-Blatt in 100% Größe (WeasyPrint ignoriert @media screen) */
   @media screen {
-    html.page { background: #d8d8dc; }
+    /* transparent -> der themen-abhängige iframe-Hintergrund (--drawer-frame:
+       hell #d8d8dc / dunkel #202329) scheint durch; Papier (body.page) bleibt weiß. */
+    html.page { background: transparent; }
     body.page { width: 210mm; min-height: 297mm; margin: 16mm auto; padding: 22mm 18mm 24mm 18mm;
       background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,.22); }
   }
