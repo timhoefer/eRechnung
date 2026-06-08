@@ -216,23 +216,22 @@ select {
 .qtyunit .unitsel-btn:focus { outline: none; }
 .qtyunit .combo-caret { width: 18px; }
 /* Eine Position = Box + Löschen-Button rechts daneben (außerhalb der Box). */
-/* container-type auf der Zeile, damit die @container-Query sowohl die Felder
-   (.item, in .position) als auch den Löschbutton (.del, Geschwister) erreicht. */
-.position-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; container-type: inline-size; }
+.position-row { margin-bottom: 12px; }
 .position {
-  flex: 1; min-width: 0;
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
   padding: 14px 16px;
 }
-/* Breites 1-Zeilen-Layout: Löschen oben auf Höhe der Feldzeile (Padding 14 + Label 22). */
-.position-row > .del { flex: 0 0 auto; align-self: flex-start; margin-top: 36px; }
-/* Schmale Box: Felder auf zwei Zeilen (Beschreibung | Menge·Einzelpreis·Summe);
-   Löschbutton mittig zum Positionsblock statt oben an der Beschreibung. */
+/* Felder + Löschbutton in einer Zeile; align-items:flex-end koppelt den Trash an
+   die Unterkante der Felder -> er sitzt automatisch auf der (letzten) Feldzeile,
+   in beiden Layouts, ohne feste Pixelwerte. container-type für die Feld-Umbruch-
+   Query (erreicht .item). */
+.position-head { display: flex; gap: 12px; align-items: flex-end; container-type: inline-size; }
+.position-head > .item { flex: 1 1 auto; min-width: 0; }
+.position-head > .del { flex: 0 0 auto; }
+/* Schmale Box: Felder auf zwei Zeilen (Beschreibung | Menge·Einzelpreis·Summe). */
 @container (max-width: 770px) {
   .item { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .item > .f-desc { grid-column: 1 / -1; }
-  /* Trash auf die Zahlenzeile (Zeile 2): Box-Padding + Beschreibungszeile + Gap. */
-  .position-row > .del { align-self: flex-start; margin-top: 111px; }
 }
 .item-extra { margin-top: 12px; }
 /* Einheiten-Dropdown: optisch identisch zur Beschreibungs-Combobox */

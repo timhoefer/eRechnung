@@ -388,8 +388,10 @@ function clearPosition(positionRow) {
 // Leistungszeitraum einer Position ein-/ausblenden; beim Entfernen Datumsfelder leeren.
 // Optionale Zusatzfelder (Leistungszeitraum + Rabatt + Rabattgrund) einer Zeile
 // gemeinsam ein-/ausblenden; beim Entfernen alle Werte zurücksetzen.
-function showExtras(row, show) {
-  const extra = row.nextElementSibling; // .item-extra (immer vorhanden)
+function showExtras(el, show) {
+  // .item-extra robust über die Position finden (unabhängig von der DOM-Reihenfolge).
+  const pos = el.closest(".position");
+  const extra = pos && pos.querySelector(".item-extra");
   if (!extra) return;
   const addBtn = extra.querySelector(".add-extras");
   const fields = extra.querySelector(".extra-row");
