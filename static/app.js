@@ -234,27 +234,16 @@ function validateMasterData() {
 
 // "entspricht Rechnungsdatum": Zeitraumfelder sperren (Werte bleiben erhalten,
 // werden aber nicht gesendet -> BT-72 = Rechnungsdatum, PDF zeigt Hinweis).
-function syncServicePeriod() {
-  const eq = document.getElementById("service-eq-issue");
-  const s = document.querySelector('#invoice-form [name="service_start"]');
-  const en = document.querySelector('#invoice-form [name="service_end"]');
-  if (eq && s && en) {
-    s.disabled = eq.checked;
-    en.disabled = eq.checked;
-  }
-  updatePeriodHint();
-}
 
 // Den Pflicht-Hinweis nur zeigen, solange die Angabe noch fehlt. Sobald ein
 // Zeitraum eingetragen ODER "entspricht Rechnungsdatum" gewählt ist, ausblenden.
 function updatePeriodHint() {
   const hint = document.getElementById("period-hint");
   if (!hint) return;
-  const eq = document.getElementById("service-eq-issue");
   const s = document.querySelector('#invoice-form [name="service_start"]');
   const en = document.querySelector('#invoice-form [name="service_end"]');
   const filled = !!(s && en && s.value && en.value);
-  hint.hidden = filled || (eq && eq.checked);
+  hint.hidden = filled;  // informativ: nur ausblenden, wenn ein Zeitraum eingetragen ist
 }
 
 // Bezugsfelder (Storno/Korrektur) nur bei Belegart != 380 (normale Rechnung) zeigen.
@@ -1077,10 +1066,6 @@ document.addEventListener("input", (e) => {
   if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
 });
 document.addEventListener("change", (e) => {
-  if (e.target.id === "service-eq-issue") {
-    syncServicePeriod();
-    schedulePreview();
-  }
   if (e.target.name === "service_start" || e.target.name === "service_end") updatePeriodHint();
 });
 document.addEventListener("focusin", (e) => {
@@ -1388,7 +1373,7 @@ updateTaxnrHint();
 validateMasterData();
 toggleRefFields();
 updateStateField();
-syncServicePeriod();
+updatePeriodHint();
 syncItemExtras();
 syncAllUnitDisplays();
 updateDiscTypeLabels();
