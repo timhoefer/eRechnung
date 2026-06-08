@@ -35,6 +35,7 @@ from zugferd import (
     extract_xml_from_pdf,
     fmt_money,
     loc,
+    q,
     validate_schematron,
     validate_xml_bytes,
 )
@@ -636,6 +637,13 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
         items, cast(Decimal, treatment["rate"]), _dec(inv.get("discount") or "0"),
         inv.get("discount_type") or "abs",
     )
+    # Anzahlung (BT-113): vom Brutto abziehen -> Zahlbetrag (BT-115).
+    prepaid = q(_dec(inv.get("prepaid") or "0"))
+    if prepaid < Decimal("0"):
+        prepaid = Decimal("0")
+    if prepaid > grand_total:
+        prepaid = grand_total
+    due_amount = q(grand_total - prepaid)
     unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
     unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
     body_class = "mini" if mode == "mini" else ("page" if mode else "")
@@ -658,6 +666,8 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
         tax_basis=tax_basis,
         tax_total=tax_total,
         grand_total=grand_total,
+        prepaid=prepaid,
+        due_amount=due_amount,
         D=Decimal,
     )
     return html, (line_total, discount, tax_basis, tax_total, grand_total, treatment)
@@ -702,6 +712,8 @@ def _assemble(form):
         "discount": (form.get("discount", "0") or "0").replace(",", ".").strip() or "0",
         "discount_type": "abs" if form.get("discount_type") == "abs" else "pct",
         "discount_reason": form.get("discount_reason", "").strip() or None,
+        "prepaid": (form.get("prepaid", "0") or "0").replace(",", ".").strip() or "0",
+        "prepaid_ref": form.get("prepaid_ref", "").strip() or None,
     }
     buyer = buyer_from_form(form)
     data = {"seller": seller, "buyer": buyer, "invoice": inv, "items": items}

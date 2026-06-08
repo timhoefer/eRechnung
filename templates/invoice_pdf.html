@@ -168,7 +168,13 @@
     {% elif treatment_note %}
     <div class="rc"><span>{{ treatment_note }}</span></div>
     {% endif %}
+    {% if prepaid and prepaid > 0 %}
+    <div><span>{{ ti.pdf_gross_total }}</span><span class="amt">{{ inv.currency }} {{ grand_total|money(inv.language) }}</span></div>
+    <div><span>{{ ti.pdf_prepaid }}{% if inv.prepaid_ref %} ({{ inv.prepaid_ref }}){% endif %}</span><span class="amt">− {{ inv.currency }} {{ prepaid|money(inv.language) }}</span></div>
+    <div class="grand"><span>{{ ti.pdf_due_amount }}</span><span class="amt">{{ inv.currency }} {{ due_amount|money(inv.language) }}</span></div>
+    {% else %}
     <div class="grand"><span>{{ ti.pdf_amount_due }}</span><span class="amt">{{ inv.currency }} {{ grand_total|money(inv.language) }}</span></div>
+    {% endif %}
   </div>
 
   {% if inv.note and treatment_note and treatment.rate == 0 %}

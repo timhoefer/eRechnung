@@ -65,6 +65,18 @@ def test_normal_invoice_has_delivery_date():
     assert b"ActualDeliverySupplyChainEvent" in build_xml(make_data())
 
 
+def test_prepaid_reduces_due_amount():
+    # Schlussrechnung mit Anzahlung: BT-113 gesetzt, Zahlbetrag = Brutto − Anzahlung.
+    data = make_data()
+    data["invoice"]["prepaid"] = "100"  # 100 brutto Anzahlung (Brutto gesamt 238)
+    xml = build_xml(data)
+    ok, messages = validate_xml_bytes(xml)
+    assert ok, "XSD-Fehler:\n" + "\n".join(messages)
+    assert b"TotalPrepaidAmount" in xml      # BT-113
+    assert b">100.00<" in xml                # Anzahlung
+    assert b">138.00<" in xml                # BT-115 Zahlbetrag 238 − 100
+
+
 def test_doctype_detection():
     assert has_doctype(b'<?xml version="1.0"?>\n<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>\n<r/>')
     assert not has_doctype(b'<?xml version="1.0"?><rsm:CrossIndustryInvoice/>')

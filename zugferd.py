@@ -483,7 +483,16 @@ def build_xml(data) -> bytes:
     ms.tax_basis_total = tax_basis  # BT-109: line_total − discount (ohne currencyID)
     ms.tax_total = (tax_total, currency)  # BT-110: currencyID Pflicht
     ms.grand_total = grand_total
-    ms.due_amount = grand_total
+    # Anzahlung (BT-113): bereits berechnete/erhaltene Vorauszahlung; mindert den
+    # Zahlbetrag (BT-115 = Brutto − Anzahlung). Schlussrechnung über Anzahlungen.
+    prepaid = q(_dec(inv.get("prepaid") or "0"))
+    if prepaid < Decimal("0"):
+        prepaid = Decimal("0")
+    if prepaid > grand_total:
+        prepaid = grand_total
+    if prepaid > 0:
+        ms.prepaid_total = prepaid
+    ms.due_amount = q(grand_total - prepaid)
 
     return doc.serialize(schema="FACTUR-X_EN16931")
 

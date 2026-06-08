@@ -303,12 +303,29 @@
       </div>
     </div>
 
+    <div class="prepaid-extra">
+      <button type="button" class="add-extras" id="add-prepaid">{{ t.prepaid_add }}</button>
+      <div class="prepaid-row" id="prepaid-row" hidden>
+        <label>{{ t.prepaid }}
+          <input name="prepaid" id="prepaid" class="num" inputmode="decimal" value="0" aria-label="{{ t.prepaid }}">
+        </label>
+        <label>{{ t.prepaid_ref }}
+          <span class="reason-row">
+            <input name="prepaid_ref" placeholder="{{ t.prepaid_ref_ph }}" aria-label="{{ t.prepaid_ref }}">
+            <button type="button" class="del-extras" id="del-prepaid" title="{{ t.remove_extras }}" aria-label="{{ t.remove_extras }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
+          </span>
+        </label>
+      </div>
+    </div>
+
     <div class="totals">
       <div id="t-sub-row" hidden><span>{{ t.subtotal }}</span><strong id="t-sub">0,00</strong></div>
       <div id="t-disc-row" hidden><span>{{ t.discount }}</span><strong id="t-disc">0,00</strong></div>
       <div><span>{{ t.net }}</span><strong id="t-net">0,00</strong></div>
       <div><span id="t-tax-label">{{ t.vat }}</span><strong id="t-tax">0,00</strong></div>
       <div class="grand"><span>{{ t.total }}</span><strong id="t-grand">0,00</strong></div>
+      <div id="t-prepaid-row" hidden><span>{{ t.prepaid }}</span><strong id="t-prepaid">0,00</strong></div>
+      <div class="grand" id="t-due-row" hidden><span>{{ t.amount_payable }}</span><strong id="t-due">0,00</strong></div>
     </div>
   </div>
 
@@ -379,6 +396,7 @@
   window.USED_NUMBERS = {{ used_numbers|tojson }};
   window.REF_INVOICES = {{ ref_invoices|tojson }};
   window.MSG_NUMBER_IN_USE = {{ t['number_in_use']|tojson }};
+  window.MSG_NUMBER_GAP = {{ t['number_gap']|tojson }};
   window.SELLER_AUTOSAVE_URL = {{ url_for('settings_autosave')|tojson }};
   window.CUSTOMER_AUTOSAVE_URL = {{ url_for('customers_autosave')|tojson }};
   window.CUSTOMER_ITEMS_SAVE_URL = {{ url_for('customers_items_save')|tojson }};

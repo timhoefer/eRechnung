@@ -52,7 +52,22 @@ function recalc() {
   }
   document.querySelector("#t-net").textContent = fmt(basis);
   document.querySelector("#t-tax").textContent = fmt(tax);
-  document.querySelector("#t-grand").textContent = fmt(basis + tax);
+  const grand = basis + tax;
+  document.querySelector("#t-grand").textContent = fmt(grand);
+  // Anzahlung abziehen -> Zahlbetrag (nur wenn > 0).
+  const prepaidEl = document.querySelector("#prepaid");
+  let prepaid = prepaidEl ? num(prepaidEl.value) : 0;
+  if (prepaid < 0) prepaid = 0;
+  if (prepaid > grand) prepaid = grand;
+  const prepaidRow = document.querySelector("#t-prepaid-row");
+  const dueRow = document.querySelector("#t-due-row");
+  if (prepaid > 0) {
+    if (prepaidRow) { prepaidRow.hidden = false; document.querySelector("#t-prepaid").textContent = "− " + fmt(prepaid); }
+    if (dueRow) { dueRow.hidden = false; document.querySelector("#t-due").textContent = fmt(grand - prepaid); }
+  } else {
+    if (prepaidRow) prepaidRow.hidden = true;
+    if (dueRow) dueRow.hidden = true;
+  }
   const vatLabel = window.VAT_LABEL || "USt";
   document.querySelector("#t-tax-label").textContent = rate > 0 ? vatLabel + " " + rate + " %" : vatLabel;
 }
@@ -517,6 +532,14 @@ function applyDraft() {
   if (num(inv.discount) > 0 || (inv.discount_reason || "").trim()) {
     const add = document.getElementById("add-discount");
     const row = document.getElementById("discount-row");
+    if (add && row) { row.hidden = false; add.hidden = true; }
+  }
+  // Anzahlung wiederherstellen und ggf. ausklappen.
+  set("prepaid", inv.prepaid);
+  set("prepaid_ref", inv.prepaid_ref);
+  if (num(inv.prepaid) > 0 || (inv.prepaid_ref || "").trim()) {
+    const add = document.getElementById("add-prepaid");
+    const row = document.getElementById("prepaid-row");
     if (add && row) { row.hidden = false; add.hidden = true; }
   }
 
@@ -1637,8 +1660,31 @@ function checkInvoiceNumber() {
   const input = document.getElementById("invoice-number");
   const warn = document.getElementById("number-warning");
   if (!input || !warn) return;
+  const val = input.value.trim();
   const used = Array.isArray(window.USED_NUMBERS) ? window.USED_NUMBERS : [];
-  warn.hidden = !used.includes(input.value.trim());
+  if (used.includes(val)) {  // bereits vergeben (Duplikat)
+    warn.textContent = window.MSG_NUMBER_IN_USE || "";
+    warn.hidden = false;
+    return;
+  }
+  // Lücke im Nummernkreis (Format YYYY-NNN): höhere Sequenz als bisher + 1.
+  const m = val.match(/^(\d{4})-(\d+)$/);
+  if (m) {
+    const year = m[1];
+    const seq = parseInt(m[2], 10);
+    let maxSeq = 0;
+    used.forEach((u) => {
+      const mm = u.match(/^(\d{4})-(\d+)$/);
+      if (mm && mm[1] === year) maxSeq = Math.max(maxSeq, parseInt(mm[2], 10));
+    });
+    if (maxSeq > 0 && seq > maxSeq + 1) {
+      const last = year + "-" + String(maxSeq).padStart(3, "0");
+      warn.textContent = (window.MSG_NUMBER_GAP || "").replace("%s", last);
+      warn.hidden = false;
+      return;
+    }
+  }
+  warn.hidden = true;
 }
 (function initInvoiceNumberCheck() {
   const input = document.getElementById("invoice-number");
@@ -1669,6 +1715,32 @@ function checkInvoiceNumber() {
       if (reason) reason.value = "";
       const dt = row.querySelector('[name="discount_type"]');
       if (dt) { dt.selectedIndex = 0; syncUnitDisplay(dt); }
+      recalc();
+      schedulePreview();
+    });
+  }
+})();
+
+// === Anzahlung ein-/ausklappen (analog Gesamtrabatt) =========================
+(function initOverallPrepaid() {
+  const add = document.getElementById("add-prepaid");
+  const row = document.getElementById("prepaid-row");
+  const del = document.getElementById("del-prepaid");
+  if (!add || !row) return;
+  add.addEventListener("click", () => {
+    row.hidden = false;
+    add.hidden = true;
+    const inp = document.getElementById("prepaid");
+    if (inp) inp.focus();
+  });
+  if (del) {
+    del.addEventListener("click", () => {
+      row.hidden = true;
+      add.hidden = false;
+      const inp = document.getElementById("prepaid");
+      if (inp) inp.value = "0";
+      const ref = row.querySelector('[name="prepaid_ref"]');
+      if (ref) ref.value = "";
       recalc();
       schedulePreview();
     });
