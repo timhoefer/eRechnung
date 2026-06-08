@@ -6,64 +6,61 @@ function num(v) {
   return parseFloat((v || "0").replace(",", ".")) || 0;
 }
 
+// .item-extra einer Position robust finden (liegt außerhalb von .position-head,
+// daher NICHT über nextElementSibling – das wäre der Löschbutton).
+function itemExtraOf(row) {
+  const pos = row.closest(".position");
+  return pos ? pos.querySelector(".item-extra") : null;
+}
+
 function recalc() {
   const rate = num(document.querySelector("#tax_treatment option:checked").dataset.rate);
-  let net = 0;
-  document.querySelectorAll("#items .item").forEach((row) => {
-    const gross = num(row.querySelector(".qty").value) * num(row.querySelector(".price").value);
-    const extra = row.nextElementSibling;
-    let lineDisc = 0;
-    if (extra) {
-      const dInp = extra.querySelector(".disc-input");
-      const dType = extra.querySelector(".disc-type");
-      const dVal = dInp ? num(dInp.value) : 0;
-      if (dVal > 0) {
-        if (dType && dType.value === "abs") lineDisc = Math.min(dVal, gross);
-        else lineDisc = (gross * Math.min(dVal, 100)) / 100;
-      }
-    }
-    const lineNet = gross - lineDisc;
-    row.querySelector(".line-sum").textContent = fmt(lineNet);
-    net += lineNet;
+  const rows = [...document.querySelectorAll("#items .item")];
+  const items = rows.map((row) => {
+    const extra = itemExtraOf(row);
+    const dInp = extra && extra.querySelector(".disc-input");
+    const dType = extra && extra.querySelector(".disc-type");
+    return {
+      qty: row.querySelector(".qty").value,
+      price: row.querySelector(".price").value,
+      discVal: dInp ? dInp.value : 0,
+      discType: dType ? dType.value : "pct",
+    };
   });
   const discEl = document.querySelector("#discount");
   const discType = document.querySelector('[name="discount_type"]');
-  let discount = discEl ? num(discEl.value) : 0;
-  if (discount < 0) discount = 0;
-  if (discType && discType.value === "pct") {
-    discount = (net * Math.min(discount, 100)) / 100;
-  } else if (discount > net) {
-    discount = net;
-  }
-  const basis = net - discount;
-  const tax = (basis * rate) / 100;
+  const prepaidEl = document.querySelector("#prepaid");
+  const t = InvoiceCalc.totals({
+    items: items,
+    rate: rate,
+    discount: discEl ? discEl.value : 0,
+    discountType: discType ? discType.value : "pct",
+    prepaid: prepaidEl ? prepaidEl.value : 0,
+  });
+  rows.forEach((row, i) => { row.querySelector(".line-sum").textContent = fmt(t.lines[i]); });
+
   const subRow = document.querySelector("#t-sub-row");
   const discRow = document.querySelector("#t-disc-row");
-  if (discount > 0) {
+  if (t.discount > 0) {
     if (subRow) subRow.hidden = false;
     if (discRow) discRow.hidden = false;
     const subEl = document.querySelector("#t-sub");
     const dEl = document.querySelector("#t-disc");
-    if (subEl) subEl.textContent = fmt(net);
-    if (dEl) dEl.textContent = "− " + fmt(discount);
+    if (subEl) subEl.textContent = fmt(t.net);
+    if (dEl) dEl.textContent = "− " + fmt(t.discount);
   } else {
     if (subRow) subRow.hidden = true;
     if (discRow) discRow.hidden = true;
   }
-  document.querySelector("#t-net").textContent = fmt(basis);
-  document.querySelector("#t-tax").textContent = fmt(tax);
-  const grand = basis + tax;
-  document.querySelector("#t-grand").textContent = fmt(grand);
+  document.querySelector("#t-net").textContent = fmt(t.basis);
+  document.querySelector("#t-tax").textContent = fmt(t.tax);
+  document.querySelector("#t-grand").textContent = fmt(t.grand);
   // Anzahlung abziehen -> Zahlbetrag (nur wenn > 0).
-  const prepaidEl = document.querySelector("#prepaid");
-  let prepaid = prepaidEl ? num(prepaidEl.value) : 0;
-  if (prepaid < 0) prepaid = 0;
-  if (prepaid > grand) prepaid = grand;
   const prepaidRow = document.querySelector("#t-prepaid-row");
   const dueRow = document.querySelector("#t-due-row");
-  if (prepaid > 0) {
-    if (prepaidRow) { prepaidRow.hidden = false; document.querySelector("#t-prepaid").textContent = "− " + fmt(prepaid); }
-    if (dueRow) { dueRow.hidden = false; document.querySelector("#t-due").textContent = fmt(grand - prepaid); }
+  if (t.prepaid > 0) {
+    if (prepaidRow) { prepaidRow.hidden = false; document.querySelector("#t-prepaid").textContent = "− " + fmt(t.prepaid); }
+    if (dueRow) { dueRow.hidden = false; document.querySelector("#t-due").textContent = fmt(t.due); }
   } else {
     if (prepaidRow) prepaidRow.hidden = true;
     if (dueRow) dueRow.hidden = true;
@@ -412,7 +409,7 @@ function showExtras(el, show) {
 // Beim Laden/Wiederherstellen: Zusatzfelder zeigen, wenn irgendein Wert gesetzt ist.
 function syncItemExtras() {
   document.querySelectorAll("#items .item").forEach((row) => {
-    const extra = row.nextElementSibling;
+    const extra = itemExtraOf(row);
     if (!extra) return;
     const hasPeriod = [...extra.querySelectorAll('input[type="date"]')].some((i) => i.value);
     const dInp = extra.querySelector(".disc-input");
@@ -1365,13 +1362,25 @@ document.addEventListener("click", (e) => {
   if (e.target.closest(".del")) {
     const rows = document.querySelectorAll("#items .position-row");
     const row = e.target.closest(".position-row");
-    if (rows.length > 1) {
-      if (row) row.remove(); // mehrere Positionen: entfernen, Rest rückt nach
+    if (rows.length > 1 && row) {
+      // Mehrere Positionen: entfernen – mit Undo (Node behält Werte/Extras und
+      // wird beim Rückgängig an alter Stelle wieder eingesetzt).
+      const parent = row.parentNode;
+      const nextSibling = row.nextElementSibling;
+      row.remove();
+      recalc();
+      schedulePreview();
+      announce(window.MSG_ITEM_DELETED || "");
+      flashUndo(window.MSG_ITEM_DELETED, () => {
+        parent.insertBefore(row, nextSibling);
+        recalc();
+        schedulePreview();
+      });
     } else if (row) {
       clearPosition(row); // einzige Position: nur Inhalt leeren
+      recalc();
+      schedulePreview();
     }
-    recalc();
-    schedulePreview();
   }
 });
 
@@ -1487,6 +1496,32 @@ function flashError(msg) {
   el.hidden = false;
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+}
+
+// Toast mit „Rückgängig"-Aktion (z. B. nach dem Löschen einer Position).
+let _undoTimer;
+function flashUndo(msg, onUndo) {
+  let el = document.getElementById("undo-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "undo-toast";
+    el.className = "toast toast-undo";
+    el.setAttribute("role", "status");
+    document.body.appendChild(el);
+  }
+  el.textContent = "";
+  const span = document.createElement("span");
+  span.textContent = msg || "";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "toast-undo-btn";
+  btn.textContent = window.MSG_UNDO || "Rückgängig";
+  el.append(span, btn);
+  el.hidden = false;
+  const dismiss = () => { el.hidden = true; };
+  clearTimeout(_undoTimer);
+  _undoTimer = setTimeout(dismiss, 6000);
+  btn.onclick = () => { clearTimeout(_undoTimer); dismiss(); if (onUndo) onUndo(); };
 }
 
 function setPreviewHead(label) {

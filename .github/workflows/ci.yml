@@ -51,3 +51,15 @@ jobs:
         run: |
           pip install mypy==2.1.0
           mypy app.py zugferd.py i18n.py countries.py desktop.py
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Syntax-Check
+        run: node --check static/calc.js && node --check static/app.js
+      - name: JS-Tests (Rechenlogik)
+        run: node --test tests/calc.test.js

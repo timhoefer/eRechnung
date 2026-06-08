@@ -443,6 +443,12 @@ a:focus-visible, button:focus-visible, summary:focus-visible,
   background: var(--ink); color: var(--bg); font-size: var(--text-sm); font-weight: 600;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
 }
+.toast-undo { display: flex; align-items: center; gap: 14px; }
+.toast-undo-btn {
+  font: inherit; font-weight: 700; color: var(--accent);
+  background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline;
+}
+.toast-undo-btn:hover { opacity: .85; }
 
 /* Onboarding-Hinweis (Erststart, leere Stammdaten) */
 .onboarding {

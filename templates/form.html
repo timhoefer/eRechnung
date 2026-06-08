@@ -400,6 +400,8 @@
   window.MSG_SETTINGS_OPENED = {{ t['settings_opened']|tojson }};
   window.MSG_SETTINGS_CLOSED = {{ t['settings_closed']|tojson }};
   window.MSG_ACTION_FAILED = {{ t['action_failed']|tojson }};
+  window.MSG_ITEM_DELETED = {{ t['item_deleted']|tojson }};
+  window.MSG_UNDO = {{ t['undo']|tojson }};
   window.USED_NUMBERS = {{ used_numbers|tojson }};
   window.REF_INVOICES = {{ ref_invoices|tojson }};
   window.MSG_NUMBER_IN_USE = {{ t['number_in_use']|tojson }};
@@ -413,6 +415,7 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
+<script src="{{ url_for('static', filename='calc.js') }}?v={{ asset_version('calc.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_version('app.js') }}"></script>
 </body>
 </html>
