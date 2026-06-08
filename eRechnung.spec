@@ -69,7 +69,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="eRechnung.app",
-    icon=None,
+    icon="assets/icon.icns",
     bundle_identifier="com.machineandfolk.erechnung",
     info_plist={
         "CFBundleName": "eRechnung",
