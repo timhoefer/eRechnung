@@ -217,24 +217,25 @@ select {
 .qtyunit .combo-caret { width: 18px; }
 /* Eine Position = Box + Löschen-Button rechts daneben (außerhalb der Box). */
 .position-row { margin-bottom: 12px; }
-/* Felder-Box (umrandet) + Löschbutton AUSSERHALB rechts daneben, in einer Flex-
-   Zeile. align-items:flex-end koppelt den Trash an die Unterkante der Box; das
-   margin-bottom (= Box-Padding unten) hebt ihn auf die Feld-Unterkante -> er
-   sitzt automatisch auf der (letzten) Feldzeile, in beiden Layouts, ohne Magie. */
-.position-fields { display: flex; gap: 12px; align-items: flex-end; }
-.position-fields > .position { flex: 1 1 auto; min-width: 0; container-type: inline-size; }
-.position-fields > .del { flex: 0 0 auto; margin-bottom: 14px; }
+/* Umrandete Box mit Feldern UND Zusatzfeldern; rechts ist Platz (margin-right)
+   für den außen liegenden Löschbutton reserviert. */
 .position {
+  margin-right: 49px; container-type: inline-size;
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
   padding: 14px 16px;
 }
-.item-extra { margin-top: 8px; }
+.position-head { position: relative; }  /* Anker für den außen liegenden Trash */
+/* Trash AUSSERHALB der Box, an die Unterkante der Feld-Zeile gekoppelt: bottom:0
+   relativ zu .position-head (= nur die Felder) -> sitzt automatisch auf der
+   (letzten) Feldzeile, in beiden Layouts, ohne feste Pixel-Höhe. left/margin
+   schieben ihn rechts neben die Box. */
+.position-head > .del { position: absolute; bottom: 0; left: 100%; margin-left: 28px; }
+.item-extra { margin-top: 12px; }
 /* Schmale Box: Felder auf zwei Zeilen (Beschreibung | Menge·Einzelpreis·Summe). */
 @container (max-width: 720px) {
   .item { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .item > .f-desc { grid-column: 1 / -1; }
 }
-.item-extra { margin-top: 12px; }
 /* Einheiten-Dropdown: optisch identisch zur Beschreibungs-Combobox */
 .unitsel { position: relative; }
 .unitsel select.unit { display: none; }
