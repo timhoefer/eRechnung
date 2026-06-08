@@ -524,7 +524,7 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
    Box füllt den Platz, die Notiz sitzt unten. */
 .preview-col {
   flex: 0 0 420px; align-self: flex-start; position: sticky; top: 16px; margin-top: 16px;
-  max-height: calc(100vh - 96px); display: flex; flex-direction: column;
+  display: flex; flex-direction: column;
 }
 .preview-pane {
   flex: 0 1 auto; min-height: 0;
