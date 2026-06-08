@@ -19,7 +19,12 @@ from PIL import Image, ImageDraw
 
 S = 1024
 TOP, BOT = (63, 125, 244), (36, 87, 191)  # Markenblau (Verlauf)
-HORSE_WIDTH = 0.72  # Anteil der Icon-Breite
+# macOS-Icon-Raster (Big Sur): farbiger Körper 824x824 zentriert in 1024 (je 100px
+# Rand), Eckradius ~185. So sitzt das Icon wie native Apps – nicht randlos.
+MARGIN = 100
+BODY = S - 2 * MARGIN          # 824
+RADIUS = round(BODY * 0.2237)  # ~184
+HORSE_WIDTH = 0.60             # Anteil der KÖRPER-Breite (nicht der Leinwand)
 
 
 def squircle_bg() -> Image.Image:
@@ -31,7 +36,9 @@ def squircle_bg() -> Image.Image:
     grad = grad.resize((S, S))
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     mask = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, S - 1, S - 1], radius=230, fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [MARGIN, MARGIN, S - MARGIN - 1, S - MARGIN - 1], radius=RADIUS, fill=255
+    )
     img.paste(grad, (0, 0), mask)
     return img
 
@@ -42,7 +49,7 @@ horse = Image.open(io.BytesIO(png)).convert("RGBA")
 horse = horse.crop(horse.getbbox())
 
 img = squircle_bg()
-w = int(S * HORSE_WIDTH)
+w = int(BODY * HORSE_WIDTH)
 h = horse.resize((w, int(w * horse.height / horse.width)), Image.LANCZOS)
 img.alpha_composite(h, ((S - h.width) // 2, (S - h.height) // 2))
 
