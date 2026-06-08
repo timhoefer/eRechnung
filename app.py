@@ -57,8 +57,9 @@ def _patch_cffi_dlopen() -> None:
     Bewusst OHNE DYLD_*-Variablen gelöst – die werden unter macOS Hardened Runtime
     (für die spätere Notarisierung nötig) ignoriert. Läuft vor dem ersten Import
     von WeasyPrint, da dieser erst in build_pdf() erfolgt."""
-    import cffi
     import os as _os
+
+    import cffi
 
     libdir = Path(sys._MEIPASS)
     _dbg = _os.environ.get("ERECHNUNG_DEBUG")
@@ -299,6 +300,16 @@ def _guard_local_only():
             referer = request.headers.get("Referer")
             if referer is not None and not _netloc_is_local(urlparse(referer).netloc):
                 abort(403)
+
+
+@app.template_global()
+def asset_version(filename: str) -> str:
+    """Cache-Busting-Token aus der mtime der Static-Datei – automatisch, ohne
+    manuelles Hochzählen von ?v=. Ändert sich die Datei, ändert sich das Token."""
+    try:
+        return str(int((RESOURCE_BASE / "static" / filename).stat().st_mtime))
+    except OSError:
+        return "0"
 
 
 @app.template_filter("money")
@@ -561,6 +572,7 @@ def parse_items(form) -> list[dict]:
             form.getlist("quantity"),
             form.getlist("unit"),
             form.getlist("unit_price"),
+            strict=False,  # bei abweichenden Längen am kürzesten enden (defensiv)
         )
     ):
         if not desc.strip():

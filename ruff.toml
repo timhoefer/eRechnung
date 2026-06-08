@@ -1,0 +1,9 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+# Wertvolle Regeln: Pyflakes (F, echte Bugs/ungenutzt), Bugbear (B),
+# Import-Sortierung (I), Modernisierung (UP), Basis-Style (E/W).
+select = ["E", "F", "W", "I", "B", "UP"]
+# Zeilenlänge bewusst NICHT erzwungen (viel Rauschen, geringer Wert bei i18n-Strings).
+ignore = ["E501"]

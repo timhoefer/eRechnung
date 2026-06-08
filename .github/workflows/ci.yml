@@ -34,8 +34,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Ruff (advisory)
-        continue-on-error: true
+      - name: Ruff
         run: |
-          pip install ruff
+          pip install ruff==0.15.16
           ruff check --output-format=github .

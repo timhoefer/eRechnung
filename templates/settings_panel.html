@@ -75,7 +75,7 @@
     <thead><tr><th>{{ t.file }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
       {% for a in archive %}
-      <tr class="arch-row" data-view-url="{{ url_for('view', filename=a.filename) }}"{% if a.has_draft %} data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}"{% endif %}>
+      <tr class="arch-row" tabindex="0" aria-label="{{ a.filename }}" data-view-url="{{ url_for('view', filename=a.filename) }}"{% if a.has_draft %} data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}"{% endif %}>
         <td>{{ a.filename }}</td>
         <td>{{ a.modified }}</td>
         <td class="r">

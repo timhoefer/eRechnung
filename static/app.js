@@ -1274,6 +1274,29 @@ updatePreview();
 // === Einstellungen-/Archiv-Panel (In-Place auf der Startseite) ==============
 let lastPreviewUrl = null;
 
+// Screenreader-Ansage (Live-Region).
+function announce(msg) {
+  const el = document.getElementById("a11y-live");
+  if (el && msg) el.textContent = msg;
+}
+
+// Kurz sichtbare Fehlermeldung (macht still scheiternde AJAX-Aktionen sichtbar).
+let _toastTimer;
+function flashError(msg) {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast";
+    el.setAttribute("role", "alert");
+    document.body.appendChild(el);
+  }
+  el.textContent = msg || window.MSG_ACTION_FAILED || "Fehler";
+  el.hidden = false;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+}
+
 function setPreviewHead(label) {
   const head = document.querySelector(".preview-head span");
   if (head && label) head.textContent = label;
@@ -1292,7 +1315,18 @@ function showInvoicePreview(url, label) {
       scaleMiniPreview();
       setPreviewHead(label);
     })
-    .catch(() => showNoPreview(label));
+    .catch(() => { flashError(); showNoPreview(label); });
+}
+
+// Eine Archiv-Zeile in der Vorschau zeigen (für Hover UND Fokus).
+function previewRow(row) {
+  const key = row.dataset.previewUrl || row.dataset.viewUrl;
+  if (!key || key === lastPreviewUrl) return;
+  lastPreviewUrl = key;
+  const fileCell = row.querySelector("td");
+  const label = fileCell ? fileCell.textContent.trim() : "";
+  if (row.dataset.previewUrl) showInvoicePreview(row.dataset.previewUrl, label);
+  else showNoPreview(label);
 }
 
 // Platzhalter für Dateien ohne Sidecar (Fremd-/Altdateien): per Klick noch
@@ -1333,7 +1367,7 @@ function loadSettingsPanel() {
   return fetch(window.SETTINGS_PANEL_URL)
     .then((r) => r.text())
     .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
-    .catch(() => {});
+    .catch(() => flashError());
 }
 
 function openSettings() {
@@ -1346,6 +1380,7 @@ function openSettings() {
     pane.hidden = false;
     content.hidden = true;
     pane.focus(); // Fokus ins Panel ziehen (Tastatur/Screenreader behalten den Kontext)
+    announce(window.MSG_SETTINGS_OPENED);
   });
   if (btn) {
     btn.textContent = btn.dataset.close;
@@ -1368,6 +1403,7 @@ function closeSettings() {
     btn.setAttribute("aria-expanded", "false");
     btn.focus(); // Fokus zurück auf den Auslöser
   }
+  announce(window.MSG_SETTINGS_CLOSED);
   restoreLivePreview();
 }
 
@@ -1377,18 +1413,23 @@ function closeSettings() {
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
 
-  // Hover über eine Archiv-Zeile -> HTML-Vorschau (app-Rechnung mit Sidecar)
-  // bzw. Platzhalter (Fremd-/Altdatei ohne Sidecar).
+  // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.
   pane.addEventListener("mouseover", (e) => {
     const row = e.target.closest(".arch-row");
-    if (!row) return;
-    const key = row.dataset.previewUrl || row.dataset.viewUrl;
-    if (!key || key === lastPreviewUrl) return;
-    lastPreviewUrl = key;
-    const fileCell = row.querySelector("td");
-    const label = fileCell ? fileCell.textContent.trim() : "";
-    if (row.dataset.previewUrl) showInvoicePreview(row.dataset.previewUrl, label);
-    else showNoPreview(label);
+    if (row) previewRow(row);
+  });
+  pane.addEventListener("focusin", (e) => {
+    const row = e.target.closest(".arch-row");
+    if (row) previewRow(row);
+  });
+  // Enter/Leertaste auf einer fokussierten Zeile öffnet das PDF.
+  pane.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const row = e.target.closest(".arch-row");
+    if (row && e.target === row && row.dataset.viewUrl) {
+      e.preventDefault();
+      window.open(row.dataset.viewUrl, "_blank");
+    }
   });
 
   pane.addEventListener("click", (e) => {
@@ -1402,7 +1443,7 @@ function closeSettings() {
       fd.append("filename", fn);
       fetch(window.ARCHIVE_DELETE_URL, { method: "POST", body: fd })
         .then(() => loadSettingsPanel())
-        .catch(() => {});
+        .catch(() => flashError());
       return;
     }
     // Datenordner durchsuchen (nativer Dialog).
@@ -1413,7 +1454,7 @@ function closeSettings() {
       fetch(window.DATA_DIR_BROWSE_URL, { method: "POST" })
         .then((r) => r.json())
         .then((d) => { if (d.ok && d.path && input) input.value = d.path; })
-        .catch(() => {})
+        .catch(() => flashError())
         .finally(() => { browse.disabled = false; });
       return;
     }
@@ -1430,12 +1471,12 @@ function closeSettings() {
     if (form.classList.contains("datadir-form")) {
       fetch(window.DATA_DIR_SET_URL, { method: "POST", body: new FormData(form) })
         .then(() => loadSettingsPanel())
-        .catch(() => {});
+        .catch(() => flashError());
     } else { // Datei prüfen / Archiv-Rechnung prüfen -> Panel mit Ergebnis ersetzen
       fetch(window.SETTINGS_PANEL_URL, { method: "POST", body: new FormData(form) })
         .then((r) => r.text())
         .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
-        .catch(() => {});
+        .catch(() => flashError());
     }
   });
 })();
