@@ -14,7 +14,7 @@ import io
 import os
 
 import cairosvg
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 S = 1024
 TOP, BOT = (63, 125, 244), (36, 87, 191)  # Markenblau (Verlauf)
@@ -22,7 +22,7 @@ TOP, BOT = (63, 125, 244), (36, 87, 191)  # Markenblau (Verlauf)
 MARGIN = 100
 BODY = S - 2 * MARGIN
 RADIUS = round(BODY * 0.2237)
-HORSE_WIDTH = 0.66  # Anteil der Körper-Breite
+HORSE_WIDTH = 0.78  # Anteil der Körper-Breite
 
 
 def squircle_bg() -> Image.Image:
@@ -49,7 +49,19 @@ horse = horse.crop(horse.getbbox())
 img = squircle_bg()
 w = int(BODY * HORSE_WIDTH)
 h = horse.resize((w, int(w * horse.height / horse.width)), Image.LANCZOS)
-img.alpha_composite(h, ((S - h.width) // 2, (S - h.height) // 2))
+hx, hy = (S - h.width) // 2, (S - h.height) // 2
+
+# Subtiler Schlagschatten hinter dem Pferd (Pferdeform, abgedunkelt, weich, leicht
+# nach unten versetzt) -> etwas Tiefe, ohne aufdringlich zu wirken.
+sil = h.split()[3].point(lambda a: int(a * 0.45))  # halbtransparente Pferdeform
+shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+dark = Image.new("RGBA", h.size, (6, 22, 56, 255))
+dark.putalpha(sil)
+shadow.alpha_composite(dark, (hx, hy + 16))
+shadow = shadow.filter(ImageFilter.GaussianBlur(18))
+img = Image.alpha_composite(img, shadow)
+
+img.alpha_composite(h, (hx, hy))
 
 os.makedirs("assets", exist_ok=True)
 img.save("assets/icon_master.png")
