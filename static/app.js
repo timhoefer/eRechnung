@@ -1013,21 +1013,43 @@ function updatePreview() {
       frame.srcdoc = html;
     })
     .catch(() => {});
-  updateDrawerPreview();
+  // Der ausgeklappte Drawer zeigt das echte PDF und wird NICHT live aktualisiert
+  // (PDF-Rendern ist zu langsam für jede Eingabe) -> nur beim Öffnen, s. openPreviewDrawer.
 }
+// Mehrseitig? Wenn der Inhalt das eine Mini-A4-Blatt überläuft, kleinen Hinweis zeigen.
+function checkMiniPages() {
+  const frame = document.getElementById("preview-frame");
+  const hint = document.getElementById("preview-pages-hint");
+  if (!frame || !hint) return;
+  try {
+    const b = frame.contentDocument && frame.contentDocument.body;
+    if (!b) return;
+    const multi = b.scrollHeight > b.clientHeight + 4;
+    hint.textContent = multi ? " " + (window.MSG_PREVIEW_MULTIPAGE || "") : "";
+    hint.hidden = !multi;
+  } catch (e) {}
+}
+// Ausgeklappte Ansicht: echtes (visuelles) PDF mit korrekten Seitenumbrüchen.
 function updateDrawerPreview() {
   const drawer = document.getElementById("preview-drawer");
   const frame = document.getElementById("drawer-frame");
   const form = document.getElementById("invoice-form");
-  if (!drawer || drawer.hidden || !frame || !form || !window.PREVIEW_URL) return;
+  if (!drawer || drawer.hidden || !frame || !form || !window.PREVIEW_PDF_URL) return;
   const data = new FormData(form);
-  data.append("_full", "1");
-  fetch(window.PREVIEW_URL, { method: "POST", body: data })
-    .then((r) => r.text())
-    .then((html) => {
-      frame.srcdoc = html;
+  fetch(window.PREVIEW_PDF_URL, { method: "POST", body: data })
+    .then((r) => (r.ok ? r.blob() : Promise.reject(r)))
+    .then((blob) => {
+      if (frame._objUrl) URL.revokeObjectURL(frame._objUrl);
+      frame._objUrl = URL.createObjectURL(blob);
+      frame.removeAttribute("srcdoc");
+      frame.src = frame._objUrl;
     })
-    .catch(() => {});
+    .catch(() => {
+      frame.removeAttribute("src");
+      frame.srcdoc =
+        "<!doctype html><meta charset='utf-8'><body style='font:14px sans-serif;padding:40px;color:#888'>" +
+        (window.MSG_NO_PREVIEW || "") + "</body>";
+    });
 }
 function schedulePreview() {
   clearTimeout(previewTimer);
@@ -1039,6 +1061,13 @@ function openPreviewDrawer() {
   if (!drawer) return;
   drawer.hidden = false;
   document.body.classList.add("drawer-open");
+  const frame = document.getElementById("drawer-frame");
+  if (frame) {
+    frame.removeAttribute("src");
+    frame.srcdoc =
+      "<!doctype html><meta charset='utf-8'><body style='font:14px sans-serif;padding:40px;color:#888'>" +
+      (window.MSG_PREVIEW_LOADING || "") + "</body>";
+  }
   updateDrawerPreview();
 }
 function closePreviewDrawer() {
@@ -1382,7 +1411,7 @@ let restoredFromLang = false;
 if (!restoredFromLang) applyDraft();
 
 const previewFrameEl = document.getElementById("preview-frame");
-if (previewFrameEl) previewFrameEl.addEventListener("load", scaleMiniPreview);
+if (previewFrameEl) previewFrameEl.addEventListener("load", function () { scaleMiniPreview(); checkMiniPages(); });
 window.addEventListener("resize", scaleMiniPreview);
 // Spaltenbreite beobachten: neu skalieren, wenn sich die Layout-Breite ändert
 // (Settle nach (Sprach-)Reload, Fonts) – nicht nur bei window.resize.

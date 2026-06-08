@@ -341,7 +341,7 @@
 <div class="preview-col">
 <aside class="preview-pane">
   <div class="preview-head">
-    <span>{{ t.live_preview }}</span>
+    <span>{{ t.live_preview }}<span id="preview-pages-hint" class="preview-pages-hint" hidden></span></span>
     <button type="button" id="preview-expand" class="preview-expand" title="{{ t.preview_expand }}" aria-label="{{ t.preview_expand }}">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
     </button>
@@ -383,6 +383,9 @@
   window.UI_LANG = {{ lang|tojson }};
   window.VAT_LABEL = {{ t.vat|tojson }};
   window.PREVIEW_URL = {{ url_for('preview_html')|tojson }};
+  window.PREVIEW_PDF_URL = {{ url_for('preview_pdf')|tojson }};
+  window.MSG_PREVIEW_MULTIPAGE = {{ t['preview_multipage']|tojson }};
+  window.MSG_PREVIEW_LOADING = {{ t['preview_loading']|tojson }};
   window.SETTINGS_PANEL_URL = {{ url_for('settings_panel')|tojson }};
   window.SETTINGS_DEPINFO_URL = {{ url_for('settings_depinfo')|tojson }};
   window.DATA_DIR_SET_URL = {{ url_for('data_dir_set')|tojson }};

@@ -914,6 +914,31 @@ def preview():
     )
 
 
+@app.route("/preview-pdf", methods=["POST"])
+def preview_pdf():
+    """Visuelle PDF-Vorschau (ohne ZUGFeRD-XML-Einbettung) für die ausgeklappte
+    Ansicht – zeigt die echten Seitenumbrüche, deutlich schneller als die volle
+    Erzeugung (die Seitenumbrüche sind identisch; nur das XML fehlt)."""
+    data, html, _ = _assemble(request.form)
+    if not data["items"]:
+        msg = translate(get_ui_lang(request))["need_item"]
+        return Response(
+            f"<!doctype html><meta charset='utf-8'>"
+            f"<body style='font:15px sans-serif;padding:40px;color:#b91c1c'>{msg}</body>",
+            status=400,
+            mimetype="text/html",
+        )
+    import weasyprint
+
+    base_url = str(Path(__file__).resolve().parent)
+    pdf = weasyprint.HTML(string=html, base_url=base_url).write_pdf()
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="vorschau.pdf"'},
+    )
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     seller = load_seller()
