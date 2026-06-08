@@ -516,9 +516,9 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
 .layout { display: flex; gap: 24px; max-width: 1640px; margin: 0 auto; padding: 0 24px; align-items: stretch; }
 .form-pane { flex: 1 1 0; min-width: 0; }
 .form-pane .card, .form-pane details.card, .form-pane .actions { max-width: none; margin-left: 0; margin-right: 0; }
-/* Letzte Karte ohne unteren Abstand -> gestreckte Vorschau-Pane schließt exakt
-   mit der Unterkante der letzten Box ab (Footer/Disclaimer steht darunter). */
-#invoice-form > .card:last-child { margin-bottom: 0; }
+/* Letzte Karte (egal ob Formular- oder Settings-Modus) ohne unteren Abstand ->
+   gestreckte Vorschau-Pane schließt exakt mit der Unterkante der letzten Box ab. */
+.form-pane .card:last-child { margin-bottom: 0; }
 .preview-pane {
   flex: 0 0 420px; position: sticky; top: 16px; margin-top: 16px;
   display: flex; flex-direction: column; max-height: calc(100vh - 96px);
