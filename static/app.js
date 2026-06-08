@@ -389,9 +389,9 @@ function clearPosition(positionRow) {
 // Optionale Zusatzfelder (Leistungszeitraum + Rabatt + Rabattgrund) einer Zeile
 // gemeinsam ein-/ausblenden; beim Entfernen alle Werte zurücksetzen.
 function showExtras(el, show) {
-  // .item-extra robust über die Position finden (unabhängig von der DOM-Reihenfolge).
-  const pos = el.closest(".position");
-  const extra = pos && pos.querySelector(".item-extra");
+  // .item-extra robust über die Positionszeile finden (liegt außerhalb der Box).
+  const row = el.closest(".position-row");
+  const extra = row && row.querySelector(".item-extra");
   if (!extra) return;
   const addBtn = extra.querySelector(".add-extras");
   const fields = extra.querySelector(".extra-row");
