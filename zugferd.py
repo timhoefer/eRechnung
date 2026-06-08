@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, cast
 
 from drafthorse.models.accounting import (
     ApplicableTradeTax,
@@ -27,7 +28,7 @@ def fmt_money(value, lang: str = "de") -> str:
     """Zahl mit Tausender-/Dezimaltrennung je Sprache: de=1.234,56 · en=1,234.56."""
     s = f"{q(value):,.2f}"  # englischer Stil: 1,234.56
     if lang != "en":
-        s = s.translate(str.maketrans({",": ".", ".": ","}))
+        s = s.translate(str.maketrans(",.", ".,"))
     return s
 
 
@@ -286,7 +287,7 @@ def build_xml(data) -> bytes:
     buyer = data["buyer"]
     inv = data["invoice"]
     treatment = TAX_TREATMENTS[inv["tax_treatment"]]
-    rate = treatment["rate"]
+    rate = cast(Decimal, treatment["rate"])
     lang = inv.get("language", "de")
     note_text = loc(treatment["note"], lang)
     reason_text = loc(treatment["reason"], lang)
@@ -611,7 +612,8 @@ def _run_schematron(xslt_path: str, xml: bytes):
 
     root = etree.fromstring(svrl.encode("utf-8"))
     ns = {"svrl": "http://purl.oclc.org/dsdl/svrl"}
-    errs, warns = [], []
+    errs: list[str] = []
+    warns: list[str] = []
     for fa in root.findall(".//svrl:failed-assert", ns):
         flag = (fa.get("flag") or fa.get("role") or "fatal").lower()
         text_el = fa.find("svrl:text", ns)
@@ -630,7 +632,7 @@ def validate_schematron(xml: bytes) -> dict:
     """
     import os
 
-    out = {"available": False, "ok": None, "errors": [], "warnings": [], "error": None, "xrechnung": False}
+    out: dict[str, Any] = {"available": False, "ok": None, "errors": [], "warnings": [], "error": None, "xrechnung": False}
     # XXE-Schutz: SaxonC löst externe Entities auf -> DOCTYPE-XML niemals an Saxon geben.
     if has_doctype(xml):
         out["available"] = True

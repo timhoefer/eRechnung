@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import secrets
 import sys
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import urlparse
 
 from flask import (
@@ -41,7 +44,7 @@ from zugferd import (
 # Im normalen Quell-Start (run.sh / start.command) bleibt alles wie gehabt.
 FROZEN = getattr(sys, "frozen", False)
 if FROZEN:
-    RESOURCE_BASE = Path(sys._MEIPASS)  # gebündelte templates/static/…
+    RESOURCE_BASE = Path(sys._MEIPASS)  # type: ignore[attr-defined]  # nur im Bundle
     BASE = Path.home() / "Library" / "Application Support" / "eRechnung"
     BASE.mkdir(parents=True, exist_ok=True)
 else:
@@ -61,7 +64,7 @@ def _patch_cffi_dlopen() -> None:
 
     import cffi
 
-    libdir = Path(sys._MEIPASS)
+    libdir = Path(sys._MEIPASS)  # type: ignore[attr-defined]
     _dbg = _os.environ.get("ERECHNUNG_DEBUG")
 
     # WeasyPrint probiert je Lib mehrere Namensvarianten der Reihe nach und nimmt
@@ -262,7 +265,9 @@ app = Flask(
     template_folder=str(RESOURCE_BASE / "templates"),
     static_folder=str(RESOURCE_BASE / "static"),
 )
-app.secret_key = "erechnung-local"  # nur für Flash-Messages, rein lokal
+# Flash-Messages signieren. Lokal/Single-User: aus Env, sonst pro Start zufällig
+# (kein hartkodiertes Secret mehr; Flash überlebt einen Neustart nicht – egal hier).
+app.secret_key = os.environ.get("ERECHNUNG_SECRET_KEY") or secrets.token_hex(32)
 # Upload-/Form-Größe begrenzen (Schutz vor Speicher-DoS über /validate).
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
 
@@ -628,7 +633,7 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
         tt = "de_19"
     treatment = TAX_TREATMENTS[tt]
     computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
-        items, treatment["rate"], _dec(inv.get("discount") or "0"),
+        items, cast(Decimal, treatment["rate"]), _dec(inv.get("discount") or "0"),
         inv.get("discount_type") or "abs",
     )
     unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
@@ -1013,7 +1018,7 @@ def drafthorse_version_info() -> dict:
     """Installierte drafthorse-Version mit der neuesten auf PyPI vergleichen."""
     import importlib.metadata as meta
 
-    info = {"current": None, "latest": None, "update_available": False, "error": None}
+    info: dict[str, Any] = {"current": None, "latest": None, "update_available": False, "error": None}
     try:
         info["current"] = meta.version("drafthorse")
     except meta.PackageNotFoundError:
@@ -1129,9 +1134,9 @@ def export_csv():
         issue = inv.get("issue_date") or ""
         if (frm and issue < frm) or (to and issue > to):
             continue
-        treatment = TAX_TREATMENTS.get(inv.get("tax_treatment"), TAX_TREATMENTS["de_19"])
+        treatment = TAX_TREATMENTS.get(inv.get("tax_treatment") or "de_19", TAX_TREATMENTS["de_19"])
         _c, _lt, _disc, net, vat, gross = compute_totals(
-            d.get("items") or [], treatment["rate"],
+            d.get("items") or [], cast(Decimal, treatment["rate"]),
             _dec(inv.get("discount") or "0"), inv.get("discount_type") or "abs",
         )
         buyer = d.get("buyer") or {}

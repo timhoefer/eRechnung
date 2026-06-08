@@ -38,3 +38,16 @@ jobs:
         run: |
           pip install ruff==0.15.16
           ruff check --output-format=github .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: mypy
+        # ignore_missing_imports (mypy.ini) -> Dritt-Libs müssen nicht installiert sein.
+        run: |
+          pip install mypy==2.1.0
+          mypy app.py zugferd.py i18n.py countries.py desktop.py
