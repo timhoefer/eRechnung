@@ -1,6 +1,6 @@
 """Round-trip-Test: build_xml erzeugt wohlgeformtes, EN-16931-XSD-valides CII-XML
 mit korrekten Beträgen. Fängt Regressionen in der XML-Erzeugung nach Dep-Updates."""
-from zugferd import build_xml, validate_xml_bytes
+from zugferd import build_xml, has_doctype, validate_xml_bytes
 
 
 def make_data():
@@ -46,6 +46,21 @@ def test_build_xml_is_xsd_valid():
     xml = build_xml(make_data())
     ok, messages = validate_xml_bytes(xml)
     assert ok, "XSD-Fehler:\n" + "\n".join(messages)
+
+
+def test_doctype_detection():
+    assert has_doctype(b'<?xml version="1.0"?>\n<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>\n<r/>')
+    assert not has_doctype(b'<?xml version="1.0"?><rsm:CrossIndustryInvoice/>')
+    assert not has_doctype(b"<root/>")
+
+
+def test_validate_rejects_doctype_xxe():
+    # XXE-Schutz: DOCTYPE/DTD wird vor jedem Parser abgelehnt (SaxonC würde sonst
+    # externe Entities auflösen -> Dateioffenlegung).
+    xxe = b'<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/hostname">]><r>&x;</r>'
+    ok, msgs = validate_xml_bytes(xxe)
+    assert ok is False
+    assert any("DOCTYPE" in m or "Sicherheit" in m for m in msgs)
 
 
 def test_xrechnung_profile_specid():

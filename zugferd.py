@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from drafthorse.models.accounting import (
     ApplicableTradeTax,
@@ -510,6 +510,24 @@ def _xsd_path() -> str:
     )
 
 
+def has_doctype(xml: bytes) -> bool:
+    """True, wenn das XML im Prolog ein <!DOCTYPE/DTD deklariert.
+
+    Valide EN16931-/CII-Rechnungen haben nie ein DOCTYPE. Ein DOCTYPE ist der
+    Träger für (externe) Entities -> XXE. Insbesondere SaxonC löst externe
+    Entities standardmäßig auf; daher lehnen wir DOCTYPE-XML grundsätzlich ab,
+    bevor es an einen Parser geht."""
+    s = xml.lstrip(b"\xef\xbb\xbf \t\r\n")
+    if s.startswith(b"<?xml"):  # XML-Deklaration überspringen
+        i = s.find(b"?>")
+        s = (s[i + 2:] if i != -1 else b"").lstrip()
+    while s.startswith(b"<!--") or s.startswith(b"<?"):  # Kommentare/PIs überspringen
+        end = b"-->" if s.startswith(b"<!--") else b"?>"
+        i = s.find(end)
+        s = (s[i + len(end):] if i != -1 else b"").lstrip()
+    return s.startswith(b"<!DOCTYPE")
+
+
 def _safe_parser():
     """Gehärteter lxml-Parser für nicht vertrauenswürdiges (hochgeladenes) XML:
     keine Entity-Auflösung, kein Netzwerk, keine DTD, keine huge_tree-Expansion.
@@ -526,6 +544,8 @@ def validate_xml_bytes(xml: bytes):
     """XML strukturell gegen die EN-16931-XSD prüfen. -> (ok, [meldungen])."""
     from lxml import etree
 
+    if has_doctype(xml):
+        return False, ["XML mit DOCTYPE/DTD wird aus Sicherheitsgründen abgelehnt."]
     try:
         doc = etree.fromstring(xml, _safe_parser())
     except etree.XMLSyntaxError as e:
@@ -611,6 +631,11 @@ def validate_schematron(xml: bytes) -> dict:
     import os
 
     out = {"available": False, "ok": None, "errors": [], "warnings": [], "error": None, "xrechnung": False}
+    # XXE-Schutz: SaxonC löst externe Entities auf -> DOCTYPE-XML niemals an Saxon geben.
+    if has_doctype(xml):
+        out["available"] = True
+        out["error"] = "XML mit DOCTYPE/DTD wird aus Sicherheitsgründen abgelehnt."
+        return out
     d = _schematron_dir()
     en_path = os.path.join(d, _SCH_EN16931)
     if not os.path.exists(en_path):
