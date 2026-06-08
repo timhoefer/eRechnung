@@ -98,6 +98,26 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
 .langswitch a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* Theme-Umschalter (Hell/Dunkel) */
 .header-controls { display: flex; align-items: center; gap: 8px; }
+
+/* Marke: Pferd-Logo links neben dem Titel (als Maske -> Akzentfarbe, theme-tauglich) */
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-logo {
+  flex: 0 0 auto; width: 52px; height: 34px;
+  background-color: var(--accent);
+  -webkit-mask: url("horse.svg") left center / contain no-repeat;
+  mask: url("horse.svg") left center / contain no-repeat;
+  will-change: transform;
+}
+/* Bonus: galoppierende „Hüpf"-Bewegung bei Hover (kein echtes Bein-Frame-Anim,
+   sondern Gallop-Rhythmus per Transform). Bei prefers-reduced-motion global aus. */
+.brand:hover .brand-logo { animation: gallop 0.6s ease-in-out infinite; }
+@keyframes gallop {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  20%  { transform: translate(1px, -3px) rotate(-1.5deg); }
+  45%  { transform: translate(2px, 0) rotate(0deg); }
+  70%  { transform: translate(1px, -2px) rotate(1deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
 .theme-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 28px; padding: 0; cursor: pointer;
