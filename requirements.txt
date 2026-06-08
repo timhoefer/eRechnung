@@ -2,5 +2,5 @@
 # Vollständig aufgelöste Umgebung (inkl. transitiver Pakete): requirements.lock
 flask==3.1.3
 drafthorse==2025.2.0
-weasyprint==68.1
+weasyprint==69.0
 saxonche==13.0.0  # EN16931-Schematron-Prüfung (XSLT 2.0)
