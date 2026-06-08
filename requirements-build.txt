@@ -1,2 +1,3 @@
 pyinstaller
 pywebview
+cairosvg  # nur für make_icon.py (Icon-Regenerierung); benötigt native libcairo

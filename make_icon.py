@@ -1,18 +1,20 @@
-"""Erzeugt assets/icon.icns aus assets/horse_source.png (reproduzierbar).
+"""Erzeugt assets/icon.icns aus assets/horse.svg (reproduzierbar).
 
-Motiv: galoppierendes Pferd (weiße Silhouette, blaue Mähnen-Linie) auf blauem
-Verlauf im macOS-Squircle. Quelle ist eine schwarze Silhouette auf Weiß; die
-Helligkeit wird invertiert -> dunkel = Pferd (weiß gefärbt), weiß = transparent
-(die helle Mähnen-Linie bleibt als blaue Aussparung erhalten).
+Motiv: galoppierendes Pferd (weiße Silhouette) auf blauem Verlauf im macOS-
+Squircle. Quelle ist ein Vektor-SVG (schwarze Pfade); #000000 wird beim Rendern
+auf Weiß gesetzt, der Hintergrund bleibt transparent.
 
-Voraussetzung: Pillow.
+Voraussetzung: Pillow + cairosvg (siehe requirements-build.txt; cairosvg braucht
+die native libcairo, z. B. `brew install cairo`).
 Aufruf:  python make_icon.py   (danach iconutil -> .icns; erledigt build_icon.sh)
 """
 from __future__ import annotations
 
+import io
 import os
 
-from PIL import Image, ImageDraw, ImageOps
+import cairosvg
+from PIL import Image, ImageDraw
 
 S = 1024
 TOP, BOT = (63, 125, 244), (36, 87, 191)  # Markenblau (Verlauf)
@@ -39,11 +41,10 @@ def squircle_bg() -> Image.Image:
     return img
 
 
-src = Image.open("assets/horse_source.png").convert("L")
-alpha = ImageOps.invert(src)  # dunkel -> deckend, weiß -> transparent
-white = Image.new("RGBA", src.size, (255, 255, 255, 255))
-white.putalpha(alpha)
-horse = white.crop(alpha.getbbox())
+svg = open("assets/horse.svg", encoding="utf-8").read().replace("#000000", "#ffffff").replace("#000", "#fff")
+png = cairosvg.svg2png(bytestring=svg.encode(), output_width=1600)
+horse = Image.open(io.BytesIO(png)).convert("RGBA")
+horse = horse.crop(horse.getbbox())
 
 img = squircle_bg()
 w = int(BODY * HORSE_WIDTH)
