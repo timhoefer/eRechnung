@@ -990,6 +990,10 @@ function scaleMiniPreview() {
   const wrap = inner && inner.parentElement;
   if (!frame || !inner || !wrap) return;
   const wrapW = wrap.clientWidth;
+  // Nur bei tatsächlicher Breitenänderung neu skalieren -> verhindert eine
+  // ResizeObserver-Rückkopplung (Zittern beim Öffnen, bevor das Layout steht).
+  if (wrapW <= 0 || wrapW === scaleMiniPreview._lastW) return;
+  scaleMiniPreview._lastW = wrapW;
   const s = wrapW / A4_W;
   frame.style.width = A4_W + "px";
   frame.style.height = A4_H + "px";
