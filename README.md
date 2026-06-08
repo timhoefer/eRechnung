@@ -57,6 +57,11 @@ Das Ergebnis lässt sich mit Validatoren wie dem [KoSIT-Validator] oder Mustang 
   sich hier aber im selben Format erzeugen.
 - Dies ist ein Werkzeug, keine Steuerberatung. Die korrekte steuerliche Einordnung im
   Einzelfall liegt bei dir bzw. deinem Steuerberater.
+- **Aufbewahrung / GoBD:** Dies ist ein **Rechnungs-Generator, kein revisionssicheres
+  Archiv.** Der `output/`-Ordner ist eine Arbeitskopie — Dateien sind dort änder- und
+  löschbar, es gibt kein Änderungsprotokoll. Bewahre deine Rechnungen **revisionssicher**
+  dort auf, wo deine Buchhaltung liegt (z. B. DATEV/Steuerberater oder ein GoBD-konformes
+  System). Aufbewahrungsfrist: **10 Jahre** (§ 14b UStG, § 147 AO).
 
 ## Als macOS-App bauen (optional)
 
