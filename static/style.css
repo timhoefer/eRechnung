@@ -231,7 +231,8 @@ select {
 @container (max-width: 770px) {
   .item { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .item > .f-desc { grid-column: 1 / -1; }
-  .position-row > .del { align-self: center; margin-top: 0; }
+  /* Trash auf die Zahlenzeile (Zeile 2): Box-Padding + Beschreibungszeile + Gap. */
+  .position-row > .del { align-self: flex-start; margin-top: 111px; }
 }
 .item-extra { margin-top: 12px; }
 /* Einheiten-Dropdown: optisch identisch zur Beschreibungs-Combobox */
