@@ -271,6 +271,10 @@ app = Flask(
 app.secret_key = os.environ.get("ERECHNUNG_SECRET_KEY") or secrets.token_hex(32)
 # Upload-/Form-Größe begrenzen (Schutz vor Speicher-DoS über /validate).
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
+# Templates bei Änderung neu laden, ohne Server-Neustart (Quell-Start). Vernachlässig-
+# barer Aufwand lokal; verhindert „neues CSS auf altem HTML" nach einem git pull.
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
 
 # Die App ist ein rein lokales Tool (127.0.0.1). Hostnamen, die als „lokal"
 # gelten – schützt gegen DNS-Rebinding und Cross-Site-Zugriffe von Webseiten.
