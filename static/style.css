@@ -510,7 +510,9 @@ table.archive form { margin-left: 12px; }
 input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%; background: var(--surface); }
 
 /* Zwei-Spalten-Layout: Formular links, Live-Vorschau rechts */
-.layout { display: flex; gap: 24px; max-width: 1640px; margin: 0 auto; padding: 0 24px; align-items: flex-start; }
+/* align-items: stretch -> die Vorschau-Pane wird so hoch wie die Formularspalte
+   (schließt unten bündig ab); max-height + sticky kappen sie bei langen Formularen. */
+.layout { display: flex; gap: 24px; max-width: 1640px; margin: 0 auto; padding: 0 24px; align-items: stretch; }
 .form-pane { flex: 1 1 0; min-width: 0; }
 .form-pane .card, .form-pane details.card, .form-pane .actions { max-width: none; margin-left: 0; margin-right: 0; }
 .preview-pane {
@@ -529,7 +531,7 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
   border-radius: 7px; background: var(--card); color: var(--muted); cursor: pointer;
 }
 .preview-expand:hover { color: var(--accent); border-color: var(--accent); }
-.preview-frame-wrap { flex: 0 1 auto; overflow: auto; background: var(--card); }
+.preview-frame-wrap { flex: 1 1 auto; overflow: auto; background: var(--card); }
 .preview-actions {
   flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px;
   padding: 14px 16px; border-top: 1px solid var(--line); background: var(--surface);
