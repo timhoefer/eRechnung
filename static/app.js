@@ -1380,6 +1380,15 @@ if (!restoredFromLang) applyDraft();
 const previewFrameEl = document.getElementById("preview-frame");
 if (previewFrameEl) previewFrameEl.addEventListener("load", scaleMiniPreview);
 window.addEventListener("resize", scaleMiniPreview);
+// Container-Breite beobachten: neu skalieren, wenn sich die Spaltenbreite ändert
+// (Layout-Settle nach (Sprach-)Reload, Scrollbar, geladene Fonts) – nicht nur bei
+// window.resize. Behebt: Vorschau füllt nach Sprachwechsel den Container nicht.
+const previewWrapEl = previewFrameEl && previewFrameEl.closest(".preview-frame-wrap");
+if (previewWrapEl && window.ResizeObserver) {
+  new ResizeObserver(scaleMiniPreview).observe(previewWrapEl);
+}
+// Nach dem Laden der Schriften erneut skalieren (Layout kann sich noch verschieben).
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(scaleMiniPreview);
 
 const previewExpandBtn = document.getElementById("preview-expand");
 if (previewExpandBtn) previewExpandBtn.addEventListener("click", openPreviewDrawer);
