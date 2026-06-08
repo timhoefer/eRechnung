@@ -166,6 +166,9 @@ label.check { flex-direction: row; align-items: center; gap: 8px; font-size: var
   background: var(--hover); border: 1px solid var(--line); border-radius: 8px;
   padding: 10px 12px; font-size: var(--text-sm); color: var(--ink);
 }
+/* Im Grid liefert das row-gap (12px) bereits den Abstand -> kein doppelter
+   margin-top, damit der Callout-Abstand überall einheitlich 12px ist. */
+.grid > .callout { margin-top: 0; }
 .callout::before, .callout::after {
   content: ""; position: absolute; bottom: 100%; width: 0; height: 0;
   border: solid transparent; pointer-events: none;
