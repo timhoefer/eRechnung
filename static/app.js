@@ -1384,12 +1384,19 @@ if (!restoredFromLang) applyDraft();
 const previewFrameEl = document.getElementById("preview-frame");
 if (previewFrameEl) previewFrameEl.addEventListener("load", scaleMiniPreview);
 window.addEventListener("resize", scaleMiniPreview);
-// Container-Breite beobachten: neu skalieren, wenn sich die Spaltenbreite ändert
-// (Layout-Settle nach (Sprach-)Reload, Scrollbar, geladene Fonts) – nicht nur bei
-// window.resize. Behebt: Vorschau füllt nach Sprachwechsel den Container nicht.
-const previewWrapEl = previewFrameEl && previewFrameEl.closest(".preview-frame-wrap");
-if (previewWrapEl && window.ResizeObserver) {
-  new ResizeObserver(scaleMiniPreview).observe(previewWrapEl);
+// Spaltenbreite beobachten: neu skalieren, wenn sich die Layout-Breite ändert
+// (Settle nach (Sprach-)Reload, Fonts) – nicht nur bei window.resize.
+// WICHTIG: die STABILE Spalte (.preview-col) beobachten, nicht .preview-frame-wrap –
+// deren Größe wird von der Skalierung beeinflusst (Rückkopplung -> Zittern).
+// Zusätzlich per rAF drosseln, damit kein ResizeObserver-Loop entsteht.
+const previewColEl = previewFrameEl && previewFrameEl.closest(".preview-col");
+if (previewColEl && window.ResizeObserver) {
+  let roPending = false;
+  new ResizeObserver(() => {
+    if (roPending) return;
+    roPending = true;
+    requestAnimationFrame(() => { roPending = false; scaleMiniPreview(); });
+  }).observe(previewColEl);
 }
 // Nach dem Laden der Schriften erneut skalieren (Layout kann sich noch verschieben).
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(scaleMiniPreview);
