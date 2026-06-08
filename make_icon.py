@@ -1,30 +1,26 @@
-"""Erzeugt assets/icon.icns aus assets/horse.svg (reproduzierbar).
+"""Erzeugt assets/icon.icns aus assets/horse_source.png (reproduzierbar).
 
-Motiv: laufendes Pferd (weiße Silhouette) auf blauem Verlauf im macOS-Squircle.
-Die Pferd-Vektorgrafik liegt als assets/horse.svg vor (fill=currentColor wird
-beim Rendern auf Weiß gesetzt).
+Motiv: galoppierendes Pferd (weiße Silhouette, blaue Mähnen-Linie) auf blauem
+Verlauf im macOS-Squircle. Quelle ist eine schwarze Silhouette auf Weiß; die
+Helligkeit wird invertiert -> dunkel = Pferd (weiß gefärbt), weiß = transparent
+(die helle Mähnen-Linie bleibt als blaue Aussparung erhalten).
 
-Voraussetzungen: Pillow + cairosvg (siehe requirements-build.txt; cairosvg
-benötigt die native libcairo, z. B. via Homebrew `brew install cairo`).
-
+Voraussetzung: Pillow.
 Aufruf:  python make_icon.py   (danach iconutil -> .icns; erledigt build_icon.sh)
 """
 from __future__ import annotations
 
-import io
 import os
 
-import cairosvg
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 S = 1024
 TOP, BOT = (63, 125, 244), (36, 87, 191)  # Markenblau (Verlauf)
-# macOS-Icon-Raster (Big Sur): farbiger Körper 824x824 zentriert in 1024 (je 100px
-# Rand), Eckradius ~185. So sitzt das Icon wie native Apps – nicht randlos.
+# macOS-Icon-Raster (Big Sur): farbiger Körper 824x824 zentriert (je 100px Rand).
 MARGIN = 100
-BODY = S - 2 * MARGIN          # 824
-RADIUS = round(BODY * 0.2237)  # ~184
-HORSE_WIDTH = 0.60             # Anteil der KÖRPER-Breite (nicht der Leinwand)
+BODY = S - 2 * MARGIN
+RADIUS = round(BODY * 0.2237)
+HORSE_WIDTH = 0.66  # Anteil der Körper-Breite
 
 
 def squircle_bg() -> Image.Image:
@@ -43,10 +39,11 @@ def squircle_bg() -> Image.Image:
     return img
 
 
-svg = open("assets/horse.svg", encoding="utf-8").read().replace("currentColor", "#ffffff")
-png = cairosvg.svg2png(bytestring=svg.encode(), output_width=1600)
-horse = Image.open(io.BytesIO(png)).convert("RGBA")
-horse = horse.crop(horse.getbbox())
+src = Image.open("assets/horse_source.png").convert("L")
+alpha = ImageOps.invert(src)  # dunkel -> deckend, weiß -> transparent
+white = Image.new("RGBA", src.size, (255, 255, 255, 255))
+white.putalpha(alpha)
+horse = white.crop(alpha.getbbox())
 
 img = squircle_bg()
 w = int(BODY * HORSE_WIDTH)
