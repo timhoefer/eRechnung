@@ -678,7 +678,7 @@ def _assemble(form):
     if profile not in ("en16931", "xrechnung"):
         profile = "en16931"
     doc_type = form.get("doc_type", "380") or "380"
-    if doc_type not in ("380", "381", "384"):
+    if doc_type not in ("380", "381", "384", "386"):
         doc_type = "380"
     inv = {
         "number": form.get("number", "").strip(),

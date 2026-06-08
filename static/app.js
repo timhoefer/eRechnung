@@ -240,6 +240,14 @@ function validateMasterData() {
 function updatePeriodHint() {
   const hint = document.getElementById("period-hint");
   if (!hint) return;
+  const docType = (document.querySelector("#doc_type") || {}).value;
+  if (docType === "386") {
+    // Vorausrechnung: Leistung noch nicht erbracht -> eigener Hinweis, immer sichtbar.
+    if (window.MSG_PERIOD_HINT_PREPAY) hint.textContent = window.MSG_PERIOD_HINT_PREPAY;
+    hint.hidden = false;
+    return;
+  }
+  if (window.MSG_PERIOD_HINT) hint.textContent = window.MSG_PERIOD_HINT;
   const s = document.querySelector('#invoice-form [name="service_start"]');
   const en = document.querySelector('#invoice-form [name="service_end"]');
   const filled = !!(s && en && s.value && en.value);
@@ -250,7 +258,7 @@ function updatePeriodHint() {
 function toggleRefFields() {
   const sel = document.querySelector("#doc_type");
   if (!sel) return;
-  const show = sel.value !== "380";
+  const show = sel.value === "381" || sel.value === "384";  // Bezug nur bei Storno/Korrektur
   document.querySelectorAll(".ref-field").forEach((el) => {
     el.hidden = !show;
   });
@@ -1200,7 +1208,7 @@ window.addEventListener("scroll", repositionMenus, true);
 window.addEventListener("resize", repositionMenus);
 document.addEventListener("change", (e) => {
   if (e.target.id === "tax_treatment") showNote();
-  if (e.target.id === "doc_type") toggleRefFields();
+  if (e.target.id === "doc_type") { toggleRefFields(); updatePeriodHint(); }
   if (e.target.classList.contains("disc-type")) recalc();
   if (e.target.name === "currency") updateDiscTypeLabels();
   if (e.target.id === "buyer_country") {

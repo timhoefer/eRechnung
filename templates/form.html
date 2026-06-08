@@ -101,6 +101,7 @@
           <option value="380">{{ t.doc_type_invoice }}</option>
           <option value="381">{{ t.doc_type_cancel }}</option>
           <option value="384">{{ t.doc_type_correction }}</option>
+          <option value="386">{{ t.doc_type_prepayment }}</option>
         </select>
       </label>
       <label>{{ t.invoice_language }}
@@ -370,6 +371,8 @@
   window.MSG_CONFIRM_DELETE = {{ t['confirm_delete_text']|tojson }};
   window.MSG_LIVE_PREVIEW = {{ t['live_preview']|tojson }};
   window.MSG_NO_PREVIEW = {{ t['no_preview']|tojson }};
+  window.MSG_PERIOD_HINT = {{ t['service_period_hint']|tojson }};
+  window.MSG_PERIOD_HINT_PREPAY = {{ t['service_period_hint_prepay']|tojson }};
   window.MSG_SETTINGS_OPENED = {{ t['settings_opened']|tojson }};
   window.MSG_SETTINGS_CLOSED = {{ t['settings_closed']|tojson }};
   window.MSG_ACTION_FAILED = {{ t['action_failed']|tojson }};

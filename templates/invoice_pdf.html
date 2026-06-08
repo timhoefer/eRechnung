@@ -114,7 +114,7 @@
     </div>
   </div>
 
-  {% set doc_title = ti.pdf_cancel if inv.doc_type == '381' else (ti.pdf_correction if inv.doc_type == '384' else ti.pdf_invoice) %}
+  {% set doc_title = ti.pdf_cancel if inv.doc_type == '381' else (ti.pdf_correction if inv.doc_type == '384' else (ti.pdf_prepayment if inv.doc_type == '386' else ti.pdf_invoice)) %}
   <div class="invoice-line">
     <div class="no">{{ doc_title }} {{ ti.pdf_no }} {{ inv.number }}</div>
     <div class="date">{{ ti.pdf_date }}: {{ inv.issue_date|datefmt }}{% if inv.due_date %} &middot; {{ ti.pdf_due }}: {{ inv.due_date|datefmt }}{% endif %}</div>
@@ -122,6 +122,7 @@
     {% set ns = namespace(line_periods=false) %}
     {% for it in items %}{% if it.item_start and it.item_end %}{% set ns.line_periods = true %}{% endif %}{% endfor %}
     {% if inv.service_start and inv.service_end %}<div class="ref">{{ ti.pdf_service_period }}: {{ inv.service_start|datefmt }} – {{ inv.service_end|datefmt }}</div>
+    {% elif inv.doc_type == '386' %}<div class="ref">{{ ti.pdf_prepayment_note }}</div>
     {% elif not ns.line_periods %}<div class="ref">{{ ti.pdf_service_eq_issue }}</div>{% endif %}
     {% if buyer.reference %}<div class="ref">{{ ti.pdf_reference }}: {{ buyer.reference }}</div>{% endif %}
   </div>

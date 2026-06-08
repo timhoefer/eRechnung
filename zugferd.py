@@ -387,11 +387,16 @@ def build_xml(data) -> bytes:
         doc.trade.settlement.period.start = _parse_date(svc_start)
         doc.trade.settlement.period.end = _parse_date(svc_end)
 
-    # BT-72 Liefer-/Leistungsdatum: Pflicht (§14 UStG, BR-FX-EN-04).
-    # Bei Zeitraum = dessen Ende; sonst spätestes Positions-Ende; sonst Rechnungsdatum.
+    # BT-72 Liefer-/Leistungsdatum. Normalfall: Zeitraum-Ende, sonst spätestes
+    # Positions-Ende, sonst Rechnungsdatum. Vorausrechnung (386): Leistung noch
+    # nicht erbracht -> kein Default aufs Rechnungsdatum; nur ein ausdrücklich
+    # angegebenes (geplantes) Datum wird gesetzt, sonst entfällt BT-72.
     line_ends = [it["item_end"] for it in computed if it.get("item_end")]
-    delivery_date = svc_end or inv.get("service_date") or (max(line_ends) if line_ends else None) or inv["issue_date"]
-    doc.trade.delivery.event.occurrence = _parse_date(delivery_date)
+    delivery_date = svc_end or inv.get("service_date") or (max(line_ends) if line_ends else None)
+    if not delivery_date and inv.get("doc_type") != "386":
+        delivery_date = inv["issue_date"]
+    if delivery_date:
+        doc.trade.delivery.event.occurrence = _parse_date(delivery_date)
 
     # Rechnungspositionen
     for idx, it in enumerate(computed, start=1):

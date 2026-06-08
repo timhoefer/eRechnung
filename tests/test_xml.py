@@ -48,6 +48,23 @@ def test_build_xml_is_xsd_valid():
     assert ok, "XSD-Fehler:\n" + "\n".join(messages)
 
 
+def test_prepayment_omits_delivery_date():
+    # Vorausrechnung (386): Leistung noch nicht erbracht -> BT-72 entfällt,
+    # kein Default aufs Rechnungsdatum; XML bleibt EN-16931-XSD-valide.
+    data = make_data()
+    data["invoice"]["doc_type"] = "386"
+    xml = build_xml(data)
+    ok, messages = validate_xml_bytes(xml)
+    assert ok, "XSD-Fehler:\n" + "\n".join(messages)
+    assert b">386<" in xml  # BT-3 Belegart
+    assert b"ActualDeliverySupplyChainEvent" not in xml  # BT-72 weggelassen
+
+
+def test_normal_invoice_has_delivery_date():
+    # Gegenprobe: normale Rechnung (380) ohne Datum -> BT-72 = Rechnungsdatum.
+    assert b"ActualDeliverySupplyChainEvent" in build_xml(make_data())
+
+
 def test_doctype_detection():
     assert has_doctype(b'<?xml version="1.0"?>\n<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>\n<r/>')
     assert not has_doctype(b'<?xml version="1.0"?><rsm:CrossIndustryInvoice/>')
