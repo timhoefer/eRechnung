@@ -53,6 +53,29 @@ def test_settings_panel_renders(client):
     assert b"check-file-form" in r.data and b"datadir-form" in r.data
 
 
+def test_export_csv(client):
+    out = appmod.OUTPUT_DIR
+    (out / "Rechnung_2026-001.pdf").write_bytes(b"%PDF-1.4")
+    (out / "Rechnung_2026-001.json").write_text(json.dumps({
+        "invoice": {"number": "2026-001", "issue_date": "2026-03-15",
+                    "currency": "EUR", "tax_treatment": "de_19"},
+        "buyer": {"name": "Muster GmbH", "country": "DE"},
+        "items": [{"description": "Leistung", "quantity": "2",
+                   "unit": "C62", "unit_price": "100"}],
+    }), encoding="utf-8")
+    r = client.get("/export/csv?from=2026-01-01&to=2026-12-31")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers["Content-Type"]
+    body = r.get_data(as_text=True)
+    assert "2026-001" in body and "Muster GmbH" in body
+    # 2 × 100 = 200 netto, 19 % = 38 USt, 238 brutto (locale-tolerant)
+    assert ("200,00" in body or "200.00" in body)
+    assert ("238,00" in body or "238.00" in body)
+    # Datumsfilter: außerhalb -> Rechnung nicht enthalten
+    r2 = client.get("/export/csv?from=2025-01-01&to=2025-12-31")
+    assert "2026-001" not in r2.get_data(as_text=True)
+
+
 _FORM = {
     "number": "2026-001", "issue_date": "2026-01-01", "due_date": "2026-01-15",
     "description": "Leistung", "quantity": "1", "unit": "C62", "unit_price": "100",

@@ -1098,6 +1098,68 @@ def settings_depinfo():
     return render_template("_deps_card.html", depinfo=drafthorse_version_info())
 
 
+@app.route("/export/csv")
+def export_csv():
+    """Rechnungen als Buchungsjournal-CSV (für eigene Buchhaltung/EÜR/USt-VA).
+    Optional gefiltert über ?from=YYYY-MM-DD&to=YYYY-MM-DD oder eine Einzelrechnung
+    über ?file=<dateiname>. Quelle ist die Sidecar-JSON (nur app-erzeugte Rechnungen)."""
+    import csv
+    import io
+
+    lang = get_ui_lang(request)
+    de = lang != "en"
+    frm = (request.args.get("from") or "").strip()
+    to = (request.args.get("to") or "").strip()
+    only = request.args.get("file")
+
+    def fnum(value):
+        s = f"{value:.2f}"
+        return s.replace(".", ",") if de else s
+
+    rows = []
+    for p in OUTPUT_DIR.glob("*.pdf"):
+        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+        if not sidecar.exists() or (only and p.name != only):
+            continue
+        try:
+            d = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        inv = d.get("invoice") or {}
+        issue = inv.get("issue_date") or ""
+        if (frm and issue < frm) or (to and issue > to):
+            continue
+        treatment = TAX_TREATMENTS.get(inv.get("tax_treatment"), TAX_TREATMENTS["de_19"])
+        _c, _lt, _disc, net, vat, gross = compute_totals(
+            d.get("items") or [], treatment["rate"],
+            _dec(inv.get("discount") or "0"), inv.get("discount_type") or "abs",
+        )
+        buyer = d.get("buyer") or {}
+        rows.append([
+            inv.get("number", ""), issue, buyer.get("name", ""), buyer.get("country", ""),
+            loc(treatment["label"], lang), treatment["category"], str(treatment["rate"]),
+            fnum(net), fnum(vat), fnum(gross), inv.get("currency", "EUR"),
+        ])
+    rows.sort(key=lambda r: (r[1], r[0]))  # nach Datum, dann Nummer
+
+    header = (
+        ["Nummer", "Datum", "Kunde", "Land", "Behandlung", "USt-Code",
+         "USt-Satz %", "Netto", "USt-Betrag", "Brutto", "Währung"] if de else
+        ["Number", "Date", "Customer", "Country", "Treatment", "VAT code",
+         "VAT rate %", "Net", "VAT amount", "Gross", "Currency"]
+    )
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";" if de else ",")
+    writer.writerow(header)
+    writer.writerows(rows)
+    data = ("\ufeff" + buf.getvalue()).encode("utf-8")  # BOM -> Umlaute in Excel
+    name = f"{Path(only).stem}.csv" if only else "rechnungen.csv"
+    return Response(
+        data, mimetype="text/csv",  # Flask ergänzt charset=utf-8 automatisch
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
 @app.route("/data-dir", methods=["POST"])
 def data_dir_set():
     ok, key = set_data_dir(request.form.get("data_dir", ""))

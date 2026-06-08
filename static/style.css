@@ -334,6 +334,12 @@ a:focus-visible, button:focus-visible, summary:focus-visible,
   border-radius: 10px; background: #eef3fe; color: var(--ink);
   font-size: 13px; line-height: 1.5;
 }
+
+/* CSV-Export im Archiv */
+.export-bar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.export-bar label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.export-presets { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+
 .flash { padding: 12px 18px; font-size: 14px; }
 .flash.ok { border-color: var(--ok); color: var(--ok); background: #f0fdf4; }
 .flash.err { border-color: var(--err); color: var(--err); background: #fef2f2; }

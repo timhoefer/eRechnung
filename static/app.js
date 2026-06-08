@@ -1458,6 +1458,38 @@ function closeSettings() {
         .finally(() => { browse.disabled = false; });
       return;
     }
+    // Export-Preset (Jahr/Quartal) -> Datumsfelder füllen.
+    const preset = e.target.closest("[data-preset]");
+    if (preset) {
+      const from = pane.querySelector("#export-from");
+      const to = pane.querySelector("#export-to");
+      if (from && to) {
+        const y = new Date().getFullYear();
+        const iso = (yy, m, d) => `${yy}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const ranges = {
+          thisyear: [iso(y, 1, 1), iso(y, 12, 31)],
+          lastyear: [iso(y - 1, 1, 1), iso(y - 1, 12, 31)],
+          q1: [iso(y, 1, 1), iso(y, 3, 31)],
+          q2: [iso(y, 4, 1), iso(y, 6, 30)],
+          q3: [iso(y, 7, 1), iso(y, 9, 30)],
+          q4: [iso(y, 10, 1), iso(y, 12, 31)],
+        };
+        const r = ranges[preset.dataset.preset];
+        if (r) { from.value = r[0]; to.value = r[1]; }
+      }
+      return;
+    }
+    // CSV-Export (Bulk, gefiltert über Datumsbereich) -> Download.
+    if (e.target.closest("#export-csv")) {
+      const from = (pane.querySelector("#export-from") || {}).value || "";
+      const to = (pane.querySelector("#export-to") || {}).value || "";
+      const qs = new URLSearchParams();
+      if (from) qs.set("from", from);
+      if (to) qs.set("to", to);
+      const q = qs.toString();
+      window.location = window.EXPORT_CSV_URL + (q ? "?" + q : "");
+      return;
+    }
     // Klick auf die Zeile (nicht auf Links/Buttons) -> PDF im Tab öffnen.
     if (e.target.closest("a, button")) return;
     const row = e.target.closest(".arch-row");
