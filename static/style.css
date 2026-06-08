@@ -41,10 +41,10 @@
 }
 
 /* Dark-Mode: nur die Variablen werden überschrieben; das Layout bleibt gleich.
-   Die Rechnungs-Vorschau (eigenes Dokument im iframe) bleibt bewusst hell –
-   sie repräsentiert das gedruckte PDF (Papier). */
-@media (prefers-color-scheme: dark) {
-  :root {
+   Aktiv über data-theme="dark" am <html> (gesetzt per Toggle/System – siehe
+   _theme_script.html). Die Rechnungs-Vorschau (eigenes Dokument im iframe)
+   bleibt bewusst hell – sie repräsentiert das gedruckte PDF (Papier). */
+:root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #16181c;
     --card: #1e2127;
@@ -74,7 +74,6 @@
     --warn-border: #b8860b;
     --overlay-bg: #101114;
     --drawer-frame: #202329;
-  }
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }  /* schlägt display:flex von .period/label */
@@ -92,6 +91,18 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
   padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px;
 }
 .langswitch a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* Theme-Umschalter (Hell/Dunkel) */
+.header-controls { display: flex; align-items: center; gap: 8px; }
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 28px; padding: 0; cursor: pointer;
+  color: var(--muted); background: var(--card);
+  border: 1px solid var(--line); border-radius: 7px;
+}
+.theme-toggle:hover { color: var(--ink); }
+.theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: inline; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
 .card, .flash, form > .card, details.card, .actions {
   max-width: 1080px; margin: 16px auto; padding: 20px 22px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;

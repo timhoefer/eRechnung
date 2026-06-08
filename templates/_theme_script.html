@@ -1,0 +1,28 @@
+<script>
+// Theme (Hell/Dunkel): vor dem ersten Paint setzen -> kein Aufblitzen.
+// Default folgt dem System; eine explizite Wahl (Toggle) wird in localStorage
+// gemerkt und überschreibt das System. Bewusst eigenständig (kein app.js nötig),
+// damit das Theme auf allen Seiten ohne Flackern greift.
+(function () {
+  var KEY = "erechnung-theme", root = document.documentElement;
+  function sysDark() { return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches; }
+  function apply(t) { root.setAttribute("data-theme", t); }
+  try {
+    var saved = localStorage.getItem(KEY);
+    apply(saved || (sysDark() ? "dark" : "light"));
+    if (!saved && window.matchMedia) {
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (e) {
+        if (!localStorage.getItem(KEY)) apply(e.matches ? "dark" : "light");
+      });
+    }
+  } catch (e) {}
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("#theme-toggle");
+    if (!btn) return;
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    apply(next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+    btn.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
+  });
+})();
+</script>
