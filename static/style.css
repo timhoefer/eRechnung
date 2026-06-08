@@ -218,9 +218,15 @@ select {
 /* Eine Position = Box + Löschen-Button rechts daneben (außerhalb der Box). */
 .position-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
 .position {
-  flex: 1; min-width: 0;
+  flex: 1; min-width: 0; container-type: inline-size;
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
   padding: 14px 16px;
+}
+/* Schmale Position-Box: Felder auf zwei Zeilen umbrechen –
+   Zeile 1 Beschreibung, Zeile 2 Menge | Einzelpreis | Summe. */
+@container (max-width: 720px) {
+  .item { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .item > .f-desc { grid-column: 1 / -1; }
 }
 /* Löschen oben verankert, auf Höhe der Eingabefelder: Box-Padding (14) + Label-Bereich (22). */
 .position-row > .del { flex: 0 0 auto; align-self: flex-start; margin-top: 36px; }
@@ -517,9 +523,7 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
   .grid, .grid.grid-3 { grid-template-columns: 1fr; }
   .grid .span-2, .grid .span-3, .grid .new-row, #taxnr-hint { grid-column: 1 / -1; }
   .layout { padding: 0 14px; }
-  /* Positionen: Felder bei sehr engen Viewports zweispaltig gestapelt */
-  .item { grid-template-columns: 1fr 1fr; }
-  .item > .f-desc { grid-column: 1 / -1; }
+  /* .item-Umbruch übernimmt die Container-Query (@container .position) */
 }
 
 /* Vorschau-Drawer in Originalgröße (A4 100%) */
