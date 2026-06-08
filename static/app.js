@@ -764,6 +764,81 @@ function highlightCust(delta) {
   opts[custIndex].scrollIntoView({ block: "nearest" });
 }
 
+// ---- Bezugs-Combobox (Storno/Korrektur) – gleiche Optik wie die Kunden-Combobox.
+// Tippen ODER aus den im Tool erzeugten Rechnungen wählen (Auswahl füllt Datum).
+let refMenu = null;
+let refInput = null;
+let refIndex = -1;
+function ensureRefMenu() {
+  if (refMenu) return refMenu;
+  refMenu = document.createElement("div");
+  refMenu.className = "combo-menu";
+  refMenu.hidden = true;
+  document.body.appendChild(refMenu);
+  return refMenu;
+}
+function closeRefMenu() {
+  if (refMenu) refMenu.hidden = true;
+  if (refInput) refInput.setAttribute("aria-expanded", "false");
+  refInput = null;
+  refIndex = -1;
+}
+function positionRefMenu(input) {
+  const r = input.getBoundingClientRect();
+  refMenu.style.left = r.left + "px";
+  refMenu.style.top = r.bottom + 3 + "px";
+  refMenu.style.width = Math.max(r.width, 240) + "px";
+}
+function openRefMenu(input) {
+  const menu = ensureRefMenu();
+  refInput = input;
+  refIndex = -1;
+  const q = input.value.trim().toLowerCase();
+  const pool = (window.REF_INVOICES || []).filter(
+    (r) => !q || (r.number || "").toLowerCase().includes(q)
+  );
+  menu.innerHTML = "";
+  menu._pool = pool;
+  if (!pool.length) {
+    menu.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    return;
+  }
+  pool.forEach((r) => {
+    const opt = document.createElement("div");
+    opt.className = "combo-opt";
+    const d = document.createElement("span");
+    d.className = "combo-opt-desc";
+    d.textContent = r.number || "";
+    opt.appendChild(d);
+    if (r.date) {
+      const p = document.createElement("span");
+      p.className = "combo-opt-price";
+      p.textContent = r.date;
+      opt.appendChild(p);
+    }
+    opt.addEventListener("mousedown", (ev) => { ev.preventDefault(); chooseRef(r); });
+    menu.appendChild(opt);
+  });
+  positionRefMenu(input);
+  menu.hidden = false;
+  input.setAttribute("aria-expanded", "true");
+}
+function chooseRef(r) {
+  if (refInput) refInput.value = r.number || "";
+  const dateEl = document.querySelector("[name='ref_date']");
+  if (dateEl && r.date) dateEl.value = r.date;
+  closeRefMenu();
+}
+function highlightRef(delta) {
+  if (!refMenu || refMenu.hidden) return;
+  const opts = refMenu.querySelectorAll(".combo-opt");
+  if (!opts.length) return;
+  refIndex = (refIndex + delta + opts.length) % opts.length;
+  opts.forEach((o, i) => o.classList.toggle("active", i === refIndex));
+  opts[refIndex].scrollIntoView({ block: "nearest" });
+}
+
 // ---- Eigenes Einheiten-Dropdown (gestylt wie die Beschreibungs-Combobox) ----
 // Der native <select class="unit"> bleibt versteckt als Werteträger erhalten,
 // damit XML-Erzeugung und Speichern unverändert über .value funktionieren.
@@ -997,7 +1072,7 @@ document.addEventListener("input", (e) => {
   }
   if (e.target.name && e.target.name.startsWith("buyer_")) scheduleCustomerSave();
   if (e.target.name === "service_start" || e.target.name === "service_end") updatePeriodHint();
-  if (e.target.name === "ref_number") fillRefDate(e.target);
+  if (e.target.classList.contains("ref-name")) { fillRefDate(e.target); openRefMenu(e.target); }
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
   if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
 });
@@ -1011,6 +1086,7 @@ document.addEventListener("change", (e) => {
 document.addEventListener("focusin", (e) => {
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
   if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
+  if (e.target.classList.contains("ref-name")) openRefMenu(e.target);
 });
 document.addEventListener("keydown", (e) => {
   if (!e.target.matches('#items [name="description"]')) return;
@@ -1062,6 +1138,32 @@ document.addEventListener("keydown", (e) => {
     closeCustMenu();
   }
 });
+// Tastaturbedienung der Bezugs-Combobox.
+document.addEventListener("keydown", (e) => {
+  if (!e.target.classList || !e.target.classList.contains("ref-name")) return;
+  if (!refMenu || refMenu.hidden) {
+    if (e.key === "ArrowDown") {
+      openRefMenu(e.target);
+      e.preventDefault();
+    }
+    return;
+  }
+  if (e.key === "ArrowDown") {
+    highlightRef(1);
+    e.preventDefault();
+  } else if (e.key === "ArrowUp") {
+    highlightRef(-1);
+    e.preventDefault();
+  } else if (e.key === "Enter") {
+    const pool = refMenu._pool;
+    if (refIndex >= 0 && pool && pool[refIndex]) {
+      chooseRef(pool[refIndex]);
+      e.preventDefault();
+    }
+  } else if (e.key === "Escape") {
+    closeRefMenu();
+  }
+});
 document.addEventListener("mousedown", (e) => {
   const inMenu = e.target.closest(".combo-menu");
   const combo = e.target.closest(".combo");
@@ -1069,6 +1171,8 @@ document.addEventListener("mousedown", (e) => {
   if (!e.target.closest(".unitsel") && !inMenu) closeUnitMenu();
   const inCustCombo = combo && combo.querySelector(".cust-name");
   if (!inCustCombo && !inMenu) closeCustMenu();
+  const inRefCombo = combo && combo.querySelector(".ref-name");
+  if (!inRefCombo && !inMenu) closeRefMenu();
   if (!e.target.closest("#format-trigger") && !e.target.closest("#format-menu")) closeFormatMenu();
 });
 // Tastaturbedienung des Einheiten-Dropdowns.
@@ -1099,6 +1203,7 @@ document.addEventListener("keydown", (e) => {
 function repositionMenus() {
   if (comboInput && comboMenu && !comboMenu.hidden) positionComboMenu(comboInput);
   if (custInput && custMenu && !custMenu.hidden) positionCustMenu(custInput);
+  if (refInput && refMenu && !refMenu.hidden) positionRefMenu(refInput);
   const fm = document.getElementById("format-menu");
   if (fm && !fm.hidden) positionFormatMenu();
   if (unitSelectEl && unitMenu && !unitMenu.hidden) {
@@ -1172,6 +1277,12 @@ document.addEventListener("click", (e) => {
       else {
         input.focus();
         openCustMenu(input);
+      }
+    } else if (input && input.classList.contains("ref-name")) {
+      if (refInput === input && refMenu && !refMenu.hidden) closeRefMenu();
+      else {
+        input.focus();
+        openRefMenu(input);
       }
     } else if (input) {
       if (comboInput === input && comboMenu && !comboMenu.hidden) closeComboMenu();

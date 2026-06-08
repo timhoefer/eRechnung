@@ -111,10 +111,12 @@
         </select>
       </label>
       <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
-      <label class="ref-field" hidden>{{ t.ref_number }}<input name="ref_number" list="ref-invoice-list" autocomplete="off"></label>
-      <datalist id="ref-invoice-list">
-        {% for r in ref_invoices %}<option value="{{ r.number }}">{{ r.number }}{% if r.date %} · {{ r.date }}{% endif %}</option>{% endfor %}
-      </datalist>
+      <label class="ref-field" hidden>{{ t.ref_number }}
+        <div class="combo">
+          <input name="ref_number" class="combo-input ref-name" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+          <span class="combo-caret" aria-hidden="true"></span>
+        </div>
+      </label>
       <label class="ref-field" hidden>{{ t.ref_date }}<input name="ref_date" type="date"></label>
       <p class="hint wide ref-field" id="ref-hint" hidden>{{ t.ref_hint }}</p>
       <label>{{ t.invoice_no }}<input name="number" id="invoice-number" value="{{ defaults.number }}" required></label>
