@@ -107,18 +107,6 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
   background-color: var(--accent);
   -webkit-mask: url("horse.svg") left center / contain no-repeat;
   mask: url("horse.svg") left center / contain no-repeat;
-  will-change: transform;
-}
-/* Bonus: galoppierende „Hüpf"-Bewegung bei Hover über die Titelzeile (kein echtes
-   Bein-Frame-Anim, sondern Gallop-Rhythmus per Transform). Bei prefers-reduced-
-   motion global aus. */
-header h1:hover .brand-logo { animation: gallop 0.6s ease-in-out infinite; }
-@keyframes gallop {
-  0%   { transform: translate(0, 0) rotate(0deg); }
-  20%  { transform: translate(1px, -3px) rotate(-1.5deg); }
-  45%  { transform: translate(2px, 0) rotate(0deg); }
-  70%  { transform: translate(1px, -2px) rotate(1deg); }
-  100% { transform: translate(0, 0) rotate(0deg); }
 }
 .theme-toggle {
   display: inline-flex; align-items: center; justify-content: center;
