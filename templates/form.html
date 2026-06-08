@@ -111,7 +111,10 @@
         </select>
       </label>
       <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
-      <label class="ref-field" hidden>{{ t.ref_number }}<input name="ref_number"></label>
+      <label class="ref-field" hidden>{{ t.ref_number }}<input name="ref_number" list="ref-invoice-list" autocomplete="off"></label>
+      <datalist id="ref-invoice-list">
+        {% for r in ref_invoices %}<option value="{{ r.number }}">{{ r.number }}{% if r.date %} · {{ r.date }}{% endif %}</option>{% endfor %}
+      </datalist>
       <label class="ref-field" hidden>{{ t.ref_date }}<input name="ref_date" type="date"></label>
       <p class="hint wide ref-field" id="ref-hint" hidden>{{ t.ref_hint }}</p>
       <label>{{ t.invoice_no }}<input name="number" id="invoice-number" value="{{ defaults.number }}" required></label>
@@ -373,6 +376,7 @@
   window.MSG_SETTINGS_CLOSED = {{ t['settings_closed']|tojson }};
   window.MSG_ACTION_FAILED = {{ t['action_failed']|tojson }};
   window.USED_NUMBERS = {{ used_numbers|tojson }};
+  window.REF_INVOICES = {{ ref_invoices|tojson }};
   window.MSG_NUMBER_IN_USE = {{ t['number_in_use']|tojson }};
   window.SELLER_AUTOSAVE_URL = {{ url_for('settings_autosave')|tojson }};
   window.CUSTOMER_AUTOSAVE_URL = {{ url_for('customers_autosave')|tojson }};

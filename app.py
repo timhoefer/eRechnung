@@ -739,6 +739,30 @@ def used_invoice_numbers() -> list[str]:
     return sorted(nums)
 
 
+def archived_invoices() -> list[dict]:
+    """Im Tool erzeugte Rechnungen als {number, date} aus den Sidecars – für den
+    Bezugs-Auswähler bei Storno/Korrektur. Neueste zuerst, je Nummer einmal."""
+    rows = []
+    for p in OUTPUT_DIR.glob("*.pdf"):
+        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+        if not sidecar.exists():
+            continue
+        try:
+            inv = json.loads(sidecar.read_text(encoding="utf-8")).get("invoice") or {}
+        except (ValueError, OSError):
+            continue
+        num = (inv.get("number") or "").strip()
+        if num:
+            rows.append({"number": num, "date": inv.get("issue_date") or ""})
+    seen, uniq = set(), []
+    for r in sorted(rows, key=lambda r: (r["date"], r["number"]), reverse=True):
+        if r["number"] in seen:
+            continue
+        seen.add(r["number"])
+        uniq.append(r)
+    return uniq
+
+
 @app.route("/")
 def index():
     seller = load_seller()
@@ -762,6 +786,7 @@ def index():
         units=UNITS,
         draft=draft,
         used_numbers=used_invoice_numbers(),
+        ref_invoices=archived_invoices(),
     )
 
 
@@ -882,6 +907,10 @@ def generate():
         return redirect(url_for("index"))
     if data["invoice"]["tax_treatment"] in ("eu_reverse", "non_eu") and not data["buyer"].get("vat_id"):
         flash(translate(get_ui_lang(request))["need_buyer_vat"], "err")
+        return redirect(url_for("index"))
+    # Storno (381) / Korrektur (384) brauchen den Bezug zur Originalrechnung (BT-25).
+    if data["invoice"]["doc_type"] in ("381", "384") and not data["invoice"].get("ref_number"):
+        flash(translate(get_ui_lang(request))["need_ref"], "err")
         return redirect(url_for("index"))
     if data["invoice"]["profile"] == "xrechnung":
         missing = xrechnung_missing(seller, data["buyer"])

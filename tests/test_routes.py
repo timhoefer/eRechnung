@@ -84,6 +84,13 @@ _FORM = {
 }
 
 
+def test_storno_requires_reference(client):
+    # 381 (Storno) ohne Bezug -> abgelehnt, kein PDF (Redirect vor dem Rendern).
+    r = client.post("/generate", data=dict(_FORM, doc_type="381"))
+    assert r.status_code in (302, 303)
+    assert not list(appmod.OUTPUT_DIR.glob("*.pdf"))
+
+
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
 def test_generate_creates_pdf_and_sidecar(client):
     r = client.post("/generate", data=dict(_FORM))

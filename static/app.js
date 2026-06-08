@@ -269,6 +269,19 @@ function toggleRefFields() {
   if (refNo) refNo.required = show;
 }
 
+// Bezugs-Datum automatisch füllen, wenn die gewählte/getippte Nummer zu einer
+// im Tool erzeugten Rechnung gehört. Externe Nummern (nicht in der Liste) lassen
+// das Datum unangetastet -> manuell ausfüllbar.
+const REF_DATES = Object.fromEntries(
+  (Array.isArray(window.REF_INVOICES) ? window.REF_INVOICES : []).map((r) => [r.number, r.date])
+);
+function fillRefDate(input) {
+  const d = REF_DATES[input.value.trim()];
+  if (!d) return;
+  const dateEl = document.querySelector("[name='ref_date']");
+  if (dateEl) dateEl.value = d;
+}
+
 // Bundesländer/Staaten je Land: [Code, Anzeigename]. Code wandert ins XML (BT-54).
 const STATES = {
   US: [
@@ -984,6 +997,7 @@ document.addEventListener("input", (e) => {
   }
   if (e.target.name && e.target.name.startsWith("buyer_")) scheduleCustomerSave();
   if (e.target.name === "service_start" || e.target.name === "service_end") updatePeriodHint();
+  if (e.target.name === "ref_number") fillRefDate(e.target);
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
   if (e.target.classList.contains("cust-name")) openCustMenu(e.target);
 });
