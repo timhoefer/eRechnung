@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Python-Abhängigkeiten (requirements*.txt). requirements.lock (.lock) wird
+  # von Dependabot nicht angefasst; nach einem Pin-Bump ggf. neu erzeugen.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns: ["*"]   # alle Updates in einem gebündelten PR (weniger Rauschen)
+
+  # Versionen der GitHub-Actions im CI-Workflow aktuell halten.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]
