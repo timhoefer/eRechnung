@@ -103,7 +103,7 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
    „E-Rechnung" sitzen auf einer Linie, als zusammengehöriges Lockup. Maske ->
    Akzentfarbe, theme-tauglich. */
 .brand-logo {
-  flex: 0 0 auto; width: 46px; height: 30px; margin-right: 12px;
+  flex: 0 0 auto; width: 46px; height: 30px; margin-right: 8px;
   background-color: var(--accent);
   -webkit-mask: url("horse.svg") left center / contain no-repeat;
   mask: url("horse.svg") left center / contain no-repeat;
@@ -141,7 +141,7 @@ details.card summary::-webkit-details-marker { display: none; }
 .title-format {
   font: inherit; font-size: 0.68em; font-weight: 600; color: var(--ink); cursor: pointer;
   display: inline-flex; align-items: center; gap: 7px;
-  margin-left: 8px; margin-top: 3px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 9px;
+  margin-left: 14px; margin-top: 3px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--surface-hi); transition: background .12s ease, border-color .12s ease;
 }
 .title-format:hover { background: var(--surface-hi-h); border-color: var(--border-hi); }
