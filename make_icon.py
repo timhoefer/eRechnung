@@ -23,6 +23,9 @@ MARGIN = 100
 BODY = S - 2 * MARGIN
 RADIUS = round(BODY * 0.2237)
 HORSE_WIDTH = 0.78  # Anteil der Körper-Breite
+# Optischer Ausgleich: Pferd minimal nach oben/links (Masse liegt rechts/oben).
+OFFSET_X = -16
+OFFSET_Y = -16
 
 
 def squircle_bg() -> Image.Image:
@@ -49,11 +52,11 @@ horse = horse.crop(horse.getbbox())
 img = squircle_bg()
 w = int(BODY * HORSE_WIDTH)
 h = horse.resize((w, int(w * horse.height / horse.width)), Image.LANCZOS)
-hx, hy = (S - h.width) // 2, (S - h.height) // 2
+hx, hy = (S - h.width) // 2 + OFFSET_X, (S - h.height) // 2 + OFFSET_Y
 
 # Subtiler Schlagschatten hinter dem Pferd (Pferdeform, abgedunkelt, weich, leicht
 # nach unten versetzt) -> etwas Tiefe, ohne aufdringlich zu wirken.
-sil = h.split()[3].point(lambda a: int(a * 0.45))  # halbtransparente Pferdeform
+sil = h.split()[3].point(lambda a: int(a * 0.30))  # halbtransparente Pferdeform
 shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
 dark = Image.new("RGBA", h.size, (6, 22, 56, 255))
 dark.putalpha(sil)
