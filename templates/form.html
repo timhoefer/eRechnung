@@ -11,16 +11,13 @@
 <div id="a11y-live" class="sr-only" aria-live="polite" role="status"></div>
 <header>
   <div class="header-row">
-    <div class="brand">
-      <span class="brand-logo" aria-hidden="true" title="{{ t.app_title_base }}"></span>
-      <div>
-      <h1>{{ t.app_title_base }} <button type="button" id="format-trigger" class="title-format" aria-haspopup="listbox" aria-expanded="false"><span class="fmt-name">ZUGFeRD</span><svg class="title-caret" width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 2l4.5 4 4.5-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></h1>
+    <div>
+      <h1><span class="brand-logo" aria-hidden="true"></span>{{ t.app_title_base }} <button type="button" id="format-trigger" class="title-format" aria-haspopup="listbox" aria-expanded="false"><span class="fmt-name">ZUGFeRD</span><svg class="title-caret" width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 2l4.5 4 4.5-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></h1>
       <p class="sub">{{ t.app_sub }}<span id="profile-hint" hidden> · {{ t.profile_hint }}</span></p>
       <div id="format-menu" class="combo-menu" role="listbox" hidden>
         <div class="combo-opt" role="option" data-profile="en16931"><span class="combo-opt-desc">ZUGFeRD</span><span class="combo-opt-price">{{ t.fmt_zugferd_desc }}</span></div>
         <div class="combo-opt" role="option" data-profile="xrechnung"><span class="combo-opt-desc">XRechnung</span><span class="combo-opt-price">{{ t.fmt_xrechnung_desc }}</span></div>
       </div>
-    </div>
     </div>
     <div class="header-controls">
       <button type="button" id="theme-toggle" class="theme-toggle" aria-label="{{ t.theme_toggle }}" title="{{ t.theme_toggle }}">
