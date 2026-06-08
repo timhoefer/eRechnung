@@ -1,4 +1,4 @@
-<div class="card status {{ 'ok' if depinfo.current and not depinfo.update_available and not depinfo.error else '' }}">
+<div class="card status {{ 'ok' if depinfo.current and not depinfo.update_available else '' }}">
   <strong>{{ t.dep_title }}</strong>
   <table class="summary" style="margin-top:8px">
     <tr><td>{{ t.dep_drafthorse }} — {{ t.dep_current }}</td><td>{{ depinfo.current or '—' }}</td></tr>

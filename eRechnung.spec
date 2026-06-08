@@ -7,7 +7,7 @@
 import glob
 import os
 
-from PyInstaller.utils.hooks import collect_all, collect_data_files
+from PyInstaller.utils.hooks import collect_all, collect_data_files, copy_metadata
 
 datas = [
     ("templates", "templates"),
@@ -26,6 +26,9 @@ for pkg in ("weasyprint", "saxonche", "webview"):
 
 # drafthorse bringt die Factur-X-/EN16931-XSD mit (für die XML-Validierung).
 datas += collect_data_files("drafthorse")
+# dist-info-Metadaten mitnehmen, damit importlib.metadata.version("drafthorse")
+# auch im Bundle funktioniert (sonst zeigt der Software-Stand „—" statt Version).
+datas += copy_metadata("drafthorse")
 
 # Nativer Pango-Stack (Homebrew). PyInstaller löst die transitiven
 # Abhängigkeiten dieser dylibs automatisch mit auf.
