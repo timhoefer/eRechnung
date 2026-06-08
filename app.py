@@ -918,16 +918,9 @@ def preview():
 def preview_pdf():
     """Visuelle PDF-Vorschau (ohne ZUGFeRD-XML-Einbettung) für die ausgeklappte
     Ansicht – zeigt die echten Seitenumbrüche, deutlich schneller als die volle
-    Erzeugung (die Seitenumbrüche sind identisch; nur das XML fehlt)."""
-    data, html, _ = _assemble(request.form)
-    if not data["items"]:
-        msg = translate(get_ui_lang(request))["need_item"]
-        return Response(
-            f"<!doctype html><meta charset='utf-8'>"
-            f"<body style='font:15px sans-serif;padding:40px;color:#b91c1c'>{msg}</body>",
-            status=400,
-            mimetype="text/html",
-        )
+    Erzeugung (die Seitenumbrüche sind identisch; nur das XML fehlt). Rendert auch
+    ohne Positionen das Template (wie die Mini-Vorschau)."""
+    _, html, _ = _assemble(request.form)
     import weasyprint
 
     base_url = str(Path(__file__).resolve().parent)
