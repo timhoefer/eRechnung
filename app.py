@@ -961,7 +961,7 @@ def archive_preview(filename):
     Look wie die Live-Vorschau. Nur für app-erzeugte Rechnungen (mit Sidecar)."""
     draft = load_draft(filename)
     if not draft:
-        abort(404)
+        return abort(404)
     seller = draft.get("seller") or load_seller()  # Altbestände ohne seller -> aktuell
     html, _ = render_invoice_preview(
         seller, draft.get("buyer") or {}, draft.get("invoice") or {},
