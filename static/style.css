@@ -180,7 +180,8 @@ label.check input[type="checkbox"] { width: auto; padding: 0; margin: 0; accent-
 select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-position-x: calc(100% - 12px); background-position-y: calc(50% + 1px);
   padding-right: 32px;
 }
 /* Positionen: eine umrahmte Karte (.position) je Position, Felder als Grid.
