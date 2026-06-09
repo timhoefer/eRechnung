@@ -1685,6 +1685,21 @@ function closeSettings() {
         .catch(() => flashError());
       return;
     }
+    // Im Finder zeigen (Desktop-App): die Datei liegt schon im output/-Ordner.
+    const reveal = e.target.closest(".reveal-btn");
+    if (reveal) {
+      e.preventDefault();
+      fetch("/reveal/" + encodeURIComponent(reveal.dataset.file), { method: "POST" })
+        .catch(() => flashError());
+      return;
+    }
+    // CSV einer Einzelrechnung (Desktop): Server schreibt sie + zeigt sie im Finder.
+    const csvBtn = e.target.closest(".csv-export-btn");
+    if (csvBtn) {
+      e.preventDefault();
+      fetch(csvBtn.dataset.url).catch(() => flashError());
+      return;
+    }
     // Datenordner durchsuchen (nativer Dialog).
     const browse = e.target.closest("#dd-browse");
     if (browse) {
@@ -1718,7 +1733,7 @@ function closeSettings() {
       }
       return;
     }
-    // CSV-Export (Bulk, gefiltert über Datumsbereich) -> Download.
+    // CSV-Export (Bulk, gefiltert über Datumsbereich).
     if (e.target.closest("#export-csv")) {
       const from = (pane.querySelector("#export-from") || {}).value || "";
       const to = (pane.querySelector("#export-to") || {}).value || "";
@@ -1726,7 +1741,10 @@ function closeSettings() {
       if (from) qs.set("from", from);
       if (to) qs.set("to", to);
       const q = qs.toString();
-      window.location = window.EXPORT_CSV_URL + (q ? "?" + q : "");
+      const url = window.EXPORT_CSV_URL + (q ? "?" + q : "");
+      // Desktop: Server schreibt die CSV + zeigt sie im Finder (kein Download).
+      if (window.IS_DESKTOP) fetch(url).catch(() => flashError());
+      else window.location = url;
       return;
     }
     // Klick auf die Zeile (nicht auf Links/Buttons) -> PDF im Tab öffnen.

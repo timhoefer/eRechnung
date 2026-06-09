@@ -1306,6 +1306,18 @@ def export_csv():
     writer.writerows(rows)
     data = ("\ufeff" + buf.getvalue()).encode("utf-8")  # BOM -> Umlaute in Excel
     name = f"{Path(only).stem}.csv" if only else "rechnungen.csv"
+    if app.config.get("DESKTOP") and sys.platform == "darwin":
+        # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
+        # schreiben und im Finder zeigen.
+        import subprocess
+
+        out = OUTPUT_DIR / name
+        out.write_bytes(data)
+        try:
+            subprocess.run(["open", "-R", str(out)], timeout=10)
+        except Exception:
+            pass
+        return {"ok": True, "name": name}
     return Response(
         data, mimetype="text/csv",  # Flask ergänzt charset=utf-8 automatisch
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
