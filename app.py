@@ -1051,6 +1051,28 @@ def download(filename):
     return _serve(filename, inline=False)
 
 
+@app.route("/download-zip/<path:filename>")
+def download_zip(filename):
+    """PDF + zugehörige XRechnung-XML als ZIP (ein Klick -> beide Belege)."""
+    import io
+    import zipfile
+
+    path = OUTPUT_DIR / filename
+    if path.name != filename or path.suffix.lower() != ".pdf" or not path.exists():
+        abort(404)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(path, arcname=path.name)
+        xml = OUTPUT_DIR / f"{path.stem}.xml"
+        if xml.exists():
+            z.write(xml, arcname=xml.name)
+    return Response(
+        buf.getvalue(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{path.stem}.zip"'},
+    )
+
+
 @app.route("/view/<path:filename>")
 def view(filename):
     return _serve(filename, inline=True)

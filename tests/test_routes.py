@@ -116,6 +116,14 @@ def test_xrechnung_writes_standalone_xml(client):
     assert b"xrechnung_3.0" in xml.read_bytes()  # korrekte CIUS-Spec-ID
     d = client.get("/download/Rechnung_2026-001.xml")
     assert d.status_code == 200 and "xml" in d.headers["Content-Type"]
+    assert "PDF + XML" in r.get_data(as_text=True)  # kombinierter Download angeboten
+    # ZIP-Bundle enthält PDF + XML
+    import io
+    import zipfile
+    z = client.get("/download-zip/Rechnung_2026-001.pdf")
+    assert z.status_code == 200 and "zip" in z.headers["Content-Type"]
+    names = sorted(zipfile.ZipFile(io.BytesIO(z.data)).namelist())
+    assert names == ["Rechnung_2026-001.pdf", "Rechnung_2026-001.xml"]
 
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")

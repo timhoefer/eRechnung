@@ -405,7 +405,7 @@ button.secondary:hover { background: var(--surface-2-h); }
 .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: var(--text-lg); margin-top: 4px; }
 .back-link { margin: 16px 2px; }
 /* Aktionsleiste der Ergebnisseite (result.html) – im Fluss, nicht sticky */
-.actions { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+.actions { display: flex; align-items: center; gap: 12px; margin: 20px auto; }
 .actions .spacer { flex: 1; }
 /* Einstellungen/Archiv als In-Place-Panel in der linken Spalte */
 #settings-toggle.active { background: var(--surface-2-h); }

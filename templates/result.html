@@ -23,7 +23,7 @@
 <div class="card status {{ 'ok' if valid else 'err' }}">
   {% if valid %}
     <strong>&#10003; {{ t.valid_ok }}</strong>
-    <p>{{ t.valid_ok_text }}</p>
+    <p>{{ t.valid_ok_text_xr if is_xrechnung else t.valid_ok_text }}</p>
   {% else %}
     <strong>&#10007; {{ t.valid_err }}</strong>
     {% if messages %}
@@ -57,8 +57,7 @@
   <span class="spacer"></span>
   <a href="{{ url_for('view', filename=filename) }}" target="_blank"><button type="button" class="secondary">{{ t.pdf_view }}</button></a>
   {% if is_xrechnung and xml_filename %}
-  <a href="{{ url_for('download', filename=filename) }}"><button type="button" class="secondary">{{ t.pdf_download }}</button></a>
-  <a href="{{ url_for('download', filename=xml_filename) }}"><button type="button">{{ t.xml_download }}</button></a>
+  <a href="{{ url_for('download_zip', filename=filename) }}"><button type="button">{{ t.pdf_xml_download }}</button></a>
   {% else %}
   <a href="{{ url_for('download', filename=filename) }}"><button type="button">{{ t.pdf_download }}</button></a>
   {% endif %}
