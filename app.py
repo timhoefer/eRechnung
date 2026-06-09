@@ -893,38 +893,28 @@ def preview_html():
     return html
 
 
-@app.route("/preview", methods=["POST"])
-def preview():
-    """PDF-Vorschau inline im Browser (wird nicht archiviert)."""
-    data, html, _ = _assemble(request.form)
-    if not data["items"]:
-        msg = translate(get_ui_lang(request))["need_item"]
-        return Response(
-            f"<!doctype html><meta charset='utf-8'>"
-            f"<body style='font:15px sans-serif;padding:40px;color:#b91c1c'>{msg}</body>",
-            status=400,
-            mimetype="text/html",
-        )
-    xml = build_xml(data)
-    pdf = build_pdf(html, xml)
-    return Response(
-        pdf,
-        mimetype="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="vorschau.pdf"'},
-    )
-
-
 @app.route("/preview-pdf", methods=["POST"])
 def preview_pdf():
     """Visuelle PDF-Vorschau (ohne ZUGFeRD-XML-Einbettung) für die ausgeklappte
     Ansicht – zeigt die echten Seitenumbrüche, deutlich schneller als die volle
     Erzeugung (die Seitenumbrüche sind identisch; nur das XML fehlt). Rendert auch
     ohne Positionen das Template (wie die Mini-Vorschau)."""
-    _, html, _ = _assemble(request.form)
-    import weasyprint
+    try:
+        _, html, _ = _assemble(request.form)
+        import weasyprint
 
-    base_url = str(Path(__file__).resolve().parent)
-    pdf = weasyprint.HTML(string=html, base_url=base_url).write_pdf()
+        base_url = str(Path(__file__).resolve().parent)
+        pdf = weasyprint.HTML(string=html, base_url=base_url).write_pdf()
+    except Exception:
+        # Unvollständige/fehlerhafte Eingaben (z. B. beim Tippen) -> kein 500,
+        # sondern eine schlichte Meldung; der Client zeigt ohnehin „keine Vorschau".
+        msg = translate(get_ui_lang(request))["no_preview"]
+        return Response(
+            f"<!doctype html><meta charset='utf-8'>"
+            f"<body style='font:15px sans-serif;padding:40px;color:#888'>{msg}</body>",
+            status=400,
+            mimetype="text/html",
+        )
     return Response(
         pdf,
         mimetype="application/pdf",

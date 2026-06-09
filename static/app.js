@@ -1072,6 +1072,13 @@ function closePreviewDrawer() {
   if (!drawer) return;
   drawer.hidden = true;
   document.body.classList.remove("drawer-open");
+  // Blob-URL des PDFs freigeben (sonst bleibt es bis zum nächsten Öffnen im Speicher).
+  const frame = document.getElementById("drawer-frame");
+  if (frame && frame._objUrl) {
+    frame.removeAttribute("src");
+    URL.revokeObjectURL(frame._objUrl);
+    frame._objUrl = null;
+  }
 }
 
 let sellerSaveTimer;
@@ -1372,7 +1379,12 @@ document.addEventListener("click", (e) => {
       schedulePreview();
       announce(window.MSG_ITEM_DELETED || "");
       flashUndo(window.MSG_ITEM_DELETED, () => {
-        parent.insertBefore(row, nextSibling);
+        // Falls #items zwischenzeitlich umgebaut wurde (z. B. Kunde geladen),
+        // sind parent/nextSibling evtl. veraltet -> robust wieder einsetzen.
+        const container = parent && parent.isConnected ? parent : document.getElementById("items");
+        if (!container) return;
+        if (nextSibling && nextSibling.parentNode === container) container.insertBefore(row, nextSibling);
+        else container.appendChild(row);
         recalc();
         schedulePreview();
       });
