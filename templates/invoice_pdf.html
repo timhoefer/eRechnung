@@ -88,6 +88,11 @@
     html.mini { background: #fff; }
     body.mini { width: 210mm; height: 297mm; margin: 0; padding: 22mm 18mm 24mm 18mm;
       background: #fff; box-shadow: none; overflow: hidden; }
+    /* Unteren Seitenrand simulieren: overflow:hidden klippt am Padding-Rand (Blatt-
+       kante), nicht am Inhaltsrand – überlaufender Inhalt (Folgeseiten) liefe sonst
+       bis an die untere Kante. Dieser weiße Streifen verdeckt ihn -> 24mm Rand. */
+    body.mini::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0;
+      height: 24mm; background: #fff; pointer-events: none; z-index: 2; }
   }
 </style>
 </head>
