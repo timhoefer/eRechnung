@@ -406,7 +406,68 @@ def apply_seller_form(seller: dict, form) -> dict:
             seller[field] = form.get(field, "").strip()
     # Checkbox "Steuernummer ausblenden": aktiv -> show_tax_number = False.
     seller["show_tax_number"] = form.get("hide_tax_number") is None
+    # Weitere Bankkonten (optional). Das Hauptkonto bleibt in den flachen Feldern
+    # (iban/bic/...); zusätzliche Konten landen in seller["accounts"]. Nur anfassen,
+    # wenn das Formular die Sektion wirklich enthält -> Teil-Posts wischen nichts weg.
+    if form.get("has_accounts_section"):
+        labels = form.getlist("acct_label")
+        holders = form.getlist("acct_account_name")
+        banks = form.getlist("acct_bank_name")
+        ibans = form.getlist("acct_iban")
+        bics = form.getlist("acct_bic")
+
+        def at(lst: list, j: int) -> str:
+            return lst[j].strip() if j < len(lst) else ""
+
+        extras = []
+        for i, raw_iban in enumerate(ibans):
+            iban = (raw_iban or "").strip()
+            if not iban:  # leere Blöcke überspringen
+                continue
+            extras.append({
+                "label": at(labels, i), "account_name": at(holders, i),
+                "bank_name": at(banks, i), "iban": iban, "bic": at(bics, i),
+            })
+        seller["accounts"] = extras
     return seller
+
+
+def seller_accounts(seller: dict) -> list:
+    """Alle Zahlungskonten in Anzeige-Reihenfolge: Hauptkonto (flache Felder) zuerst,
+    danach die weiteren aus seller['accounts']. Konten ohne IBAN werden ausgelassen."""
+    out = []
+    if (seller.get("iban") or "").strip():
+        out.append({
+            "label": (seller.get("bank_name") or "").strip() or "Hauptkonto",
+            "account_name": seller.get("account_name", ""),
+            "bank_name": seller.get("bank_name", ""),
+            "iban": seller.get("iban", ""), "bic": seller.get("bic", ""),
+        })
+    for a in (seller.get("accounts") or []):
+        if (a.get("iban") or "").strip():
+            out.append({
+                "label": (a.get("label") or "").strip()
+                or (a.get("bank_name") or "").strip() or a.get("iban", ""),
+                "account_name": a.get("account_name", ""),
+                "bank_name": a.get("bank_name", ""),
+                "iban": a.get("iban", ""), "bic": a.get("bic", ""),
+            })
+    return out
+
+
+def select_account(seller: dict, idx) -> dict | None:
+    """Konto nach Index (aus dem Formular) wählen; 0 = Hauptkonto. Fällt bei
+    ungültigem Index auf das erste Konto zurück; None, wenn keins hinterlegt ist."""
+    accts = seller_accounts(seller)
+    if not accts:
+        return None
+    try:
+        i = int(idx)
+    except (TypeError, ValueError):
+        i = 0
+    if i < 0 or i >= len(accts):
+        i = 0
+    return accts[i]
 
 
 def payment_terms_text(days: int, lang: str) -> str:
@@ -664,11 +725,13 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
     unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
     unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
     body_class = "mini" if mode == "mini" else ("page" if mode else "")
+    bank = select_account(seller, inv.get("bank_account"))
     html = render_template(
         "invoice_pdf.html",
         ti=translate(inv_lang),
         body_class=body_class,
         seller=seller,
+        bank=bank,
         buyer=buyer,
         buyer_address_lines=format_buyer_address(buyer, inv_lang),
         inv=inv,
@@ -731,9 +794,13 @@ def _assemble(form):
         "discount_reason": form.get("discount_reason", "").strip() or None,
         "prepaid": _num_str(form.get("prepaid", "0")),
         "prepaid_ref": form.get("prepaid_ref", "").strip() or None,
+        "bank_account": form.get("bank_account", "0"),  # gewähltes Konto (0 = Hauptkonto)
     }
     buyer = buyer_from_form(form)
-    data = {"seller": seller, "buyer": buyer, "invoice": inv, "items": items}
+    data = {
+        "seller": seller, "buyer": buyer, "invoice": inv, "items": items,
+        "bank": select_account(seller, inv["bank_account"]),  # gewähltes Zahlungskonto
+    }
 
     html, (line_total, discount, tax_basis, tax_total, grand_total, treatment) = \
         render_invoice_preview(seller, buyer, inv, items, mode=form.get("_full") or "")
@@ -820,6 +887,7 @@ def index():
         draft=draft,
         used_numbers=used_invoice_numbers(),
         ref_invoices=archived_invoices(),
+        accounts=seller_accounts(seller),
         first_run=first_run,
         suggested_data_dir=str(Path.home() / "Documents" / "eRechnung"),
         can_browse=(sys.platform == "darwin"),

@@ -456,15 +456,19 @@ def build_xml(data) -> bytes:
 
     doc.trade.settlement.currency_code = currency
 
-    # Zahlungsweg (SEPA-Überweisung)
-    if seller.get("iban"):
+    # Zahlungsweg (SEPA-Überweisung) – gewähltes Konto (data["bank"]), sonst Hauptkonto.
+    acct = data.get("bank") or {
+        "iban": seller.get("iban", ""), "bic": seller.get("bic", ""),
+        "account_name": seller.get("account_name", ""),
+    }
+    if acct.get("iban"):
         pm = PaymentMeans()
         pm.type_code = "58"  # SEPA credit transfer
-        pm.payee_account.iban = seller["iban"]
-        if seller.get("account_name"):
-            pm.payee_account.account_name = seller["account_name"]
-        if seller.get("bic"):
-            pm.payee_institution.bic = seller["bic"]
+        pm.payee_account.iban = acct["iban"]
+        if acct.get("account_name"):
+            pm.payee_account.account_name = acct["account_name"]
+        if acct.get("bic"):
+            pm.payee_institution.bic = acct["bic"]
         doc.trade.settlement.payment_means.add(pm)
 
     # Zahlungsbedingungen / Fälligkeit

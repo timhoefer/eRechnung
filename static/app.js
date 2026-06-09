@@ -1389,6 +1389,23 @@ document.addEventListener("click", (e) => {
       .finally(() => { e.target.disabled = false; });
     return;
   }
+  // Weiteres Bankkonto hinzufügen (Vorlage klonen) bzw. entfernen.
+  if (e.target.id === "add-account") {
+    const tpl = document.getElementById("acct-template");
+    const wrap = document.getElementById("extra-accounts");
+    if (tpl && wrap) {
+      wrap.appendChild(tpl.content.cloneNode(true));
+      const first = wrap.lastElementChild && wrap.lastElementChild.querySelector("input");
+      if (first) first.focus();
+    }
+    return;
+  }
+  const accRemove = e.target.closest(".acct-remove");
+  if (accRemove) {
+    const block = accRemove.closest(".extra-account");
+    if (block) { block.remove(); scheduleSellerSave(); } // Entfernen sofort speichern
+    return;
+  }
   const unitTrigger = e.target.closest(".unitsel-btn, .unitsel .combo-caret");
   if (unitTrigger) {
     const sel = unitTrigger.closest(".unitsel").querySelector("select.unit");

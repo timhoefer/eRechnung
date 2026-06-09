@@ -194,13 +194,14 @@
   </div>
   {% endif %}
 
-  {% if seller.iban %}
+  {% set acct = bank if bank else {'iban': seller.iban, 'bic': seller.bic, 'bank_name': seller.bank_name, 'account_name': seller.account_name} %}
+  {% if acct.iban %}
   <div class="pay">
     <table>
-      <tr><td class="k">{{ ti.pdf_payable_to }}</td><td class="v">{{ seller.account_name or seller.name }}</td></tr>
-      {% if seller.bank_name %}<tr><td class="k">{{ ti.bank_name.split(' ')[0] }}</td><td class="v">{{ seller.bank_name }}</td></tr>{% endif %}
-      <tr><td class="k">{{ ti.iban }}</td><td class="v">{{ seller.iban }}</td></tr>
-      {% if seller.bic %}<tr><td class="k">{{ ti.bic }}</td><td class="v">{{ seller.bic }}</td></tr>{% endif %}
+      <tr><td class="k">{{ ti.pdf_payable_to }}</td><td class="v">{{ acct.account_name or seller.name }}</td></tr>
+      {% if acct.bank_name %}<tr><td class="k">{{ ti.bank_name.split(' ')[0] }}</td><td class="v">{{ acct.bank_name }}</td></tr>{% endif %}
+      <tr><td class="k">{{ ti.iban }}</td><td class="v">{{ acct.iban }}</td></tr>
+      {% if acct.bic %}<tr><td class="k">{{ ti.bic }}</td><td class="v">{{ acct.bic }}</td></tr>{% endif %}
     </table>
   </div>
   {% endif %}

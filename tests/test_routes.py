@@ -212,6 +212,64 @@ def test_no_folder_modal_when_seller_exists(client):
     assert "onboard-modal" not in body
 
 
+# --- Mehrere Bankkonten (#26) ---------------------------------------------------
+
+def test_seller_accounts_combines_primary_and_extras():
+    flat = {"name": "S", "iban": "DE11", "bic": "B1", "bank_name": "Bank A",
+            "account_name": "Inh"}
+    assert len(appmod.seller_accounts(flat)) == 1
+    combo = dict(flat, accounts=[{"label": "USD", "iban": "DE22"}, {"iban": ""}])
+    accts = appmod.seller_accounts(combo)
+    assert [a["label"] for a in accts] == ["Bank A", "USD"]  # leeres Konto übersprungen
+    assert appmod.seller_accounts({"name": "X"}) == []  # ohne IBAN keine Konten
+    # select_account: Index-Clamp + Fallback
+    assert appmod.select_account(combo, "1")["iban"] == "DE22"
+    assert appmod.select_account(combo, "99")["iban"] == "DE11"
+    assert appmod.select_account(combo, None)["iban"] == "DE11"
+
+
+def test_apply_seller_form_parses_extra_accounts():
+    from werkzeug.datastructures import MultiDict
+    md = MultiDict()
+    md.add("has_accounts_section", "1")
+    for k, v in [("acct_label", "USD"), ("acct_iban", "DE22"), ("acct_bic", "B2"),
+                 ("acct_bank_name", "Wise"), ("acct_account_name", "Inh")]:
+        md.add(k, v)
+    for k in ("acct_label", "acct_iban", "acct_bic", "acct_bank_name", "acct_account_name"):
+        md.add(k, "")  # leerer Block -> wird verworfen
+    seller = appmod.apply_seller_form({"name": "S", "iban": "DE11"}, md)
+    assert seller["accounts"] == [{"label": "USD", "account_name": "Inh",
+                                   "bank_name": "Wise", "iban": "DE22", "bic": "B2"}]
+
+
+def test_invoice_form_account_selector_visibility(client):
+    out = appmod.SELLER_FILE
+    base = json.loads(out.read_text(encoding="utf-8"))
+    # 1 Konto -> kein Auswähler
+    assert 'name="bank_account"' not in client.get("/").get_data(as_text=True)
+    # 2 Konten -> Auswähler erscheint
+    base["accounts"] = [{"label": "USD", "iban": "DE22", "bic": "B2",
+                         "bank_name": "Wise", "account_name": "Inh"}]
+    out.write_text(json.dumps(base), encoding="utf-8")
+    assert 'name="bank_account"' in client.get("/").get_data(as_text=True)
+
+
+def test_preview_uses_selected_account(client):
+    out = appmod.SELLER_FILE
+    base = json.loads(out.read_text(encoding="utf-8"))
+    base["accounts"] = [{"label": "USD", "iban": "DE99USD0", "bic": "B2",
+                         "bank_name": "Wise", "account_name": "Inh"}]
+    out.write_text(json.dumps(base), encoding="utf-8")
+    form = {"description": "L", "quantity": "1", "unit_price": "100",
+            "tax_treatment": "de_19"}
+    # Gewähltes Zweitkonto erscheint im Vorschau-HTML ...
+    body1 = client.post("/preview-html", data=dict(form, bank_account="1")).get_data(as_text=True)
+    assert "DE99USD0" in body1
+    # ... Hauptkonto (Index 0) zeigt die flache IBAN, nicht das Zweitkonto.
+    body0 = client.post("/preview-html", data=dict(form, bank_account="0")).get_data(as_text=True)
+    assert base["iban"] in body0 and "DE99USD0" not in body0
+
+
 def test_data_dir_set_onboarding_redirects_to_form(client, monkeypatch):
     # set_data_dir stubben -> keine echten Dateioperationen; nur Redirect-Ziel prüfen.
     monkeypatch.setattr(appmod, "set_data_dir", lambda raw: (True, "data_dir_saved"))
