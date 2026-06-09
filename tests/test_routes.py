@@ -101,6 +101,24 @@ def test_generate_creates_pdf_and_sidecar(client):
 
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
+def test_xrechnung_writes_standalone_xml(client):
+    # XRechnung-Modus: einreichbare .xml + PDF-Sichtexemplar; .xml herunterladbar.
+    r = client.post("/generate", data=dict(
+        _FORM, profile="xrechnung",
+        buyer_city="Köln", buyer_postcode="50667", buyer_address_line="Domkloster 4",
+        buyer_email="k@muster.de", buyer_reference="04011000-12345-67",
+    ))
+    assert r.status_code == 200
+    out = appmod.OUTPUT_DIR
+    assert (out / "Rechnung_2026-001.pdf").exists()  # Sichtexemplar
+    xml = out / "Rechnung_2026-001.xml"
+    assert xml.exists()  # einreichbare XRechnung
+    assert b"xrechnung_3.0" in xml.read_bytes()  # korrekte CIUS-Spec-ID
+    d = client.get("/download/Rechnung_2026-001.xml")
+    assert d.status_code == 200 and "xml" in d.headers["Content-Type"]
+
+
+@pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
 def test_generate_duplicate_number_keeps_both(client):
     client.post("/generate", data=dict(_FORM))
     r2 = client.post("/generate", data=dict(_FORM))  # gleiche Nummer erneut

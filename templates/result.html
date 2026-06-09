@@ -49,11 +49,19 @@
   </table>
 </div>
 
+{% if is_xrechnung and xml_filename %}
+<p class="hint" style="margin:0 0 10px">{{ t.xrechnung_result_hint }}</p>
+{% endif %}
 <div class="actions">
   <a href="{{ url_for('index') }}" class="link">{{ t.new_invoice }}</a>
   <span class="spacer"></span>
   <a href="{{ url_for('view', filename=filename) }}" target="_blank"><button type="button" class="secondary">{{ t.pdf_view }}</button></a>
+  {% if is_xrechnung and xml_filename %}
+  <a href="{{ url_for('download', filename=filename) }}"><button type="button" class="secondary">{{ t.pdf_download }}</button></a>
+  <a href="{{ url_for('download', filename=xml_filename) }}"><button type="button">{{ t.xml_download }}</button></a>
+  {% else %}
   <a href="{{ url_for('download', filename=filename) }}"><button type="button">{{ t.pdf_download }}</button></a>
+  {% endif %}
 </div>
 </body>
 </html>

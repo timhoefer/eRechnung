@@ -979,8 +979,11 @@ def generate():
     upsert_customer(data["buyer"])
 
     inv_number = data["invoice"]["number"]
+    is_xr = data["invoice"]["profile"] == "xrechnung"
     xml = build_xml(data)
-    pdf = build_pdf(html, xml)
+    # XRechnung: die einreichbare .xml ist der Hauptbeleg; das PDF ist nur ein
+    # visuelles Sichtexemplar (kein eingebettetes XML). ZUGFeRD: ein hybrides PDF.
+    pdf = render_html_pdf(html) if is_xr else build_pdf(html, xml)
 
     # Archivieren – eine vorhandene Datei NIE überschreiben. Wird dieselbe
     # Rechnungsnummer erneut verwendet (z. B. versehentlich), würde sonst eine
@@ -993,7 +996,13 @@ def generate():
         name = f"{stem} ({n})"
         n += 1
     filename = f"{name}.pdf"
+    file_stem = Path(filename).stem
     (OUTPUT_DIR / filename).write_bytes(pdf)
+    # XRechnung: standalone-XML neben das PDF legen (der eigentliche Beleg).
+    xml_filename = None
+    if is_xr:
+        xml_filename = f"{file_stem}.xml"
+        (OUTPUT_DIR / xml_filename).write_bytes(xml)
 
     # Sidecar mit den Formulardaten – ermöglicht „als Vorlage öffnen" und die
     # Archiv-Vorschau. seller wird mitgespeichert, damit die Vorschau dem Stand
@@ -1002,15 +1011,20 @@ def generate():
         "seller": seller, "buyer": data["buyer"],
         "invoice": data["invoice"], "items": data["items"],
     }
-    (OUTPUT_DIR / f"{Path(filename).stem}.json").write_text(
+    (OUTPUT_DIR / f"{file_stem}.json").write_text(
         json.dumps(sidecar, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    # Validierung des eingebetteten XML (Round-Trip aus dem fertigen PDF):
-    # XSD-Struktur + EN16931-Geschäftsregeln (Schematron).
-    embedded = extract_xml_from_pdf(pdf)
-    ok, messages = validate_xml_bytes(embedded) if embedded else (False, ["Kein XML im PDF gefunden."])
-    sch = validate_schematron(embedded) if embedded else None
+    # Validierung: XSD-Struktur + EN16931/BR-DE-Geschäftsregeln (Schematron).
+    # XRechnung direkt aus der standalone-XML, ZUGFeRD aus dem eingebetteten XML.
+    sch: dict | None
+    if is_xr:
+        ok, messages = validate_xml_bytes(xml)
+        sch = validate_schematron(xml)
+    else:
+        embedded = extract_xml_from_pdf(pdf)
+        ok, messages = validate_xml_bytes(embedded) if embedded else (False, ["Kein XML im PDF gefunden."])
+        sch = validate_schematron(embedded) if embedded else None
     valid = ok and (not sch or not sch["available"] or sch["ok"])
 
     # Letzte Rechnungsnummer merken
@@ -1020,6 +1034,8 @@ def generate():
     return render_template(
         "result.html",
         filename=filename,
+        xml_filename=xml_filename,
+        is_xrechnung=is_xr,
         inv=data["invoice"],
         buyer=data["buyer"],
         totals=totals,
@@ -1063,9 +1079,10 @@ def archive_delete():
     # Pfad-Traversal verhindern: nur einfache Dateinamen direkt im Ausgabeordner.
     if filename and path.name == filename and path.suffix == ".pdf" and path.exists():
         path.unlink()
-        sidecar = OUTPUT_DIR / f"{path.stem}.json"
-        if sidecar.exists():
-            sidecar.unlink()
+        for sib in (f"{path.stem}.json", f"{path.stem}.xml"):  # Sidecar + XRechnung-XML
+            p = OUTPUT_DIR / sib
+            if p.exists():
+                p.unlink()
         flash(translate(get_ui_lang(request))["invoice_deleted"], "ok")
     return redirect(url_for("validate"))
 
@@ -1075,9 +1092,10 @@ def _serve(filename, inline):
     if path.name != filename or not path.exists():
         abort(404)
     disp = "inline" if inline else "attachment"
+    mime = "application/xml" if path.suffix.lower() == ".xml" else "application/pdf"
     return Response(
         path.read_bytes(),
-        mimetype="application/pdf",
+        mimetype=mime,
         headers={"Content-Disposition": f'{disp}; filename="{filename}"'},
     )
 
@@ -1138,6 +1156,9 @@ def _settings_context() -> dict:
                     "%Y-%m-%d %H:%M"
                 ),
                 "has_draft": (OUTPUT_DIR / f"{p.stem}.json").exists(),
+                "xml_filename": (
+                    f"{p.stem}.xml" if (OUTPUT_DIR / f"{p.stem}.xml").exists() else None
+                ),
             }
         )
     return {
