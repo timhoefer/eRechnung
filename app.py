@@ -36,6 +36,7 @@ from zugferd import (
     fmt_money,
     loc,
     q,
+    render_html_pdf,
     validate_schematron,
     validate_xml_bytes,
 )
@@ -569,6 +570,17 @@ def suggest_invoice_number(seller: dict) -> str:
     return f"{year}-001"
 
 
+def _num_str(s) -> str:
+    """Zahleneingabe robust zu einem Punkt-Dezimal-String normalisieren – muss mit
+    num() in static/calc.js übereinstimmen, sonst weichen Vorschau und PDF ab.
+    Komma = Dezimaltrenner -> Tausender-Punkte entfernen, Komma zu Punkt; ohne
+    Komma bleibt der Punkt der Dezimaltrenner."""
+    s = str(s or "").strip()
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+    return s or "0"
+
+
 def parse_items(form) -> list[dict]:
     items = []
     starts = form.getlist("item_start")
@@ -590,12 +602,12 @@ def parse_items(form) -> list[dict]:
         items.append(
             {
                 "description": desc.strip(),
-                "quantity": (qty or "1").replace(",", "."),
+                "quantity": _num_str(qty or "1"),
                 "unit": unit or "C62",
-                "unit_price": (price or "0").replace(",", "."),
+                "unit_price": _num_str(price or "0"),
                 "item_start": (starts[i] if i < len(starts) else "") or None,
                 "item_end": (ends[i] if i < len(ends) else "") or None,
-                "item_discount": ((discounts[i] if i < len(discounts) else "0") or "0").replace(",", "."),
+                "item_discount": _num_str((discounts[i] if i < len(discounts) else "0") or "0"),
                 "item_discount_type": (discount_types[i] if i < len(discount_types) else "pct") or "pct",
                 "item_discount_reason": (discount_reasons[i].strip() if i < len(discount_reasons) else "") or None,
             }
@@ -713,10 +725,10 @@ def _assemble(form):
         "doc_type": doc_type,
         "ref_number": form.get("ref_number", "").strip() or None,
         "ref_date": form.get("ref_date") or None,
-        "discount": (form.get("discount", "0") or "0").replace(",", ".").strip() or "0",
+        "discount": _num_str(form.get("discount", "0")),
         "discount_type": "abs" if form.get("discount_type") == "abs" else "pct",
         "discount_reason": form.get("discount_reason", "").strip() or None,
-        "prepaid": (form.get("prepaid", "0") or "0").replace(",", ".").strip() or "0",
+        "prepaid": _num_str(form.get("prepaid", "0")),
         "prepaid_ref": form.get("prepaid_ref", "").strip() or None,
     }
     buyer = buyer_from_form(form)
@@ -924,10 +936,7 @@ def preview_pdf():
     ohne Positionen das Template (wie die Mini-Vorschau)."""
     try:
         _, html, _ = _assemble(request.form)
-        import weasyprint
-
-        base_url = str(Path(__file__).resolve().parent)
-        pdf = weasyprint.HTML(string=html, base_url=base_url).write_pdf()
+        pdf = render_html_pdf(html)  # gemeinsamer Renderpfad mit build_pdf
     except Exception:
         # Unvollständige/fehlerhafte Eingaben (z. B. beim Tippen) -> kein 500,
         # sondern eine schlichte Meldung; der Client zeigt ohnehin „keine Vorschau".

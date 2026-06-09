@@ -60,7 +60,7 @@ test("totals: Anzahlung gedeckelt + Zahlbetrag", () => {
   assert.equal(t2.due, 0);
 });
 
-test("totals: Positions- UND Gesamtrabatt kombiniert", () => {
+test("totals: Positions- UND Gesamtrabatt kombiniert (mit Rundung wie Server)", () => {
   // 2x100 -10% = 180; +1x50 = 230 Netto; -5% gesamt = 218,50; 19% USt
   const t = calc.totals({
     items: [
@@ -74,7 +74,30 @@ test("totals: Positions- UND Gesamtrabatt kombiniert", () => {
   assert.equal(t.net, 230);
   assert.equal(t.discount, 11.5);
   assert.equal(t.basis, 218.5);
-  assert.ok(Math.abs(t.tax - 41.515) < 1e-9);
+  assert.equal(t.tax, 41.52); // q(41.515) HALF_UP -> 41,52 (wie compute_totals)
+  assert.equal(t.grand, 260.02);
+});
+
+test("q: kaufmännische Rundung HALF_UP inkl. Float-Fallen", () => {
+  assert.equal(calc.q(1.005), 1.01);
+  assert.equal(calc.q(2.675), 2.68);
+  assert.equal(calc.q(0.375), 0.38);
+  assert.equal(calc.q(100), 100);
+});
+
+test("num: deutsche Tausendertrennung korrekt parsen", () => {
+  assert.equal(calc.num("1.234,56"), 1234.56);
+  assert.equal(calc.num("2.500,00"), 2500);
+  assert.equal(calc.num("1234,56"), 1234.56);
+  assert.equal(calc.num("1234.56"), 1234.56);
+});
+
+test("totals: Sub-Cent-Werte werden pro Zeile gerundet (round-then-sum)", () => {
+  // 3 Zeilen 1x0,125: Server rundet jede Zeile q(0,125)=0,13 -> Netto 0,39 (nicht 0,375)
+  const t = calc.totals({ items: [
+    { qty: 1, price: 0.125 }, { qty: 1, price: 0.125 }, { qty: 1, price: 0.125 },
+  ], rate: 0 });
+  assert.equal(t.net, 0.39);
 });
 
 test("totals: negative Eingaben werden auf 0 geklemmt", () => {

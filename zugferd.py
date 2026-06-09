@@ -497,18 +497,26 @@ def build_xml(data) -> bytes:
     return doc.serialize(schema="FACTUR-X_EN16931")
 
 
-def build_pdf(html: str, xml: bytes) -> bytes:
-    """HTML zu PDF/A-3 rendern und das XML als ZUGFeRD-Anhang einbetten."""
+def render_html_pdf(html: str, *, pdf_a: bool = False) -> bytes:
+    """HTML zu PDF rendern (WeasyPrint) – eine Stelle für beide Renderpfade, damit
+    Seitenumbrüche/Fonts/base_url garantiert identisch sind.
+    base_url = Projektordner, damit relative Schrift-/Asset-URLs (static/fonts/…)
+    laden. pdf_a=True -> PDF/A-3b (für die ZUGFeRD-Einbettung), sonst normale PDF
+    (visuelle Vorschau)."""
     from pathlib import Path
 
     import weasyprint
+
+    base_url = str(Path(__file__).resolve().parent)
+    kwargs = {"pdf_variant": "pdf/a-3b"} if pdf_a else {}
+    return weasyprint.HTML(string=html, base_url=base_url).write_pdf(**kwargs)
+
+
+def build_pdf(html: str, xml: bytes) -> bytes:
+    """HTML zu PDF/A-3 rendern und das XML als ZUGFeRD-Anhang einbetten."""
     from drafthorse.pdf import attach_xml
 
-    # base_url = Projektordner, damit relative Schrift-URLs (static/fonts/…) laden.
-    base_url = str(Path(__file__).resolve().parent)
-    base_pdf = weasyprint.HTML(string=html, base_url=base_url).write_pdf(
-        pdf_variant="pdf/a-3b"
-    )
+    base_pdf = render_html_pdf(html, pdf_a=True)
     # level=None: drafthorse erkennt EN 16931 bzw. XRECHNUNG aus der Spec-ID im XML.
     return attach_xml(base_pdf, xml)
 
