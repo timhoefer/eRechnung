@@ -90,7 +90,7 @@
     <h3 class="form-section">{{ t.sec_contact }}</h3>
     <label><span class="label-row"><span class="lbl">{{ t.phone }}</span><span class="req-mark" hidden> *</span></span><input name="phone" value="{{ seller.phone or '' }}" placeholder="+49 …" data-xr-mark></label>
     <label><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="email" type="email" value="{{ seller.email or '' }}" data-xr-mark></label>
-    <label>{{ t.web }}<input name="web" value="{{ seller.web or '' }}" placeholder="machineandfolk.com"></label>
+    <label>{{ t.web }}<input name="web" value="{{ seller.web or '' }}" placeholder="example.com"></label>
 
     <h3 class="form-section">{{ t.sec_tax }}</h3>
     <label>{{ t.vat_id }}<input name="vat_id" value="{{ seller.vat_id or '' }}" placeholder="DE123456789"></label>
