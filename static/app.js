@@ -171,6 +171,9 @@ function applyProfile() {
   // Erzeugen-Button beschriften
   const gen = document.getElementById("generate-btn");
   if (gen && gen.dataset.xr) gen.textContent = xr ? gen.dataset.xr : gen.dataset.zug;
+  // Hinweis unter der Vorschau: XRechnung = XML + PDF (kein eingebettetes XML).
+  const note = document.querySelector(".preview-note");
+  if (note && note.dataset.xr) note.textContent = xr ? note.dataset.xr : note.dataset.zug;
 }
 
 // Format-Dropdown im Titel (gestylt wie die Combobox).
