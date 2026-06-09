@@ -160,6 +160,9 @@
         </select>
       </label>
       <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
+      <label class="bank-select" id="bank-select-wrap" hidden>{{ t.bank_account }}
+        <select name="bank_account" id="bank-account-select"></select>
+      </label>
       <label class="ref-field" hidden>{{ t.ref_number }}
         <div class="combo">
           <input name="ref_number" class="combo-input ref-name" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
@@ -327,14 +330,6 @@
       <button type="button" id="save-items" class="secondary">{{ t.save_items }}</button>
     </div>
     <p class="hint" id="items-status">{{ t.unit_hint }}</p>
-
-    {% if accounts and accounts|length >= 2 %}
-    <label class="bank-select">{{ t.bank_account }}
-      <select name="bank_account">
-        {% for a in accounts %}<option value="{{ loop.index0 }}">{{ a.label }}{% if a.iban %} · …{{ a.iban[-4:] }}{% endif %}</option>{% endfor %}
-      </select>
-    </label>
-    {% endif %}
 
     <div class="discount-extra">
       <button type="button" class="add-extras" id="add-discount">{{ t.total_discount_add }}</button>

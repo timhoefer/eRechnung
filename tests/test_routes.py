@@ -242,16 +242,12 @@ def test_apply_seller_form_parses_extra_accounts():
                                    "bank_name": "Wise", "iban": "DE22", "bic": "B2"}]
 
 
-def test_invoice_form_account_selector_visibility(client):
-    out = appmod.SELLER_FILE
-    base = json.loads(out.read_text(encoding="utf-8"))
-    # 1 Konto -> kein Auswähler
-    assert 'name="bank_account"' not in client.get("/").get_data(as_text=True)
-    # 2 Konten -> Auswähler erscheint
-    base["accounts"] = [{"label": "USD", "iban": "DE22", "bic": "B2",
-                         "bank_name": "Wise", "account_name": "Inh"}]
-    out.write_text(json.dumps(base), encoding="utf-8")
-    assert 'name="bank_account"' in client.get("/").get_data(as_text=True)
+def test_invoice_form_has_account_selector_element(client):
+    # Auswähler ist immer im DOM (JS befüllt ihn aus den Konten + blendet ihn ab 2
+    # Konten ein); initial ausgeblendet. Die weiteren Konten stehen in den Stammdaten.
+    body = client.get("/").get_data(as_text=True)
+    assert 'id="bank-select-wrap"' in body and 'name="bank_account"' in body
+    assert 'id="add-account"' in body and 'id="acct-template"' in body
 
 
 def test_preview_uses_selected_account(client):

@@ -408,7 +408,7 @@ button.secondary:hover { background: var(--surface-2-h); }
 .extra-account { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
 .extra-account input { flex: 1 1 130px; min-width: 0; }
 .extra-account .acct-remove { flex: 0 0 auto; font-size: 18px; line-height: 1; padding: 4px 8px; }
-.bank-select { display: block; max-width: 360px; margin: 4px 0 0; }
+.bank-select[hidden] { display: none; }
 .actions { display: flex; align-items: center; gap: 12px; margin: 20px auto; }
 .result-note { max-width: 1080px; margin: 0 auto 10px; padding: 0 23px; box-sizing: border-box; }
 .actions .spacer { flex: 1; }

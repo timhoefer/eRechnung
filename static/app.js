@@ -1183,6 +1183,9 @@ document.addEventListener("input", (e) => {
   if (e.target.closest("#settings-form")) {
     scheduleSellerSave();
     if (e.target.name === "vat_id" || e.target.name === "tax_number") updateTaxnrHint();
+    // Bank-/Kontofelder ändern -> Auswähler live nachziehen.
+    if (e.target.name === "iban" || e.target.name === "bank_name"
+        || (e.target.name || "").startsWith("acct_")) syncBankSelector();
     validateMasterData();
     return;
   }
@@ -1403,7 +1406,7 @@ document.addEventListener("click", (e) => {
   const accRemove = e.target.closest(".acct-remove");
   if (accRemove) {
     const block = accRemove.closest(".extra-account");
-    if (block) { block.remove(); scheduleSellerSave(); } // Entfernen sofort speichern
+    if (block) { block.remove(); scheduleSellerSave(); syncBankSelector(); } // entfernen + speichern
     return;
   }
   const unitTrigger = e.target.closest(".unitsel-btn, .unitsel .combo-caret");
@@ -1521,6 +1524,7 @@ let restoredFromLang = false;
 })();
 
 if (!restoredFromLang) applyDraft();
+syncBankSelector(); // Konto-Auswähler initial aufbauen (falls ≥2 Konten hinterlegt)
 
 const previewFrameEl = document.getElementById("preview-frame");
 if (previewFrameEl) previewFrameEl.addEventListener("load", function () { scaleMiniPreview(); checkMiniPages(); });
@@ -1586,6 +1590,46 @@ function announce(msg) {
 
 // Kurz sichtbare Fehlermeldung (macht still scheiternde AJAX-Aktionen sichtbar).
 let _toastTimer;
+// Bankkonten aus dem Stammdaten-Formular sammeln – Hauptkonto (flache Felder) zuerst,
+// dann die weiteren Blöcke. Reihenfolge = Serverseite (seller_accounts) -> Index passt.
+function collectAccounts() {
+  const accts = [];
+  const sf = document.getElementById("settings-form");
+  if (!sf) return accts;
+  const val = (el) => (el ? el.value : "").trim();
+  const pIban = val(sf.querySelector('[name="iban"]'));
+  if (pIban) {
+    accts.push({ label: val(sf.querySelector('[name="bank_name"]')) || "…" + pIban.slice(-4), iban: pIban });
+  }
+  sf.querySelectorAll(".extra-account").forEach((b) => {
+    const iban = val(b.querySelector('[name="acct_iban"]'));
+    if (!iban) return;
+    const label = val(b.querySelector('[name="acct_label"]')) || val(b.querySelector('[name="acct_bank_name"]'));
+    accts.push({ label: label || "…" + iban.slice(-4), iban: iban });
+  });
+  return accts;
+}
+
+// Konto-Auswähler (neben der Währung) live aus den eingetragenen Konten aufbauen.
+// Erscheint nur ab 2 Konten; bestehende Auswahl bleibt nach Möglichkeit erhalten.
+function syncBankSelector() {
+  const wrap = document.getElementById("bank-select-wrap");
+  const sel = document.getElementById("bank-account-select");
+  if (!wrap || !sel) return;
+  const accts = collectAccounts();
+  if (accts.length < 2) { wrap.hidden = true; sel.innerHTML = ""; return; }
+  const prev = sel.value;
+  sel.innerHTML = "";
+  accts.forEach((a, i) => {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = a.label;
+    sel.appendChild(o);
+  });
+  if (prev && Number(prev) < accts.length) sel.value = prev;
+  wrap.hidden = false;
+}
+
 // Toast-Element (einmalig) anlegen oder wiederverwenden – Basis für beide Toasts.
 function makeToast(id, className, role) {
   let el = document.getElementById(id);

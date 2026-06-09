@@ -887,7 +887,6 @@ def index():
         draft=draft,
         used_numbers=used_invoice_numbers(),
         ref_invoices=archived_invoices(),
-        accounts=seller_accounts(seller),
         first_run=first_run,
         suggested_data_dir=str(Path.home() / "Documents" / "eRechnung"),
         can_browse=(sys.platform == "darwin"),
