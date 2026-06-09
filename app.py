@@ -1349,9 +1349,15 @@ def data_dir_browse():
 
     if sys.platform != "darwin":
         return {"ok": False, "error": "unsupported"}
+    # Den Dialog über System Events aktiviert öffnen, sonst erscheint er u. U. HINTER
+    # dem App-Fenster und wirkt dadurch verzögert.
     script = (
-        'POSIX path of (choose folder with prompt "Datenordner wählen" '
-        "default location (path to home folder))"
+        'tell application "System Events"\n'
+        "  activate\n"
+        '  set f to choose folder with prompt "Datenordner wählen" '
+        "default location (path to home folder)\n"
+        "end tell\n"
+        "POSIX path of f"
     )
     try:
         r = subprocess.run(
