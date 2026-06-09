@@ -1047,16 +1047,27 @@ function updatePreview(force) {
   // (PDF-Rendern ist zu langsam für jede Eingabe) -> nur beim Öffnen, s. openPreviewDrawer.
 }
 // Mehrseitig? Wenn der Inhalt das eine Mini-A4-Blatt überläuft, kleinen Hinweis zeigen.
+// Heuristik (HTML-Überlauf ≈ PDF-Pagination); für die exakte Seitenzahl gibt es nur
+// das echte PDF im ausgeklappten Drawer.
 function checkMiniPages() {
   const frame = document.getElementById("preview-frame");
   const hint = document.getElementById("preview-pages-hint");
   if (!frame || !hint) return;
+  const measure = () => {
+    try {
+      const b = frame.contentDocument && frame.contentDocument.body;
+      if (!b) return;
+      const multi = b.scrollHeight > b.clientHeight + 4;
+      hint.textContent = multi ? " " + (window.MSG_PREVIEW_MULTIPAGE || "") : "";
+      hint.hidden = !multi;
+    } catch (e) {}
+  };
+  measure();
+  // #R6: nach dem Laden der Schriften IM iframe erneut messen – vorher kann der Text
+  // noch umfließen und die Überlauf-Messung verfälschen.
   try {
-    const b = frame.contentDocument && frame.contentDocument.body;
-    if (!b) return;
-    const multi = b.scrollHeight > b.clientHeight + 4;
-    hint.textContent = multi ? " " + (window.MSG_PREVIEW_MULTIPAGE || "") : "";
-    hint.hidden = !multi;
+    const doc = frame.contentDocument;
+    if (doc && doc.fonts && doc.fonts.ready) doc.fonts.ready.then(measure).catch(() => {});
   } catch (e) {}
 }
 // Ausgeklappte Ansicht: echtes (visuelles) PDF mit korrekten Seitenumbrüchen.
