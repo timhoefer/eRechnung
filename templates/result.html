@@ -50,7 +50,7 @@
 </div>
 
 {% if is_xrechnung and xml_filename %}
-<p class="hint" style="margin:0 0 10px">{{ t.xrechnung_result_hint }}</p>
+<p class="hint result-note">{{ t.xrechnung_result_hint }}</p>
 {% endif %}
 <div class="actions">
   <a href="{{ url_for('index') }}" class="link">{{ t.new_invoice }}</a>
