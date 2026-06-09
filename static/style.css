@@ -222,9 +222,9 @@ select {
 .qtyunit .qty::-webkit-inner-spin-button,
 .qtyunit .qty::-webkit-outer-spin-button { margin-left: 10px; }
 .qtyunit .unitsel { flex: 1; min-width: 0; }
-.qtyunit .unitsel-btn { border: none; border-radius: 0; background: transparent; text-align: right; padding: 7px 20px 7px 6px; }
+.qtyunit .unitsel-btn { border: none; border-radius: 0; background: transparent; text-align: right; padding: 7px 26px 7px 6px; }
 .qtyunit .unitsel-btn:focus { outline: none; }
-.qtyunit .combo-caret { width: 18px; }
+/* Chevron-Abstand zum rechten Rand identisch zur Beschreibung-Combobox (Default 28px). */
 /* Eine Position = Box + Löschen-Button rechts daneben (außerhalb der Box). */
 .position-row { margin-bottom: 12px; }
 /* Umrandete Box mit Feldern UND Zusatzfeldern; rechts ist Platz (margin-right)
