@@ -368,6 +368,7 @@ def inject_i18n():
         "languages": LANGUAGES,
         "loc": loc,
         "countries": countries,
+        "is_desktop": bool(app.config.get("DESKTOP")),
     }
 
 
@@ -1071,6 +1072,24 @@ def download_zip(filename):
         mimetype="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{path.stem}.zip"'},
     )
+
+
+@app.route("/reveal/<path:filename>", methods=["POST"])
+def reveal(filename):
+    """Datei im Finder zeigen (macOS). In der Desktop-App ersetzt das den Download –
+    die Belege liegen ohnehin schon im output/-Ordner."""
+    import subprocess
+
+    path = OUTPUT_DIR / filename
+    if path.name != filename or not path.exists():
+        abort(404)
+    if sys.platform != "darwin":
+        return {"ok": False, "error": "unsupported"}
+    try:
+        subprocess.run(["open", "-R", str(path)], timeout=10)
+    except Exception:
+        return {"ok": False, "error": "failed"}
+    return {"ok": True}
 
 
 @app.route("/view/<path:filename>")

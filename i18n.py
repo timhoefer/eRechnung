@@ -157,6 +157,7 @@ LANG = {
         "generate_xr": "XRechnung erzeugen",
         "xml_download": "XRechnung-XML herunterladen",
         "pdf_xml_download": "PDF + XML herunterladen",
+        "reveal_finder": "Im Finder zeigen",
         "xml_view": "XML ansehen",
         "xrechnung_result_hint": "Die XML ist der einreichbare Beleg (Leitweg-ID/Portal); das PDF ist ein Sichtexemplar.",
         # Ergebnis
@@ -407,6 +408,7 @@ LANG = {
         "generate_xr": "Generate XRechnung",
         "xml_download": "Download XRechnung XML",
         "pdf_xml_download": "Download PDF + XML",
+        "reveal_finder": "Show in Finder",
         "xml_view": "View XML",
         "xrechnung_result_hint": "The XML is the submittable invoice (Leitweg-ID/portal); the PDF is a visual copy.",
         "result_title": "Invoice created",

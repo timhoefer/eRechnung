@@ -73,6 +73,10 @@ def main() -> None:
 
     import webview
 
+    # Läuft im nativen Fenster (kein Browser): Downloads via WKWebView greifen
+    # nicht, daher zeigen die Templates stattdessen „Im Finder zeigen".
+    app.config["DESKTOP"] = True
+
     port = _free_port()
     server = make_server("127.0.0.1", port, app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

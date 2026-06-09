@@ -56,11 +56,24 @@
   <a href="{{ url_for('index') }}" class="link">{{ t.new_invoice }}</a>
   <span class="spacer"></span>
   <a href="{{ url_for('view', filename=filename) }}" target="_blank"><button type="button" class="secondary">{{ t.pdf_view }}</button></a>
-  {% if is_xrechnung and xml_filename %}
+  {% if is_desktop %}
+  {# Desktop-App: WKWebView lädt nichts herunter – die Belege liegen schon im
+     output/-Ordner, also im Finder zeigen (XRechnung: XML markiert, PDF daneben). #}
+  <button type="button" class="reveal-btn" data-file="{{ xml_filename if (is_xrechnung and xml_filename) else filename }}">{{ t.reveal_finder }}</button>
+  {% elif is_xrechnung and xml_filename %}
   <a href="{{ url_for('download_zip', filename=filename) }}"><button type="button">{{ t.pdf_xml_download }}</button></a>
   {% else %}
   <a href="{{ url_for('download', filename=filename) }}"><button type="button">{{ t.pdf_download }}</button></a>
   {% endif %}
 </div>
+{% if is_desktop %}
+<script>
+  document.querySelectorAll(".reveal-btn").forEach(function (b) {
+    b.addEventListener("click", function () {
+      fetch("/reveal/" + encodeURIComponent(b.dataset.file), { method: "POST" });
+    });
+  });
+</script>
+{% endif %}
 </body>
 </html>
