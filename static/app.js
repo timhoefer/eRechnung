@@ -995,6 +995,11 @@ function saveCustomerItems() {
 
 let previewTimer;
 let settingsOpen = false; // true, solange das Einstellungen-Panel offen ist
+// Vorschau-Anfragen: laufende abbrechen (neueste gewinnt, Server rendert Veraltetes
+// nicht zu Ende) + identische Eingaben nicht erneut rendern.
+let _previewAbort = null;
+let _previewLastKey = null;
+let _drawerAbort = null;
 const A4_W = 794; // 210 mm bei 96 dpi – logische Breite der Mini-Vorschau
 const A4_H = 1123; // 297 mm bei 96 dpi – A4-Höhe (eine Seite)
 function scaleMiniPreview() {
@@ -1013,19 +1018,31 @@ function scaleMiniPreview() {
   frame.style.transform = "scale(" + s + ")";
   inner.style.height = A4_H * s + "px";
 }
-function updatePreview() {
+// force=true erzwingt ein Rendern trotz unveränderter Eingabe (z. B. nachdem sich
+// die Stammdaten geändert haben – die stecken nicht im invoice-form-FormData).
+function updatePreview(force) {
   if (settingsOpen) return; // im Einstellungen-Modus zeigt die Vorschau Archiv-PDFs
   const form = document.getElementById("invoice-form");
   const frame = document.getElementById("preview-frame");
   if (!form || !frame || !window.PREVIEW_URL) return;
   const data = new FormData(form);
   data.append("_full", "mini");
-  fetch(window.PREVIEW_URL, { method: "POST", body: data })
+  // Dedup: identische Eingabe nicht erneut rendern (spart Server-Renders).
+  let key = null;
+  try { key = new URLSearchParams(data).toString(); } catch (e) { key = null; }
+  if (!force && key !== null && key === _previewLastKey) return;
+  // Veraltete, noch laufende Anfrage abbrechen -> ihre (späte) Antwort wird verworfen
+  // und kann die neuere nicht out-of-order überschreiben; Verbindung wird frei.
+  if (_previewAbort) _previewAbort.abort();
+  const ctrl = new AbortController();
+  _previewAbort = ctrl;
+  fetch(window.PREVIEW_URL, { method: "POST", body: data, signal: ctrl.signal })
     .then((r) => r.text())
     .then((html) => {
+      _previewLastKey = key; // erst nach Erfolg merken
       frame.srcdoc = html;
     })
-    .catch(() => {});
+    .catch(() => {}); // abgebrochene/fehlgeschlagene ignorieren
   // Der ausgeklappte Drawer zeigt das echte PDF und wird NICHT live aktualisiert
   // (PDF-Rendern ist zu langsam für jede Eingabe) -> nur beim Öffnen, s. openPreviewDrawer.
 }
@@ -1049,24 +1066,32 @@ function updateDrawerPreview() {
   const form = document.getElementById("invoice-form");
   if (!drawer || drawer.hidden || !frame || !form || !window.PREVIEW_PDF_URL) return;
   const data = new FormData(form);
-  fetch(window.PREVIEW_PDF_URL, { method: "POST", body: data })
+  // #R4: laufende Drawer-Anfrage abbrechen, sonst kann eine langsamere ältere Antwort
+  // nach einer neueren landen und ein veraltetes PDF zeigen.
+  if (_drawerAbort) _drawerAbort.abort();
+  const ctrl = new AbortController();
+  _drawerAbort = ctrl;
+  fetch(window.PREVIEW_PDF_URL, { method: "POST", body: data, signal: ctrl.signal })
     .then((r) => (r.ok ? r.blob() : Promise.reject(r)))
     .then((blob) => {
+      if (ctrl.signal.aborted || drawer.hidden) return; // überholt oder inzwischen zu
       if (frame._objUrl) URL.revokeObjectURL(frame._objUrl);
       frame._objUrl = URL.createObjectURL(blob);
       frame.removeAttribute("srcdoc");
       frame.src = frame._objUrl;
     })
-    .catch(() => {
+    .catch((err) => {
+      if (err && err.name === "AbortError") return; // bewusst abgebrochen, kein Fehler
       frame.removeAttribute("src");
       frame.srcdoc =
         "<!doctype html><meta charset='utf-8'><body style='font:14px sans-serif;padding:40px;color:#888'>" +
         (window.MSG_NO_PREVIEW || "") + "</body>";
     });
 }
-function schedulePreview() {
+function schedulePreview(force) {
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(updatePreview, 350);
+  // 250 ms: spürbar schneller als 350; überholte Anfragen werden ohnehin abgebrochen.
+  previewTimer = setTimeout(() => updatePreview(force), 250);
 }
 
 function openPreviewDrawer() {
@@ -1088,6 +1113,7 @@ function closePreviewDrawer() {
   if (!drawer) return;
   drawer.hidden = true;
   document.body.classList.remove("drawer-open");
+  if (_drawerAbort) { _drawerAbort.abort(); _drawerAbort = null; } // laufenden PDF-Fetch stoppen
   // Blob-URL des PDFs freigeben (sonst bleibt es bis zum nächsten Öffnen im Speicher).
   const frame = document.getElementById("drawer-frame");
   if (frame && frame._objUrl) {
@@ -1101,9 +1127,10 @@ let sellerSaveTimer;
 function autosaveSeller() {
   const form = document.getElementById("settings-form");
   if (!form || !window.SELLER_AUTOSAVE_URL) return;
-  // Nach dem Speichern Vorschau auffrischen (Stammdaten fließen ins PDF ein).
+  // Nach dem Speichern Vorschau auffrischen (Stammdaten fließen ins PDF ein, stehen
+  // aber nicht im invoice-form -> force, sonst greift die Dedup-Sperre).
   fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body: new FormData(form) })
-    .then(() => updatePreview())
+    .then(() => updatePreview(true))
     .catch(() => {});
 }
 function scheduleSellerSave() {
@@ -1614,7 +1641,7 @@ function showNoPreview(label) {
 function restoreLivePreview() {
   setPreviewHead(window.MSG_LIVE_PREVIEW);
   scaleMiniPreview();
-  schedulePreview();
+  schedulePreview(true); // Stammdaten könnten sich geändert haben -> Dedup umgehen
 }
 
 function loadDepsAsync() {
