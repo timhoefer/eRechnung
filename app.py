@@ -893,6 +893,29 @@ def preview_html():
     return html
 
 
+@app.route("/preview", methods=["POST"])
+def preview():
+    """Volles ZUGFeRD-PDF (mit eingebettetem XML) inline – wird NICHT archiviert.
+    Genutzt vom Build-Selbsttest (desktop.py _selftest), der das eingebettete XML
+    extrahiert und validiert; daher kein toter Code."""
+    data, html, _ = _assemble(request.form)
+    if not data["items"]:
+        msg = translate(get_ui_lang(request))["need_item"]
+        return Response(
+            f"<!doctype html><meta charset='utf-8'>"
+            f"<body style='font:15px sans-serif;padding:40px;color:#b91c1c'>{msg}</body>",
+            status=400,
+            mimetype="text/html",
+        )
+    xml = build_xml(data)
+    pdf = build_pdf(html, xml)
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="vorschau.pdf"'},
+    )
+
+
 @app.route("/preview-pdf", methods=["POST"])
 def preview_pdf():
     """Visuelle PDF-Vorschau (ohne ZUGFeRD-XML-Einbettung) für die ausgeklappte
