@@ -43,7 +43,27 @@
 
 <div id="form-content">
 
-{% if not seller.name %}<div class="onboarding">{{ t.onboarding }}</div>{% endif %}
+{% if not seller.name and not first_run %}<div class="onboarding">{{ t.onboarding }}</div>{% endif %}
+
+{% if first_run %}
+<div class="modal-backdrop" id="onboard-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+    <h3 id="onboard-title">{{ t.onboard_title }}</h3>
+    <p>{{ t.onboard_text }}</p>
+    <form method="post" action="{{ url_for('data_dir_set') }}">
+      <input type="hidden" name="origin" value="onboarding">
+      <label class="wide">{{ t.onboard_dir_label }}
+        <input name="data_dir" id="onboard-dir-input" value="{{ suggested_data_dir }}">
+      </label>
+      <p class="hint" style="margin:8px 0 16px">{{ t.onboard_existing_hint }}</p>
+      <div class="modal-actions">
+        {% if can_browse %}<button type="button" class="secondary" id="onboard-browse">{{ t.onboard_choose }}</button>{% endif %}
+        <button type="submit">{{ t.onboard_confirm }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 <details class="card" {% if not seller.name %}open{% endif %}>
   <summary>

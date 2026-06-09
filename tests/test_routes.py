@@ -192,3 +192,30 @@ def test_export_csv_browser_downloads(client):
     pdf = _make_archive_entry(appmod.OUTPUT_DIR)  # DESKTOP nicht gesetzt
     r = client.get("/export/csv?file=" + pdf)
     assert "text/csv" in r.headers["Content-Type"]
+
+
+# --- Erststart: nach dem Datenordner fragen ------------------------------------
+
+def test_first_run_shows_folder_modal(client, monkeypatch, tmp_path):
+    # Frisch: weder config.json noch seller.json -> Willkommens-Dialog mit Ordnerwahl.
+    monkeypatch.setattr(appmod, "CONFIG_FILE", tmp_path / "config.json")
+    monkeypatch.setattr(appmod, "SELLER_FILE", tmp_path / "kein_seller.json")
+    body = client.get("/").get_data(as_text=True)
+    assert "onboard-modal" in body
+    assert 'name="origin" value="onboarding"' in body
+    assert "Documents" in body  # vorgeschlagener Pfad
+
+
+def test_no_folder_modal_when_seller_exists(client):
+    # Der client-Fixture legt seller.json an -> kein Erststart, kein Dialog.
+    body = client.get("/").get_data(as_text=True)
+    assert "onboard-modal" not in body
+
+
+def test_data_dir_set_onboarding_redirects_to_form(client, monkeypatch):
+    # set_data_dir stubben -> keine echten Dateioperationen; nur Redirect-Ziel prüfen.
+    monkeypatch.setattr(appmod, "set_data_dir", lambda raw: (True, "data_dir_saved"))
+    r = client.post("/data-dir", data={"data_dir": "/x", "origin": "onboarding"})
+    assert r.status_code in (302, 303) and "validate" not in r.headers["Location"]
+    r2 = client.post("/data-dir", data={"data_dir": "/x"})  # ohne origin -> Einstellungen
+    assert r2.status_code in (302, 303) and "validate" in r2.headers["Location"]

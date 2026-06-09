@@ -1331,6 +1331,17 @@ document.addEventListener("click", (e) => {
     if (m) m.hidden = true;
     return;
   }
+  // Erststart: Datenordner per nativem Dialog wählen.
+  if (e.target.id === "onboard-browse") {
+    const input = document.getElementById("onboard-dir-input");
+    e.target.disabled = true;
+    fetch(window.DATA_DIR_BROWSE_URL, { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => { if (d.ok && d.path && input) input.value = d.path; })
+      .catch(() => flashError())
+      .finally(() => { e.target.disabled = false; });
+    return;
+  }
   const unitTrigger = e.target.closest(".unitsel-btn, .unitsel .combo-caret");
   if (unitTrigger) {
     const sel = unitTrigger.closest(".unitsel").querySelector("select.unit");

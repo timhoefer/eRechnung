@@ -806,6 +806,10 @@ def index():
         "due_date": (today + timedelta(days=term_days)).isoformat(),
     }
     draft = load_draft(request.args.get("from"))
+    # Erststart: noch kein Datenordner gewählt UND keine Stammdaten -> beim ersten
+    # Öffnen aktiv nach dem Speicherort fragen (Vorschlag: sichtbarer Dokumente-Ordner
+    # statt des versteckten Application-Support-Standards).
+    first_run = not CONFIG_FILE.exists() and not SELLER_FILE.exists()
     return render_template(
         "form.html",
         seller=seller,
@@ -816,6 +820,9 @@ def index():
         draft=draft,
         used_numbers=used_invoice_numbers(),
         ref_invoices=archived_invoices(),
+        first_run=first_run,
+        suggested_data_dir=str(Path.home() / "Documents" / "eRechnung"),
+        can_browse=(sys.platform == "darwin"),
     )
 
 
@@ -1329,7 +1336,10 @@ def data_dir_set():
     ok, key = set_data_dir(request.form.get("data_dir", ""))
     ui = translate(get_ui_lang(request))
     flash(ui.get(key, key), "ok" if ok else "err")
-    return redirect(url_for("validate"))
+    # Beim Erststart kommt die Auswahl aus dem Willkommens-Dialog -> zurück aufs
+    # Formular (nicht in die Einstellungen).
+    dest = "index" if request.form.get("origin") == "onboarding" else "validate"
+    return redirect(url_for(dest))
 
 
 @app.route("/data-dir/browse", methods=["POST"])
