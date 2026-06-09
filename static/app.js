@@ -1055,9 +1055,18 @@ function checkMiniPages() {
   if (!frame || !hint) return;
   const measure = () => {
     try {
-      const b = frame.contentDocument && frame.contentDocument.body;
+      const doc = frame.contentDocument;
+      const b = doc && doc.body;
       if (!b) return;
-      const multi = b.scrollHeight > b.clientHeight + 4;
+      // Eine PDF-Seite fasst nur den Inhaltsbereich (Blatthöhe minus oberer/unterer
+      // Rand) – nicht die volle Blatthöhe. Daher die Inhalt-Unterkante gegen
+      // (clientHeight − paddingBottom) prüfen; sonst gelten Rechnungen, die nur in den
+      // unteren Rand ragen (= im PDF schon Seite 2), fälschlich als einseitig.
+      // scrollHeight taugt nicht: overflow:hidden + fixe Höhe deckeln es bei clientHeight.
+      const pb = parseFloat(doc.defaultView.getComputedStyle(b).paddingBottom) || 0;
+      const last = b.lastElementChild;
+      const contentBottom = last ? last.offsetTop + last.offsetHeight : b.scrollHeight;
+      const multi = contentBottom > b.clientHeight - pb + 4;
       hint.textContent = multi ? " " + (window.MSG_PREVIEW_MULTIPAGE || "") : "";
       hint.hidden = !multi;
     } catch (e) {}
