@@ -13,60 +13,73 @@ function itemExtraOf(row) {
   return pos ? pos.querySelector(".item-extra") : null;
 }
 
+// Feste Formular-/Totals-Elemente einmalig auflösen (recalc läuft pro Tastendruck).
+// Diese Knoten sind statisch in form.html und werden nie neu gerendert; nur die
+// Positionszeilen (#items .item) sind dynamisch und werden weiter pro Aufruf gelesen.
+let _recalcEls = null;
+function recalcEls() {
+  if (_recalcEls) return _recalcEls;
+  const q = (s) => document.querySelector(s);
+  _recalcEls = {
+    taxSel: q("#tax_treatment"), discount: q("#discount"),
+    discountType: q('[name="discount_type"]'), prepaid: q("#prepaid"),
+    subRow: q("#t-sub-row"), discRow: q("#t-disc-row"),
+    tSub: q("#t-sub"), tDisc: q("#t-disc"),
+    tNet: q("#t-net"), tTax: q("#t-tax"), tGrand: q("#t-grand"),
+    prepaidRow: q("#t-prepaid-row"), dueRow: q("#t-due-row"),
+    tPrepaid: q("#t-prepaid"), tDue: q("#t-due"), taxLabel: q("#t-tax-label"),
+  };
+  return _recalcEls;
+}
+
 function recalc() {
-  const rate = num(document.querySelector("#tax_treatment option:checked").dataset.rate);
-  const rows = [...document.querySelectorAll("#items .item")];
-  const items = rows.map((row) => {
+  const el = recalcEls();
+  const opt = el.taxSel && el.taxSel.options[el.taxSel.selectedIndex];
+  const rate = num(opt ? opt.dataset.rate : 0);
+  const rows = document.querySelectorAll("#items .item");
+  const items = [];
+  rows.forEach((row) => {
     const extra = itemExtraOf(row);
     const dInp = extra && extra.querySelector(".disc-input");
     const dType = extra && extra.querySelector(".disc-type");
-    return {
+    items.push({
       qty: row.querySelector(".qty").value,
       price: row.querySelector(".price").value,
       discVal: dInp ? dInp.value : 0,
       discType: dType ? dType.value : "pct",
-    };
+    });
   });
-  const discEl = document.querySelector("#discount");
-  const discType = document.querySelector('[name="discount_type"]');
-  const prepaidEl = document.querySelector("#prepaid");
   const t = InvoiceCalc.totals({
     items: items,
     rate: rate,
-    discount: discEl ? discEl.value : 0,
-    discountType: discType ? discType.value : "pct",
-    prepaid: prepaidEl ? prepaidEl.value : 0,
+    discount: el.discount ? el.discount.value : 0,
+    discountType: el.discountType ? el.discountType.value : "pct",
+    prepaid: el.prepaid ? el.prepaid.value : 0,
   });
   rows.forEach((row, i) => { row.querySelector(".line-sum").textContent = fmt(t.lines[i]); });
 
-  const subRow = document.querySelector("#t-sub-row");
-  const discRow = document.querySelector("#t-disc-row");
   if (t.discount > 0) {
-    if (subRow) subRow.hidden = false;
-    if (discRow) discRow.hidden = false;
-    const subEl = document.querySelector("#t-sub");
-    const dEl = document.querySelector("#t-disc");
-    if (subEl) subEl.textContent = fmt(t.net);
-    if (dEl) dEl.textContent = "− " + fmt(t.discount);
+    if (el.subRow) el.subRow.hidden = false;
+    if (el.discRow) el.discRow.hidden = false;
+    if (el.tSub) el.tSub.textContent = fmt(t.net);
+    if (el.tDisc) el.tDisc.textContent = "− " + fmt(t.discount);
   } else {
-    if (subRow) subRow.hidden = true;
-    if (discRow) discRow.hidden = true;
+    if (el.subRow) el.subRow.hidden = true;
+    if (el.discRow) el.discRow.hidden = true;
   }
-  document.querySelector("#t-net").textContent = fmt(t.basis);
-  document.querySelector("#t-tax").textContent = fmt(t.tax);
-  document.querySelector("#t-grand").textContent = fmt(t.grand);
+  if (el.tNet) el.tNet.textContent = fmt(t.basis);
+  if (el.tTax) el.tTax.textContent = fmt(t.tax);
+  if (el.tGrand) el.tGrand.textContent = fmt(t.grand);
   // Anzahlung abziehen -> Zahlbetrag (nur wenn > 0).
-  const prepaidRow = document.querySelector("#t-prepaid-row");
-  const dueRow = document.querySelector("#t-due-row");
   if (t.prepaid > 0) {
-    if (prepaidRow) { prepaidRow.hidden = false; document.querySelector("#t-prepaid").textContent = "− " + fmt(t.prepaid); }
-    if (dueRow) { dueRow.hidden = false; document.querySelector("#t-due").textContent = fmt(t.due); }
+    if (el.prepaidRow) { el.prepaidRow.hidden = false; if (el.tPrepaid) el.tPrepaid.textContent = "− " + fmt(t.prepaid); }
+    if (el.dueRow) { el.dueRow.hidden = false; if (el.tDue) el.tDue.textContent = fmt(t.due); }
   } else {
-    if (prepaidRow) prepaidRow.hidden = true;
-    if (dueRow) dueRow.hidden = true;
+    if (el.prepaidRow) el.prepaidRow.hidden = true;
+    if (el.dueRow) el.dueRow.hidden = true;
   }
   const vatLabel = window.VAT_LABEL || "USt";
-  document.querySelector("#t-tax-label").textContent = rate > 0 ? vatLabel + " " + rate + " %" : vatLabel;
+  if (el.taxLabel) el.taxLabel.textContent = rate > 0 ? vatLabel + " " + rate + " %" : vatLabel;
 }
 
 // Passt die gewählte Behandlung zum Land des Rechnungsempfängers?
@@ -1498,15 +1511,21 @@ function announce(msg) {
 
 // Kurz sichtbare Fehlermeldung (macht still scheiternde AJAX-Aktionen sichtbar).
 let _toastTimer;
-function flashError(msg) {
-  let el = document.getElementById("toast");
+// Toast-Element (einmalig) anlegen oder wiederverwenden – Basis für beide Toasts.
+function makeToast(id, className, role) {
+  let el = document.getElementById(id);
   if (!el) {
     el = document.createElement("div");
-    el.id = "toast";
-    el.className = "toast";
-    el.setAttribute("role", "alert");
+    el.id = id;
+    el.className = className;
+    el.setAttribute("role", role);
     document.body.appendChild(el);
   }
+  return el;
+}
+
+function flashError(msg) {
+  const el = makeToast("toast", "toast", "alert");
   el.textContent = msg || window.MSG_ACTION_FAILED || "Fehler";
   el.hidden = false;
   clearTimeout(_toastTimer);
@@ -1516,14 +1535,7 @@ function flashError(msg) {
 // Toast mit „Rückgängig"-Aktion (z. B. nach dem Löschen einer Position).
 let _undoTimer;
 function flashUndo(msg, onUndo) {
-  let el = document.getElementById("undo-toast");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "undo-toast";
-    el.className = "toast toast-undo";
-    el.setAttribute("role", "status");
-    document.body.appendChild(el);
-  }
+  const el = makeToast("undo-toast", "toast toast-undo", "status");
   el.textContent = "";
   const span = document.createElement("span");
   span.textContent = msg || "";

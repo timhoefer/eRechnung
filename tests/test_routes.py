@@ -137,3 +137,58 @@ def test_generate_duplicate_number_keeps_both(client):
     assert any("(2)" in n for n in pdfs)
     body = r2.get_data(as_text=True)
     assert "bereits" in body or "already" in body  # Duplikat-Hinweis
+
+
+# --- Desktop-Modus: „Im Finder zeigen" statt Download (WKWebView lädt nicht) ----
+
+def _make_archive_entry(out, number="2026-001"):
+    """PDF + Sidecar-JSON in OUTPUT_DIR anlegen -> Archiv-Eintrag mit Entwurf."""
+    stem = f"Rechnung_{number}"
+    (out / f"{stem}.pdf").write_bytes(b"%PDF-1.4")
+    (out / f"{stem}.json").write_text(json.dumps({
+        "invoice": {"number": number, "issue_date": "2026-03-15",
+                    "currency": "EUR", "tax_treatment": "de_19"},
+        "buyer": {"name": "Muster GmbH", "country": "DE"},
+        "items": [{"description": "Leistung", "quantity": "1",
+                   "unit": "C62", "unit_price": "100"}],
+    }), encoding="utf-8")
+    return f"{stem}.pdf"
+
+
+def test_reveal_missing_file_404(client):
+    # Pfad-Prüfung greift vor dem Plattform-Check -> 404 auch auf der CI (Linux).
+    assert client.post("/reveal/gibtsnicht.pdf").status_code == 404
+
+
+def test_reveal_existing_file_opens_finder(client, monkeypatch):
+    pdf = _make_archive_entry(appmod.OUTPUT_DIR)
+    calls = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: calls.append(a[0]))
+    monkeypatch.setattr(appmod.sys, "platform", "darwin")
+    r = client.post("/reveal/" + pdf)
+    assert r.status_code == 200 and r.get_json()["ok"]
+    assert calls and calls[0][:2] == ["open", "-R"]
+
+
+def test_settings_panel_desktop_uses_reveal(client, monkeypatch):
+    _make_archive_entry(appmod.OUTPUT_DIR)
+    monkeypatch.setitem(appmod.app.config, "DESKTOP", True)
+    body = client.get("/settings/panel").get_data(as_text=True)
+    assert "reveal-btn" in body and "csv-export-btn" in body
+    assert "/download/" not in body  # keine echten Download-Links im Desktop
+
+
+def test_export_csv_desktop_writes_file(client, monkeypatch):
+    pdf = _make_archive_entry(appmod.OUTPUT_DIR)
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: None)  # kein Finder
+    monkeypatch.setattr(appmod.sys, "platform", "darwin")
+    monkeypatch.setitem(appmod.app.config, "DESKTOP", True)
+    r = client.get("/export/csv?file=" + pdf)
+    assert r.is_json and r.get_json()["ok"]
+    assert (appmod.OUTPUT_DIR / "Rechnung_2026-001.csv").exists()
+
+
+def test_export_csv_browser_downloads(client):
+    pdf = _make_archive_entry(appmod.OUTPUT_DIR)  # DESKTOP nicht gesetzt
+    r = client.get("/export/csv?file=" + pdf)
+    assert "text/csv" in r.headers["Content-Type"]
