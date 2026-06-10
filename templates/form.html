@@ -103,7 +103,7 @@
     <label>{{ t.bic }}<input name="bic" value="{{ seller.bic or '' }}"></label>
     <label>{{ t.bank_name }}<input name="bank_name" value="{{ seller.bank_name or '' }}"></label>
     <label>{{ t.account_holder }}<input name="account_name" value="{{ seller.account_name or '' }}"></label>
-    <label>{{ t.payment_term_days }}<input name="payment_term_days" type="number" min="0" step="1" value="{{ seller.payment_term_days or 14 }}"></label>
+    <label title="{{ t.payment_term_days_hint }}">{{ t.payment_term_days }}<input name="payment_term_days" type="number" min="0" step="1" value="{{ seller.payment_term_days or 14 }}"></label>
 
     {# Eine Konto-Zeile – EINMAL definiert, genutzt für bestehende Konten (Loop)
        und als klonbare Vorlage (<template>); so können beide nicht auseinanderlaufen. #}
