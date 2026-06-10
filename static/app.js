@@ -572,6 +572,7 @@ function applyDraft() {
     } else {
       bsel.value = ba; // ohne Treffer bleibt die Auswahl unverändert (erste Option)
     }
+    syncUnitDisplay(bsel); // Custom-Trigger-Label nachziehen
   }
   // Gesamtrabatt wiederherstellen und ggf. ausklappen.
   set("discount", inv.discount);
@@ -1245,6 +1246,8 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", (e) => {
   if (e.target.name === "service_start" || e.target.name === "service_end") updatePeriodHint();
+  // Bankkonto über das Custom-Menü gewählt (chooseUnit feuert "change") -> Vorschau.
+  if (e.target.id === "bank-account-select") schedulePreview();
 });
 document.addEventListener("focusin", (e) => {
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
@@ -1614,6 +1617,9 @@ let restoredFromLang = false;
 })();
 
 if (!restoredFromLang) applyDraft();
+// Nach restoreForm (Sprachwechsel) kann der Bank-Select-Wert gesetzt worden sein,
+// ohne dass das sichtbare Trigger-Label folgte -> einmal nachziehen.
+syncUnitDisplay(document.getElementById("bank-account-select"));
 
 const previewFrameEl = document.getElementById("preview-frame");
 if (previewFrameEl) previewFrameEl.addEventListener("load", function () { scaleMiniPreview(); checkMiniPages(); });
@@ -1730,6 +1736,7 @@ function syncBankSelector() {
     sel.appendChild(o);
   });
   if (prev && accts.some((a) => a.iban === prev)) sel.value = prev;
+  syncUnitDisplay(sel); // sichtbares Label des Custom-Triggers nachziehen
   wrap.hidden = false;
 }
 

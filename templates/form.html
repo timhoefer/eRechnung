@@ -150,7 +150,11 @@
       </label>
       <label>{{ t.currency }}<input name="currency" value="EUR" maxlength="3"></label>
       <label class="bank-select" id="bank-select-wrap" hidden>{{ t.bank_account }}
-        <select name="bank_account" id="bank-account-select"></select>
+        <span class="unitsel">
+          <select name="bank_account" id="bank-account-select" class="unit" aria-hidden="true" tabindex="-1"></select>
+          <button type="button" class="unitsel-btn" role="combobox" aria-haspopup="listbox" aria-expanded="false"><span class="unitsel-label"></span></button>
+          <span class="combo-caret" aria-hidden="true"></span>
+        </span>
       </label>
       <label class="ref-field" hidden>{{ t.ref_number }}
         <div class="combo">
