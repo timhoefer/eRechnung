@@ -172,7 +172,9 @@ input, select {
   border: 1px solid var(--line); border-radius: 8px; background: var(--card); width: 100%;
 }
 input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-label.check { flex-direction: row; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--ink); cursor: pointer; align-self: end; padding-bottom: 8px; }
+/* justify-content: flex-start hebt das globale flex-end der Labels auf – bei
+   row-Richtung würde es den Inhalt sonst nach RECHTS schieben statt nach unten. */
+label.check { flex-direction: row; justify-content: flex-start; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--ink); cursor: pointer; align-self: end; padding-bottom: 8px; }
 /* Callout-Box mit Pfeil zur Checkbox (zeigt nach oben auf Spalte 3) */
 .callout {
   grid-column: 1 / -1; position: relative; margin-top: 12px;
