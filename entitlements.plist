@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Entitlements für die signierte App (Hardened Runtime).
+     PyInstaller/CPython braucht diese Ausnahmen, sonst startet die App nicht:
+     - allow-unsigned-executable-memory: CPython legt ausführbaren Speicher an (ctypes/FFI).
+     - disable-library-validation: die gebündelten Homebrew-Libs (Pango/Cairo für
+       WeasyPrint, libsaxon) sind nicht mit derselben Team-ID signiert. -->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

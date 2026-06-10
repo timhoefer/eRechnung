@@ -6,6 +6,14 @@
 #   - Homebrew-Pango installiert (liefert die nativen Libs, die ins Bundle wandern):
 #       brew install pango
 #
+# Optional – Signieren + Notarisieren (für Weitergabe ohne Gatekeeper-Warnung):
+#   SIGN_IDENTITY="Developer ID Application: Name (TEAMID)"  -> signiert das Bundle
+#   NOTARY_PROFILE="erechnung-notary"                        -> notarisiert + staple
+#   (Profil einmalig anlegen: xcrun notarytool store-credentials erechnung-notary)
+#   Beispiel:
+#     SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=erechnung-notary ./build_macos.sh
+#   Ohne diese Variablen verhält sich der Build wie bisher (unsigniert).
+#
 # Der klassische Start (run.sh / start.command) bleibt davon unberührt.
 set -e
 cd "$(dirname "$0")"
@@ -40,10 +48,50 @@ fi
 
 .venv/bin/pyinstaller eRechnung.spec --noconfirm
 
+APP="dist/eRechnung.app"
+
+# --- Optional: Signieren (Hardened Runtime) -----------------------------------
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  echo
+  echo "Signiere mit: $SIGN_IDENTITY"
+  # Erst alle eingebetteten Mach-O-Dateien (PyInstaller-Bundles enthalten .so/.dylib
+  # von WeasyPrint/Pango, lxml, SaxonC), dann das Bundle selbst. Inside-out ist
+  # robuster als --deep (Apple rät von --deep ab).
+  find "$APP" \( -name "*.so" -o -name "*.dylib" \) -print0 | while IFS= read -r -d '' f; do
+    codesign --force --options runtime --timestamp \
+      --entitlements entitlements.plist --sign "$SIGN_IDENTITY" "$f"
+  done
+  codesign --force --options runtime --timestamp \
+    --entitlements entitlements.plist --sign "$SIGN_IDENTITY" "$APP"
+  echo "Prüfe Signatur ..."
+  codesign --verify --strict --deep "$APP"
+  echo "Signatur ok."
+fi
+
+# --- Optional: Notarisieren + Staple -------------------------------------------
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  if [ -z "${SIGN_IDENTITY:-}" ]; then
+    echo "FEHLER: NOTARY_PROFILE gesetzt, aber SIGN_IDENTITY fehlt (unsignierte Apps" >&2
+    echo "        kann Apple nicht notarisieren)." >&2
+    exit 1
+  fi
+  echo
+  echo "Notarisiere (Profil: $NOTARY_PROFILE) – dauert meist 1–5 Minuten ..."
+  ZIP="dist/eRechnung-notarize.zip"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  rm -f "$ZIP"
+  xcrun stapler staple "$APP"
+  echo "Gatekeeper-Check:"
+  spctl --assess --type execute -vv "$APP"
+fi
+
 echo
-echo "Fertig: dist/eRechnung.app"
-echo "Headless-Selbsttest: ./dist/eRechnung.app/Contents/MacOS/eRechnung --selftest"
+echo "Fertig: $APP"
+echo "Headless-Selbsttest: ./$APP/Contents/MacOS/eRechnung --selftest"
 echo
-echo "Hinweis: Die App ist unsigniert. Beim ersten Öffnen auf einem anderen Mac"
-echo "Rechtsklick auf die App > 'Öffnen' wählen (Gatekeeper). Für eine Weitergabe"
-echo "ohne Warnung ist Code-Signing + Notarisierung (Apple Developer Program) nötig."
+if [ -z "${SIGN_IDENTITY:-}" ]; then
+  echo "Hinweis: Die App ist unsigniert. Beim ersten Öffnen auf einem anderen Mac"
+  echo "Rechtsklick auf die App > 'Öffnen' wählen (Gatekeeper). Für eine Weitergabe"
+  echo "ohne Warnung: SIGN_IDENTITY + NOTARY_PROFILE setzen (siehe Kopf dieses Skripts)."
+fi
