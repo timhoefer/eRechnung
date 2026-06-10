@@ -1366,6 +1366,28 @@ document.addEventListener("keydown", (e) => {
     closeUnitMenu();
   }
 });
+// Tastaturbedienung des Format-Menüs (ZUGFeRD/XRechnung) im Titel.
+document.addEventListener("keydown", (e) => {
+  const trigger = document.getElementById("format-trigger");
+  if (!trigger || e.target !== trigger) return;
+  const m = document.getElementById("format-menu");
+  if (!m || m.hidden) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { openFormatMenu(); e.preventDefault(); }
+    return; // Enter/Leertaste öffnen über die native Button-Aktivierung (Klick-Handler)
+  }
+  const opts = [...m.querySelectorAll(".combo-opt")];
+  let i = opts.findIndex((o) => o.classList.contains("active"));
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    i = (i + (e.key === "ArrowDown" ? 1 : -1) + opts.length) % opts.length;
+    opts.forEach((o, j) => o.classList.toggle("active", j === i));
+    e.preventDefault();
+  } else if (e.key === "Enter" || e.key === " ") {
+    if (opts[i]) chooseFormat(opts[i].dataset.profile);
+    e.preventDefault(); // verhindert, dass die native Button-Aktivierung das Menü gleich wieder togglet
+  } else if (e.key === "Escape") {
+    closeFormatMenu();
+  }
+});
 function repositionMenus() {
   if (comboInput && comboMenu && !comboMenu.hidden) positionComboMenu(comboInput);
   if (custInput && custMenu && !custMenu.hidden) positionCustMenu(custInput);
@@ -1451,6 +1473,13 @@ document.addEventListener("click", (e) => {
   if (e.target.id === "cust-delete-cancel" || e.target.id === "cust-delete-modal") {
     const m = document.getElementById("cust-delete-modal");
     if (m) m.hidden = true;
+    return;
+  }
+  // Logo entfernen.
+  if (e.target.id === "logo-remove") {
+    const f = document.getElementById("logo-file");
+    if (f) f.value = "";
+    setLogo("");
     return;
   }
   // Erststart: Datenordner per nativem Dialog wählen.
@@ -1700,6 +1729,32 @@ function collectAccounts() {
   });
   return accts;
 }
+
+// Logo (Briefkopf): als data-URI in den Stammdaten speichern; erscheint oben rechts
+// im PDF/in der Vorschau. setLogo() speichert direkt und frischt die Vorschau auf.
+function setLogo(data) {
+  const hid = document.getElementById("logo-data");
+  const img = document.getElementById("logo-preview");
+  const rm = document.getElementById("logo-remove");
+  if (hid) hid.value = data || "";
+  if (img) {
+    if (data) { img.src = data; img.hidden = false; }
+    else { img.removeAttribute("src"); img.hidden = true; }
+  }
+  if (rm) rm.hidden = !data;
+  autosaveSeller(); // sofort speichern + Vorschau auffrischen (Logo steckt im PDF)
+}
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "logo-file") return;
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { flashError(window.MSG_LOGO_TYPE); e.target.value = ""; return; }
+  if (file.size > 512 * 1024) { flashError(window.MSG_LOGO_SIZE); e.target.value = ""; return; }
+  const reader = new FileReader();
+  reader.onload = () => setLogo(String(reader.result || ""));
+  reader.onerror = () => flashError();
+  reader.readAsDataURL(file);
+});
 
 // Nativen Ordner-Dialog öffnen und den gewählten Pfad ins Eingabefeld schreiben –
 // genutzt vom Erststart-Dialog und vom Datenordner-Feld in den Einstellungen.

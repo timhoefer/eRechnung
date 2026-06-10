@@ -206,6 +206,31 @@ def test_settings_save_fetch_returns_json(client):
     assert r2.status_code in (302, 303)
 
 
+def test_logo_stored_only_if_valid_image_data_uri(client):
+    from werkzeug.datastructures import MultiDict
+    good = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="
+    s = appmod.apply_seller_form({"name": "S"}, MultiDict({"logo": good}))
+    assert s["logo"] == good
+    # Kein Bild-data-URI -> verworfen (kein beliebiger Inhalt)
+    s2 = appmod.apply_seller_form({"name": "S"}, MultiDict({"logo": "javascript:alert(1)"}))
+    assert s2["logo"] == ""
+    # Übergroßes Logo -> verworfen
+    big = "data:image/png;base64," + ("A" * 1_600_000)
+    s3 = appmod.apply_seller_form({"name": "S"}, MultiDict({"logo": big}))
+    assert s3["logo"] == ""
+
+
+def test_logo_appears_in_preview(client):
+    out = appmod.SELLER_FILE
+    base = json.loads(out.read_text(encoding="utf-8"))
+    base["logo"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    out.write_text(json.dumps(base), encoding="utf-8")
+    body = client.post("/preview-html", data={
+        "description": "L", "quantity": "1", "unit_price": "100", "tax_treatment": "de_19",
+    }).get_data(as_text=True)
+    assert "brand-mark" in body and base["logo"] in body
+
+
 def test_customers_save_fetch_returns_json(client):
     # Per fetch (JS): JSON statt Redirect -> kein Reload, Toast im Client.
     hdr = {"X-Requested-With": "fetch"}

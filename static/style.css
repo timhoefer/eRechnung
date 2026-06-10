@@ -37,6 +37,7 @@
   --warn-border: #d97706;
   --overlay-bg: #f0f0f3;
   --drawer-frame: #d8d8dc;
+  --scrim: rgba(20, 22, 28, 0.45);
   /* Typo-Skala (4 Stufen): klein/Hinweise · Basis/Text+Eingaben · groß/Titel · XL/Seitentitel */
   --text-sm: 13px;
   --text-base: 15px;
@@ -55,7 +56,7 @@
     --card: #1e2127;
     --line: #2e333b;
     --ink: #e6e8ea;
-    --muted: #9aa1ab;
+    --muted: #aab2bd;
     --accent: #5b8cf0;
     --accent-d: #4a78d8;
     --ok: #4ade80;
@@ -79,6 +80,7 @@
     --warn-border: #b8860b;
     --overlay-bg: #101114;
     --drawer-frame: #202329;
+    --scrim: rgba(0, 0, 0, 0.6);
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }  /* schlägt display:flex von .period/label */
@@ -427,6 +429,15 @@ button.secondary:hover { background: var(--surface-2-h); }
 .primary-account input, .extra-account input { padding: 7px 8px; }
 .extra-account .acct-head > .acct-remove { position: absolute; bottom: 0; left: 100%; margin-left: 28px; }
 .bank-select[hidden] { display: none; }
+/* Logo-Upload (Briefkopf) */
+.logo-label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: 4px; }
+.logo-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.logo-preview { max-height: 48px; max-width: 180px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: #fff; }
+.logo-pick { display: inline-flex; align-items: center; cursor: pointer; padding: 8px 14px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2);
+  color: var(--ink); font-size: var(--text-sm); font-weight: 600; }
+.logo-pick:hover { background: var(--surface-2-h); }
+.logo-pick input[type="file"] { display: none; }
 .bank-select .unitsel { display: block; }
 .actions { display: flex; align-items: center; gap: 12px; margin: 20px auto; }
 .result-note { max-width: 1080px; margin: 0 auto 10px; padding: 0 23px; box-sizing: border-box; }
@@ -466,6 +477,12 @@ a:focus-visible, button:focus-visible, summary:focus-visible,
   z-index: 200; max-width: 90vw; padding: 10px 16px; border-radius: 9px;
   background: var(--ink); color: var(--bg); font-size: var(--text-sm); font-weight: 600;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  animation: toast-in .22s cubic-bezier(.2, .7, .3, 1);
+}
+/* translateX(-50%) in beiden Keyframes halten, sonst springt der Toast horizontal. */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 .toast-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok); }
 .toast-undo { display: flex; align-items: center; gap: 14px; }
@@ -529,7 +546,7 @@ table.archive form { margin-left: 12px; }
 .danger-link:hover { background: none; text-decoration: underline; }
 
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(28, 32, 36, 0.45);
+  position: fixed; inset: 0; background: var(--scrim);
   display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px;
 }
 .modal {
@@ -609,7 +626,7 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
 
 /* Vorschau-Drawer in Originalgröße (A4 100%) */
 .drawer-backdrop {
-  position: fixed; inset: 0; background: rgba(28,32,36,0.5);
+  position: fixed; inset: 0; background: var(--scrim);
   display: flex; justify-content: flex-end; z-index: 60;
 }
 .drawer {

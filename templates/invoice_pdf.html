@@ -16,6 +16,8 @@
   body { font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
     font-size: 10pt; color: #1a1a1a; line-height: 1.45; }
 
+  .brand-mark { text-align: right; margin-bottom: 5mm; }
+  .brand-mark img { max-height: 22mm; max-width: 75mm; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; }
   .recipient { max-width: 90mm; }
   .addr-label { font-size: 8pt; font-weight: 600; color: #666; text-transform: uppercase;
@@ -97,6 +99,7 @@
 </style>
 </head>
 <body class="{{ body_class }}">
+  {% if seller.logo %}<div class="brand-mark"><img src="{{ seller.logo }}" alt=""></div>{% endif %}
   <div class="head">
     <div class="recipient">
       <div class="addr-label">{{ ti.pdf_bill_to }}</div>

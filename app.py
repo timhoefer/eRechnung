@@ -406,6 +406,11 @@ def apply_seller_form(seller: dict, form) -> dict:
             seller[field] = form.get(field, "").strip()
     # Checkbox "Steuernummer ausblenden": aktiv -> show_tax_number = False.
     seller["show_tax_number"] = form.get("hide_tax_number") is None
+    # Logo (Briefkopf) als data-URI – nur echte Bild-URIs akzeptieren, Größe deckeln
+    # (~1,5 MB data-URI), damit seller.json nicht unbegrenzt wächst.
+    if "logo" in form:
+        logo = form.get("logo", "").strip()
+        seller["logo"] = logo if logo.startswith("data:image/") and len(logo) <= 1_500_000 else ""
     # Weitere Bankkonten (optional). Das Hauptkonto bleibt in den flachen Feldern
     # (iban/bic/...); zusätzliche Konten landen in seller["accounts"]. Nur anfassen,
     # wenn das Formular die Sektion wirklich enthält -> Teil-Posts wischen nichts weg.

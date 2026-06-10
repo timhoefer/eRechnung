@@ -81,6 +81,17 @@
       </select>
     </label>
 
+    <div class="wide logo-field">
+      <span class="logo-label">{{ t.logo }}</span>
+      <div class="logo-row">
+        <img id="logo-preview" class="logo-preview" alt="" src="{{ seller.logo or '' }}" {% if not seller.logo %}hidden{% endif %}>
+        <label class="logo-pick"><input type="file" id="logo-file" accept="image/png,image/jpeg,image/svg+xml">{{ t.logo_choose }}</label>
+        <button type="button" class="link danger-link" id="logo-remove" {% if not seller.logo %}hidden{% endif %}>{{ t.logo_remove }}</button>
+      </div>
+      <input type="hidden" name="logo" id="logo-data" value="{{ seller.logo or '' }}">
+      <p class="hint" style="margin:6px 0 0">{{ t.logo_hint }}</p>
+    </div>
+
     <h3 class="form-section">{{ t.sec_contact }}</h3>
     <label><span class="label-row"><span class="lbl">{{ t.phone }}</span><span class="req-mark" hidden> *</span></span><input name="phone" value="{{ seller.phone or '' }}" placeholder="+49 …" data-xr-mark></label>
     <label><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="email" type="email" value="{{ seller.email or '' }}" data-xr-mark></label>
@@ -448,6 +459,8 @@
   window.ARCHIVE_DELETE_URL = {{ url_for('archive_delete')|tojson }};
   window.EXPORT_CSV_URL = {{ url_for('export_csv')|tojson }};
   window.IS_DESKTOP = {{ is_desktop|tojson }};
+  window.MSG_LOGO_TYPE = {{ t['logo_type_err']|tojson }};
+  window.MSG_LOGO_SIZE = {{ t['logo_size_err']|tojson }};
   window.FLASHES = {{ get_flashed_messages(with_categories=true)|tojson }};
   window.MSG_CONFIRM_DELETE = {{ t['confirm_delete_text']|tojson }};
   window.MSG_LIVE_PREVIEW = {{ t['live_preview']|tojson }};
