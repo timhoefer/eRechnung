@@ -405,6 +405,9 @@ button.secondary:hover { background: var(--surface-2-h); }
 .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: var(--text-lg); margin-top: 4px; }
 .back-link { margin: 16px 2px; }
 /* Aktionsleiste der Ergebnisseite (result.html) – im Fluss, nicht sticky */
+/* Erklärtext nur zeigen, wenn mindestens ein Zusatzkonto da ist – ohne Konten ist
+   er Rauschen. :has() deckt auch Hinzufügen/Entfernen per JS automatisch ab. */
+.acct-section:not(:has(.extra-account)) .hint { display: none; }
 /* Zusätzliche Konten: Optik wie die Positionen – eingefasste Box, Trash AUSSERHALB
    rechts (absolut am relativen .acct-head, an der Unterkante der Feldzeile);
    innen 4-spaltig (.grid-Default) mit Labels. */
