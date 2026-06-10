@@ -206,6 +206,44 @@ def test_settings_save_fetch_returns_json(client):
     assert r2.status_code in (302, 303)
 
 
+def test_csv_export_escapes_formula_injection(client):
+    out = appmod.OUTPUT_DIR
+    (out / "Rechnung_2026-001.pdf").write_bytes(b"%PDF-1.4")
+    (out / "Rechnung_2026-001.json").write_text(json.dumps({
+        "invoice": {"number": "2026-001", "issue_date": "2026-03-01",
+                    "currency": "EUR", "tax_treatment": "de_19"},
+        "buyer": {"name": "=SUM(A1:A9)", "country": "DE"},
+        "items": [{"description": "L", "quantity": "1", "unit": "C62", "unit_price": "100"}],
+    }), encoding="utf-8")
+    body = client.get("/export/csv").get_data(as_text=True)
+    assert "'=SUM(A1:A9)" in body          # mit ' entschärft
+    assert ";=SUM(A1:A9)" not in body      # nicht roh als Formel
+
+
+def test_customers_delete_fetch_json(client):
+    appmod.save_customers([{"name": "Muster GmbH", "country": "DE"}])
+    hdr = {"X-Requested-With": "fetch"}
+    r = client.post("/customers/delete", headers=hdr, data={"buyer_name": "Muster GmbH"})
+    d = r.get_json()
+    assert d["ok"] and "Muster GmbH" in d["message"] and d["customers"] == []
+    # Unbekannter Name -> ok:False
+    assert client.post("/customers/delete", headers=hdr,
+                       data={"buyer_name": "Gibtsnicht"}).get_json()["ok"] is False
+
+
+def test_num_str_matches_calc_js_num():
+    # Server _num_str() muss dieselben Werte liefern wie num() in static/calc.js
+    # (Spiegel: tests/calc.test.js::"num: Parität-Fälle"). Sonst weichen Vorschau
+    # (Client) und PDF/XML (Server) bei deutscher Zahlenschreibweise ab.
+    cases = [
+        ("1234,56", 1234.56), ("1.234,56", 1234.56), ("2.500,00", 2500.0),
+        ("1234.56", 1234.56), ("1.234.567", 1234567.0), ("1.234", 1.234),
+        ("1234", 1234.0), ("", 0.0), ("abc", 0.0), ("12,", 12.0), ("1e9", 1e9),
+    ]
+    for raw, expected in cases:
+        assert float(appmod._dec(appmod._num_str(raw))) == expected, raw
+
+
 def test_logo_stored_only_if_valid_image_data_uri(client):
     from werkzeug.datastructures import MultiDict
     good = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="

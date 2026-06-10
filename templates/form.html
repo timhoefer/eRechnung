@@ -239,7 +239,7 @@
         <p><strong id="cust-del-name"></strong> {{ t.confirm_cust_delete_text }}</p>
         <div class="modal-actions">
           <button type="button" class="secondary" id="cust-delete-cancel">{{ t.cancel }}</button>
-          <button type="submit" class="danger" formaction="{{ url_for('customers_delete') }}" formnovalidate>{{ t.delete }}</button>
+          <button type="button" class="danger" id="cust-delete-confirm" data-url="{{ url_for('customers_delete') }}">{{ t.delete }}</button>
         </div>
       </div>
     </div>

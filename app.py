@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -40,6 +41,8 @@ from zugferd import (
     validate_schematron,
     validate_xml_bytes,
 )
+
+logger = logging.getLogger("erechnung")
 
 # Als gebündelte .app (PyInstaller) liegen Code/Ressourcen schreibgeschützt im
 # Bundle (sys._MEIPASS), Nutzerdaten gehören nach ~/Library/Application Support.
@@ -657,6 +660,8 @@ def _num_str(s) -> str:
     s = str(s or "").strip()
     if "," in s:
         s = s.replace(".", "").replace(",", ".")
+    elif s.count(".") >= 2:  # "1.234.567" = Tausender (kein Komma) -> Punkte raus
+        s = s.replace(".", "")
     return s or "0"
 
 
@@ -994,12 +999,18 @@ def customers_delete():
         (c for c in customers if c.get("name", "").strip().lower() == name.lower()),
         None,
     ) if name else None
+    ui = translate(get_ui_lang(request))
+    is_fetch = request.headers.get("X-Requested-With") == "fetch"
     if match:
         customers.remove(match)
         save_customers(customers)
-        flash(f"Kunde „{match['name']}“ gelöscht.", "ok")
+        msg, ok = ui["customer_deleted"].replace("{name}", match["name"]), True
     else:
-        flash("Kein gespeicherter Kunde mit diesem Namen.", "err")
+        msg, ok = ui["customer_not_found"], False
+    # Per fetch (JS): kein Reload -> Scrollposition bleibt, Toast; frische Kundenliste mit.
+    if is_fetch:
+        return {"ok": ok, "message": msg, "customers": load_customers()}
+    flash(msg, "ok" if ok else "err")
     return redirect(url_for("index"))
 
 
@@ -1043,6 +1054,7 @@ def preview_pdf():
         _, html, _ = _assemble(request.form)
         pdf = render_html_pdf(html)  # gemeinsamer Renderpfad mit build_pdf
     except Exception:
+        logger.debug("preview_pdf render failed (meist unvollständige Eingabe)", exc_info=True)
         # Unvollständige/fehlerhafte Eingaben (z. B. beim Tippen) -> kein 500,
         # sondern eine schlichte Meldung; der Client zeigt ohnehin „keine Vorschau".
         msg = translate(get_ui_lang(request))["no_preview"]
@@ -1188,6 +1200,7 @@ def reveal_in_finder(path) -> bool:
     try:
         subprocess.run(["open", "-R", str(path)], timeout=10)
     except Exception:
+        logger.warning("reveal_in_finder failed for %s", path, exc_info=True)
         return False
     return True
 
@@ -1413,10 +1426,16 @@ def export_csv():
         ["Number", "Date", "Customer", "Country", "Treatment", "VAT code",
          "VAT rate %", "Net", "VAT amount", "Gross", "Currency"]
     )
+    # CSV-Formel-Injection abwehren: Zellen, die mit =,+,-,@ (oder Tab/CR) beginnen,
+    # werden in Excel/Calc sonst als Formel ausgewertet -> mit ' als Text entschärfen.
+    def csv_safe(v):
+        s = "" if v is None else str(v)
+        return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=";" if de else ",")
     writer.writerow(header)
-    writer.writerows(rows)
+    writer.writerows([[csv_safe(c) for c in r] for r in rows])
     data = ("\ufeff" + buf.getvalue()).encode("utf-8")  # BOM -> Umlaute in Excel
     name = f"{Path(only).stem}.csv" if only else "rechnungen.csv"
     if app.config.get("DESKTOP") and sys.platform == "darwin":
@@ -1465,6 +1484,7 @@ def data_dir_browse():
             ["osascript", "-e", script], capture_output=True, text=True, timeout=600
         )
     except Exception:
+        logger.warning("data_dir_browse: osascript failed", exc_info=True)
         return {"ok": False, "error": "failed"}
     if r.returncode != 0:  # vom Nutzer abgebrochen
         return {"ok": True, "path": None}
@@ -1492,6 +1512,7 @@ def _validate_request():
         try:
             xml = extract_xml_from_pdf(raw)
         except Exception:  # defektes/manipuliertes PDF darf nicht crashen
+            logger.warning("extract_xml_from_pdf failed for upload %s", label, exc_info=True)
             xml = None
     if not xml:
         return {"label": label, "ok": False, "xsd_messages": ["Kein eingebettetes XML gefunden."], "sch": None}

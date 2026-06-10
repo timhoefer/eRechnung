@@ -92,6 +92,17 @@ test("num: deutsche Tausendertrennung korrekt parsen", () => {
   assert.equal(calc.num("1234.56"), 1234.56);
 });
 
+// Diese Fälle MÜSSEN mit _num_str() in app.py übereinstimmen (Server-Parität).
+// Spiegel-Test: tests/test_routes.py::test_num_str_matches_calc_js_num.
+const NUM_PARITY = [
+  ["1234,56", 1234.56], ["1.234,56", 1234.56], ["2.500,00", 2500],
+  ["1234.56", 1234.56], ["1.234.567", 1234567], ["1.234", 1.234],
+  ["1234", 1234], ["", 0], ["abc", 0], ["12,", 12], ["1e9", 1000000000],
+];
+test("num: Parität-Fälle (müssen Server _num_str spiegeln)", () => {
+  for (const [inp, exp] of NUM_PARITY) assert.equal(calc.num(inp), exp);
+});
+
 test("totals: Sub-Cent-Werte werden pro Zeile gerundet (round-then-sum)", () => {
   // 3 Zeilen 1x0,125: Server rundet jede Zeile q(0,125)=0,13 -> Netto 0,39 (nicht 0,375)
   const t = calc.totals({ items: [

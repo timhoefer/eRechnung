@@ -1475,6 +1475,30 @@ document.addEventListener("click", (e) => {
     if (m) m.hidden = true;
     return;
   }
+  // Kunde löschen ohne Reload: fetch -> Toast, Felder leeren, Liste aktualisieren.
+  if (e.target.id === "cust-delete-confirm") {
+    const form = document.getElementById("invoice-form");
+    const fd = new FormData();
+    fd.append("buyer_name", (form.querySelector('[name="buyer_name"]') || {}).value || "");
+    e.target.disabled = true;
+    fetch(e.target.dataset.url, { method: "POST", body: fd, headers: { "X-Requested-With": "fetch" } })
+      .then((r) => r.json())
+      .then((d) => {
+        const m = document.getElementById("cust-delete-modal");
+        if (m) m.hidden = true;
+        if (d.ok) {
+          if (d.customers) window.CUSTOMERS = d.customers;
+          form.querySelectorAll('[name^="buyer_"]').forEach((el) => { el.value = ""; });
+          const cc = form.querySelector('[name="buyer_country"]'); if (cc) cc.value = "DE";
+          lastSavedCustomerName = "";
+          flashOk(d.message);
+          schedulePreview();
+        } else { flashError(d.message); }
+      })
+      .catch(() => flashError())
+      .finally(() => { e.target.disabled = false; });
+    return;
+  }
   // Logo entfernen.
   if (e.target.id === "logo-remove") {
     const f = document.getElementById("logo-file");

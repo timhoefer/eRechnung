@@ -13,6 +13,7 @@
     var s = String(v).trim();
     if (!s) return 0;
     if (s.indexOf(",") !== -1) s = s.replace(/\./g, "").replace(",", ".");
+    else if ((s.match(/\./g) || []).length >= 2) s = s.replace(/\./g, ""); // "1.234.567" = Tausender
     return parseFloat(s) || 0;
   }
 
