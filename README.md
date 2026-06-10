@@ -34,6 +34,11 @@ werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 Bei den 0-%-Varianten wird der gesetzlich erforderliche **Begründungstext** automatisch
 in PDF und XML eingetragen.
 
+**Eine Rechnung = ein Steuersatz.** Gemischte Sätze auf einer Rechnung (z. B. 19 %
+Designleistung + 7 % Einräumung von Nutzungsrechten, § 12 Abs. 2 Nr. 7c UStG) werden
+bewusst nicht unterstützt — stelle dafür einfach **zwei separate Rechnungen**, jede für
+sich mit einem Satz. Das ist steuerlich einwandfrei und hält das Tool einfach.
+
 ## Sprache (Deutsch / Englisch)
 
 - **Oberfläche:** Umschalter **DE/EN** oben rechts (wird per Cookie gemerkt).
