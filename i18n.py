@@ -90,6 +90,8 @@ LANG = {
         "save_customer": "Kunde speichern",
         "delete": "Löschen",
         "buyer_reference": "Kundenreferenz / Bestellnr. (optional)",
+        "buyer_term_days": "Zahlungsziel (Tage, optional)",
+        "buyer_term_days_hint": "Überschreibt für diesen Kunden das Standard-Zahlungsziel; belegt beim Auswählen „Fällig am“ vor.",
         "buyer_reference_xr": "Leitweg-ID (Käuferreferenz)",
         # Steuer
         "tax_treatment": "Steuerliche Behandlung",
@@ -353,6 +355,8 @@ LANG = {
         "save_customer": "Save customer",
         "delete": "Delete",
         "buyer_reference": "Customer reference / PO no. (optional)",
+        "buyer_term_days": "Payment term (days, optional)",
+        "buyer_term_days_hint": "Overrides the default payment term for this customer; pre-fills “Due date” on selection.",
         "buyer_reference_xr": "Leitweg ID (buyer reference)",
         "tax_treatment": "Tax treatment",
         "tax_disclaimer": "These notes are not tax advice. Please verify the correct treatment yourself (or with your tax advisor).",

@@ -194,6 +194,18 @@ def test_export_csv_browser_downloads(client):
     assert "text/csv" in r.headers["Content-Type"]
 
 
+def test_customer_payment_term_roundtrip(client):
+    # Kundenspezifisches Zahlungsziel: Formular -> buyer -> Kundenspeicher.
+    from werkzeug.datastructures import MultiDict
+    md = MultiDict({"buyer_name": "Muster GmbH", "buyer_country": "DE",
+                    "buyer_payment_term_days": "30"})
+    buyer = appmod.buyer_from_form(md)
+    assert buyer["payment_term_days"] == "30"
+    appmod.upsert_customer(buyer)
+    saved = appmod.load_customers()
+    assert saved[0]["payment_term_days"] == "30"
+
+
 # --- Erststart: nach dem Datenordner fragen ------------------------------------
 
 def test_first_run_shows_folder_modal(client, monkeypatch, tmp_path):

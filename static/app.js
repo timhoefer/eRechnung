@@ -497,6 +497,7 @@ function fillCustomer(idx) {
     buyer_vat_id: c.vat_id,
     buyer_email: c.email,
     buyer_reference: c.reference,
+    buyer_payment_term_days: c.payment_term_days,
   };
   Object.entries(map).forEach(([n, v]) => {
     const el = document.querySelector(`[name="${n}"]`);
@@ -505,6 +506,24 @@ function fillCustomer(idx) {
   const cc = document.querySelector('[name="buyer_country"]');
   if (cc && !cc.value) cc.value = "DE";
   updateStateField(c.state);
+  // Kundenspezifisches Zahlungsziel -> "Fällig am" vorbelegen (Rechnungsdatum + Tage).
+  // Ohne eigenes Ziel bleibt das Datum unangetastet (Standard galt schon beim Laden).
+  const days = parseInt(c.payment_term_days, 10);
+  if (days > 0) setDueDateFromTerm(days);
+}
+
+// "Fällig am" aus Rechnungsdatum + Zahlungsziel (Tage) berechnen.
+function setDueDateFromTerm(days) {
+  const issue = document.querySelector('[name="issue_date"]');
+  const due = document.querySelector('[name="due_date"]');
+  if (!issue || !due || !issue.value) return;
+  // Durchgängig UTC: lokales Datum + toISOString() würde westlich von UTC bzw. bei
+  // Sommerzeit-Differenzen einen Tag verrutschen (10.06.+30 -> 09.07. statt 10.07.).
+  const d = new Date(issue.value + "T00:00:00Z");
+  if (isNaN(d)) return;
+  d.setUTCDate(d.getUTCDate() + days);
+  due.value = d.toISOString().slice(0, 10);
+  schedulePreview();
 }
 
 // Archivierte Rechnung als Vorlage laden: Inhalt übernehmen, Nummer/Datum bleiben frisch.
@@ -518,7 +537,7 @@ function applyDraft() {
     buyer_name: b.name, buyer_contact: b.contact, buyer_address_line: b.address_line,
     buyer_postcode: b.postcode, buyer_city: b.city, buyer_state: b.state,
     buyer_country: b.country, buyer_vat_id: b.vat_id, buyer_email: b.email,
-    buyer_reference: b.reference,
+    buyer_reference: b.reference, buyer_payment_term_days: b.payment_term_days,
   };
   Object.entries(buyerMap).forEach(([n, v]) => {
     const el = form.querySelector(`[name="${n}"]`);

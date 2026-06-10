@@ -206,6 +206,7 @@
       <label>{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
       <label><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_email" type="email" data-xr-required></label>
       <label><span class="label-row"><span class="lbl" data-zug="{{ t.buyer_reference }}" data-xr="{{ t.buyer_reference_xr }}">{{ t.buyer_reference }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_reference" data-xr-required></label>
+      <label title="{{ t.buyer_term_days_hint }}">{{ t.buyer_term_days }}<input name="buyer_payment_term_days" type="number" min="0" step="1"></label>
     </div>
     <div class="customer-bar">
       <span class="spacer"></span>

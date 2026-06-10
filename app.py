@@ -578,6 +578,9 @@ def buyer_from_form(form) -> dict:
         "vat_id": form.get("buyer_vat_id", "").strip(),
         "email": form.get("buyer_email", "").strip(),
         "reference": form.get("buyer_reference", "").strip(),
+        # Optionales kundenspezifisches Zahlungsziel (überschreibt den Standard;
+        # nur fürs Vorbelegen von "Fällig am" – das Datum selbst bleibt maßgeblich).
+        "payment_term_days": form.get("buyer_payment_term_days", "").strip(),
     }
 
 
