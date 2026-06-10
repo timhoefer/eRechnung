@@ -93,10 +93,16 @@
     <div class="callout" id="taxnr-hint" {{ '' if (seller.vat_id and seller.tax_number) else 'hidden' }}>{{ t.taxnr_hint }}</div>
 
     <h3 class="form-section">{{ t.sec_payment }}</h3>
-    <label>{{ t.iban }}<input name="iban" value="{{ seller.iban or '' }}"></label>
-    <label>{{ t.bic }}<input name="bic" value="{{ seller.bic or '' }}"></label>
-    <label>{{ t.bank_name }}<input name="bank_name" value="{{ seller.bank_name or '' }}"></label>
-    <label>{{ t.account_holder }}<input name="account_name" value="{{ seller.account_name or '' }}"></label>
+    {# Hauptkonto: gleiche Box wie die Zusatzkonten, nur ohne Löschbutton.
+       (Eigene Klasse, damit die :has(.extra-account)-Hinweis-Logik nicht anspringt.) #}
+    <div class="wide primary-account">
+      <div class="acct-head grid">
+        <label>{{ t.iban }}<input name="iban" value="{{ seller.iban or '' }}"></label>
+        <label>{{ t.bic }}<input name="bic" value="{{ seller.bic or '' }}"></label>
+        <label>{{ t.bank_name }}<input name="bank_name" value="{{ seller.bank_name or '' }}"></label>
+        <label>{{ t.account_holder }}<input name="account_name" value="{{ seller.account_name or '' }}"></label>
+      </div>
+    </div>
     {# Zahlungsziel lebt beim KUNDEN (Default 14 Tage, pro Kunde änderbar). #}
 
     {# Eine Konto-Zeile – EINMAL definiert, genutzt für bestehende Konten (Loop)

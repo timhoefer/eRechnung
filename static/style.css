@@ -414,12 +414,13 @@ button.secondary:hover { background: var(--surface-2-h); }
 /* Zusätzliche Konten: Optik wie die Positionen – eingefasste Box, Trash AUSSERHALB
    rechts (absolut am relativen .acct-head, an der Unterkante der Feldzeile);
    innen 4-spaltig (.grid-Default) mit Labels. */
-.extra-account {
+.primary-account, .extra-account {
   margin-right: 49px; border: 1px solid var(--line); border-radius: 12px;
   background: var(--surface); padding: 14px 16px; margin-bottom: 12px;
 }
-.extra-account .acct-head { position: relative; margin-top: 0; }
-.extra-account input { padding: 7px 8px; }  /* kompakte Feldhöhe wie in den Positions-Boxen (.item input) */
+.acct-head { position: relative; margin-top: 0; }
+/* kompakte Feldhöhe wie in den Positions-Boxen (.item input) */
+.primary-account input, .extra-account input { padding: 7px 8px; }
 .extra-account .acct-head > .acct-remove { position: absolute; bottom: 0; left: 100%; margin-left: 28px; }
 .bank-select[hidden] { display: none; }
 .bank-select .unitsel { display: block; }
