@@ -1571,6 +1571,29 @@ document.addEventListener("input", (e) => {
   if (e.target.name === "buyer_vat_id") e.target.setCustomValidity("");
 });
 
+// Server-Flashes (nach Redirects, z. B. Generate-Fehler) als Toasts zeigen –
+// es gibt keine Banner mehr. Mehrere Meldungen nacheinander (gestaffelt).
+(window.FLASHES || []).forEach(([cat, msg], i) => {
+  setTimeout(() => (cat === "err" ? flashError(msg) : flashOk(msg)), i * 4200);
+});
+
+// "Stammdaten speichern" ohne Seiten-Reload: Scrollposition bleibt, Toast statt
+// Banner; danach Vorschau auffrischen (Stammdaten fließen ins PDF ein).
+const settingsFormEl = document.getElementById("settings-form");
+if (settingsFormEl) {
+  settingsFormEl.addEventListener("submit", (e) => {
+    e.preventDefault();
+    fetch(settingsFormEl.action, {
+      method: "POST",
+      body: new FormData(settingsFormEl),
+      headers: { "X-Requested-With": "fetch" },
+    })
+      .then((r) => r.json())
+      .then((d) => { flashOk(d.message); updatePreview(true); })
+      .catch(() => flashError());
+  });
+}
+
 // Konto-Auswähler VOR den Restore-Pfaden aufbauen, damit restoreForm (Sprachwechsel)
 // und applyDraft die gespeicherte Konto-Auswahl in existierende Optionen schreiben.
 syncBankSelector();

@@ -32,12 +32,6 @@
   </div>
 </header>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-    <div class="flash {{ cat }}">{{ msg }}</div>
-  {% endfor %}
-{% endwith %}
-
 <div class="layout">
 <div class="form-pane">
 
@@ -440,6 +434,7 @@
   window.ARCHIVE_DELETE_URL = {{ url_for('archive_delete')|tojson }};
   window.EXPORT_CSV_URL = {{ url_for('export_csv')|tojson }};
   window.IS_DESKTOP = {{ is_desktop|tojson }};
+  window.FLASHES = {{ get_flashed_messages(with_categories=true)|tojson }};
   window.MSG_CONFIRM_DELETE = {{ t['confirm_delete_text']|tojson }};
   window.MSG_LIVE_PREVIEW = {{ t['live_preview']|tojson }};
   window.MSG_NO_PREVIEW = {{ t['no_preview']|tojson }};

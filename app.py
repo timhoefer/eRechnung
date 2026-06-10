@@ -908,7 +908,11 @@ def index():
 def settings():
     seller = apply_seller_form(load_seller(), request.form)
     save_seller(seller)
-    flash("Stammdaten gespeichert.", "ok")
+    msg = translate(get_ui_lang(request))["master_saved"]
+    # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner.
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"ok": True, "message": msg}
+    flash(msg, "ok")
     return redirect(url_for("index"))
 
 
