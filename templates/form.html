@@ -193,6 +193,7 @@
       <label>{{ t.street }}<input name="buyer_address_line"></label>
       <label>{{ t.postcode }}<input name="buyer_postcode"></label>
       <label>{{ t.city }}<input name="buyer_city"></label>
+      <label>{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
       <label>{{ t.country }}
         <select name="buyer_country" id="buyer_country">
           {% for code, label in countries %}
@@ -203,7 +204,6 @@
       <label id="buyer-state-field" hidden>{{ t.state }}<select name="buyer_state" id="buyer_state"></select></label>
     </div>
     <div class="grid grid-3">
-      <label>{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
       <label><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_email" type="email" data-xr-required></label>
       <label><span class="label-row"><span class="lbl" data-zug="{{ t.buyer_reference }}" data-xr="{{ t.buyer_reference_xr }}">{{ t.buyer_reference }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_reference" data-xr-required></label>
       <label title="{{ t.buyer_term_days_hint }}">{{ t.buyer_term_days }}<input name="buyer_payment_term_days" type="number" min="0" step="1" value="14"></label>
