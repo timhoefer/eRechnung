@@ -539,6 +539,18 @@ function applyDraft() {
   set("language", inv.language);
   set("tax_treatment", inv.tax_treatment);
   set("profile", inv.profile);
+  // Bankkonto wiederherstellen: neue Sidecars speichern die IBAN (Option-value),
+  // alte einen numerischen Index – beides unterstützen. Setzt voraus, dass
+  // syncBankSelector() vorher lief (Optionen existieren).
+  const ba = inv.bank_account;
+  const bsel = form.querySelector('[name="bank_account"]');
+  if (bsel && ba != null && ba !== "") {
+    if (/^\d+$/.test(String(ba))) {
+      if (bsel.options[Number(ba)]) bsel.selectedIndex = Number(ba);
+    } else {
+      bsel.value = ba; // ohne Treffer bleibt die Auswahl unverändert (erste Option)
+    }
+  }
   // Gesamtrabatt wiederherstellen und ggf. ausklappen.
   set("discount", inv.discount);
   set("discount_reason", inv.discount_reason);
@@ -1039,6 +1051,9 @@ function updatePreview(force) {
   fetch(window.PREVIEW_URL, { method: "POST", body: data, signal: ctrl.signal })
     .then((r) => r.text())
     .then((html) => {
+      // Stale-Guard wie im Drawer: war die Antwort schon gepuffert, ist abort() ein
+      // No-op – ohne den Check könnte eine überholte Antwort die neuere überschreiben.
+      if (ctrl.signal.aborted) return;
       _previewLastKey = key; // erst nach Erfolg merken
       frame.srcdoc = html;
     })
@@ -1383,13 +1398,7 @@ document.addEventListener("click", (e) => {
   }
   // Erststart: Datenordner per nativem Dialog wählen.
   if (e.target.id === "onboard-browse") {
-    const input = document.getElementById("onboard-dir-input");
-    e.target.disabled = true;
-    fetch(window.DATA_DIR_BROWSE_URL, { method: "POST" })
-      .then((r) => r.json())
-      .then((d) => { if (d.ok && d.path && input) input.value = d.path; })
-      .catch(() => flashError())
-      .finally(() => { e.target.disabled = false; });
+    browseDataDir(e.target, document.getElementById("onboard-dir-input"));
     return;
   }
   // Weiteres Bankkonto hinzufügen (Vorlage klonen) bzw. entfernen.
@@ -1508,6 +1517,10 @@ document.addEventListener("input", (e) => {
   if (e.target.name === "buyer_vat_id") e.target.setCustomValidity("");
 });
 
+// Konto-Auswähler VOR den Restore-Pfaden aufbauen, damit restoreForm (Sprachwechsel)
+// und applyDraft die gespeicherte Konto-Auswahl in existierende Optionen schreiben.
+syncBankSelector();
+
 let restoredFromLang = false;
 (function restoreAfterLangSwitch() {
   const raw = sessionStorage.getItem("erechnung:lang");
@@ -1524,7 +1537,6 @@ let restoredFromLang = false;
 })();
 
 if (!restoredFromLang) applyDraft();
-syncBankSelector(); // Konto-Auswähler initial aufbauen (falls ≥2 Konten hinterlegt)
 
 const previewFrameEl = document.getElementById("preview-frame");
 if (previewFrameEl) previewFrameEl.addEventListener("load", function () { scaleMiniPreview(); checkMiniPages(); });
@@ -1591,27 +1603,41 @@ function announce(msg) {
 // Kurz sichtbare Fehlermeldung (macht still scheiternde AJAX-Aktionen sichtbar).
 let _toastTimer;
 // Bankkonten aus dem Stammdaten-Formular sammeln – Hauptkonto (flache Felder) zuerst,
-// dann die weiteren Blöcke. Reihenfolge = Serverseite (seller_accounts) -> Index passt.
+// dann die weiteren Blöcke. Identifiziert wird ein Konto über seine IBAN; angezeigt
+// als "Bank · …1234" (kein eigenes Namensfeld nötig).
 function collectAccounts() {
   const accts = [];
   const sf = document.getElementById("settings-form");
   if (!sf) return accts;
   const val = (el) => (el ? el.value : "").trim();
-  const pIban = val(sf.querySelector('[name="iban"]'));
-  if (pIban) {
-    accts.push({ label: val(sf.querySelector('[name="bank_name"]')) || "…" + pIban.slice(-4), iban: pIban });
-  }
+  const push = (iban, bank) => { if (iban) accts.push({ iban: iban, bank: bank }); };
+  push(val(sf.querySelector('[name="iban"]')), val(sf.querySelector('[name="bank_name"]')));
   sf.querySelectorAll(".extra-account").forEach((b) => {
-    const iban = val(b.querySelector('[name="acct_iban"]'));
-    if (!iban) return;
-    const label = val(b.querySelector('[name="acct_label"]')) || val(b.querySelector('[name="acct_bank_name"]'));
-    accts.push({ label: label || "…" + iban.slice(-4), iban: iban });
+    push(val(b.querySelector('[name="acct_iban"]')), val(b.querySelector('[name="acct_bank_name"]')));
   });
   return accts;
 }
 
+// Nativen Ordner-Dialog öffnen und den gewählten Pfad ins Eingabefeld schreiben –
+// genutzt vom Erststart-Dialog und vom Datenordner-Feld in den Einstellungen.
+function browseDataDir(btn, input) {
+  btn.disabled = true;
+  fetch(window.DATA_DIR_BROWSE_URL, { method: "POST" })
+    .then((r) => r.json())
+    .then((d) => { if (d.ok && d.path && input) input.value = d.path; })
+    .catch(() => flashError())
+    .finally(() => { btn.disabled = false; });
+}
+
+// Anzeigetext eines Kontos: "Bank · …1234" (bzw. nur "…1234" ohne Bankname).
+function acctDisplay(a) {
+  const tail = "…" + a.iban.replace(/\s+/g, "").slice(-4);
+  return a.bank ? a.bank + " · " + tail : tail;
+}
+
 // Konto-Auswähler (neben der Währung) live aus den eingetragenen Konten aufbauen.
-// Erscheint nur ab 2 Konten; bestehende Auswahl bleibt nach Möglichkeit erhalten.
+// Erscheint nur ab 2 Konten. Der option-value ist die IBAN (stabiler Schlüssel):
+// die Auswahl übersteht damit Umsortierungen/Entfernen anderer Konten.
 function syncBankSelector() {
   const wrap = document.getElementById("bank-select-wrap");
   const sel = document.getElementById("bank-account-select");
@@ -1620,13 +1646,13 @@ function syncBankSelector() {
   if (accts.length < 2) { wrap.hidden = true; sel.innerHTML = ""; return; }
   const prev = sel.value;
   sel.innerHTML = "";
-  accts.forEach((a, i) => {
+  accts.forEach((a) => {
     const o = document.createElement("option");
-    o.value = String(i);
-    o.textContent = a.label;
+    o.value = a.iban;
+    o.textContent = acctDisplay(a);
     sel.appendChild(o);
   });
-  if (prev && Number(prev) < accts.length) sel.value = prev;
+  if (prev && accts.some((a) => a.iban === prev)) sel.value = prev;
   wrap.hidden = false;
 }
 
@@ -1837,13 +1863,7 @@ function closeSettings() {
     // Datenordner durchsuchen (nativer Dialog).
     const browse = e.target.closest("#dd-browse");
     if (browse) {
-      const input = pane.querySelector("#data-dir-input");
-      browse.disabled = true;
-      fetch(window.DATA_DIR_BROWSE_URL, { method: "POST" })
-        .then((r) => r.json())
-        .then((d) => { if (d.ok && d.path && input) input.value = d.path; })
-        .catch(() => flashError())
-        .finally(() => { browse.disabled = false; });
+      browseDataDir(browse, pane.querySelector("#data-dir-input"));
       return;
     }
     // Export-Preset (Jahr/Quartal) -> Datumsfelder füllen.

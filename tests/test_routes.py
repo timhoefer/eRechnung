@@ -218,28 +218,37 @@ def test_seller_accounts_combines_primary_and_extras():
     flat = {"name": "S", "iban": "DE11", "bic": "B1", "bank_name": "Bank A",
             "account_name": "Inh"}
     assert len(appmod.seller_accounts(flat)) == 1
-    combo = dict(flat, accounts=[{"label": "USD", "iban": "DE22"}, {"iban": ""}])
+    combo = dict(flat, accounts=[{"bank_name": "Wise", "iban": "DE22"}, {"iban": ""}])
     accts = appmod.seller_accounts(combo)
-    assert [a["label"] for a in accts] == ["Bank A", "USD"]  # leeres Konto übersprungen
+    assert [a["iban"] for a in accts] == ["DE11", "DE22"]  # leeres Konto übersprungen
     assert appmod.seller_accounts({"name": "X"}) == []  # ohne IBAN keine Konten
-    # select_account: Index-Clamp + Fallback
+    # Auswahl per IBAN (stabiler Schlüssel), tolerant gegen Leerzeichen/Kleinschreibung
+    assert appmod.select_account(combo, "DE22")["bank_name"] == "Wise"
+    assert appmod.select_account(combo, "de 22")["bank_name"] == "Wise"
+    # Unbekannte IBAN / kein Schlüssel -> erstes Konto
+    assert appmod.select_account(combo, "DE99")["iban"] == "DE11"
+    assert appmod.select_account(combo, None)["iban"] == "DE11"
+    # Alt-Sidecars: numerischer Index wird weiter unterstützt (inkl. Clamp)
     assert appmod.select_account(combo, "1")["iban"] == "DE22"
     assert appmod.select_account(combo, "99")["iban"] == "DE11"
-    assert appmod.select_account(combo, None)["iban"] == "DE11"
+    # Kernfix: IBAN-Auswahl übersteht das Wegfallen des Hauptkontos (Index täte das nicht)
+    shifted = {"name": "S", "iban": "", "accounts": [
+        {"iban": "DEAA"}, {"iban": "DE22", "bank_name": "Wise"}]}
+    assert appmod.select_account(shifted, "DE22")["bank_name"] == "Wise"
 
 
 def test_apply_seller_form_parses_extra_accounts():
     from werkzeug.datastructures import MultiDict
     md = MultiDict()
     md.add("has_accounts_section", "1")
-    for k, v in [("acct_label", "USD"), ("acct_iban", "DE22"), ("acct_bic", "B2"),
+    for k, v in [("acct_iban", "DE22"), ("acct_bic", "B2"),
                  ("acct_bank_name", "Wise"), ("acct_account_name", "Inh")]:
         md.add(k, v)
-    for k in ("acct_label", "acct_iban", "acct_bic", "acct_bank_name", "acct_account_name"):
+    for k in ("acct_iban", "acct_bic", "acct_bank_name", "acct_account_name"):
         md.add(k, "")  # leerer Block -> wird verworfen
     seller = appmod.apply_seller_form({"name": "S", "iban": "DE11"}, md)
-    assert seller["accounts"] == [{"label": "USD", "account_name": "Inh",
-                                   "bank_name": "Wise", "iban": "DE22", "bic": "B2"}]
+    assert seller["accounts"] == [{"account_name": "Inh", "bank_name": "Wise",
+                                   "iban": "DE22", "bic": "B2"}]
 
 
 def test_invoice_form_has_account_selector_element(client):
@@ -253,17 +262,20 @@ def test_invoice_form_has_account_selector_element(client):
 def test_preview_uses_selected_account(client):
     out = appmod.SELLER_FILE
     base = json.loads(out.read_text(encoding="utf-8"))
-    base["accounts"] = [{"label": "USD", "iban": "DE99USD0", "bic": "B2",
+    base["accounts"] = [{"iban": "DE99USD0", "bic": "B2",
                          "bank_name": "Wise", "account_name": "Inh"}]
     out.write_text(json.dumps(base), encoding="utf-8")
     form = {"description": "L", "quantity": "1", "unit_price": "100",
             "tax_treatment": "de_19"}
-    # Gewähltes Zweitkonto erscheint im Vorschau-HTML ...
-    body1 = client.post("/preview-html", data=dict(form, bank_account="1")).get_data(as_text=True)
+    # Konto per IBAN gewählt -> erscheint im Vorschau-HTML ...
+    body1 = client.post("/preview-html", data=dict(form, bank_account="DE99USD0")).get_data(as_text=True)
     assert "DE99USD0" in body1
-    # ... Hauptkonto (Index 0) zeigt die flache IBAN, nicht das Zweitkonto.
-    body0 = client.post("/preview-html", data=dict(form, bank_account="0")).get_data(as_text=True)
+    # ... Hauptkonto (per IBAN) zeigt die flache IBAN, nicht das Zweitkonto.
+    body0 = client.post("/preview-html", data=dict(form, bank_account=base["iban"])).get_data(as_text=True)
     assert base["iban"] in body0 and "DE99USD0" not in body0
+    # Alt-Sidecar-Kompatibilität: numerischer Index funktioniert weiter.
+    bodyl = client.post("/preview-html", data=dict(form, bank_account="1")).get_data(as_text=True)
+    assert "DE99USD0" in bodyl
 
 
 def test_data_dir_set_onboarding_redirects_to_form(client, monkeypatch):

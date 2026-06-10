@@ -410,7 +410,6 @@ def apply_seller_form(seller: dict, form) -> dict:
     # (iban/bic/...); zusätzliche Konten landen in seller["accounts"]. Nur anfassen,
     # wenn das Formular die Sektion wirklich enthält -> Teil-Posts wischen nichts weg.
     if form.get("has_accounts_section"):
-        labels = form.getlist("acct_label")
         holders = form.getlist("acct_account_name")
         banks = form.getlist("acct_bank_name")
         ibans = form.getlist("acct_iban")
@@ -425,7 +424,7 @@ def apply_seller_form(seller: dict, form) -> dict:
             if not iban:  # leere Blöcke überspringen
                 continue
             extras.append({
-                "label": at(labels, i), "account_name": at(holders, i),
+                "account_name": at(holders, i),
                 "bank_name": at(banks, i), "iban": iban, "bic": at(bics, i),
             })
         seller["accounts"] = extras
@@ -433,12 +432,12 @@ def apply_seller_form(seller: dict, form) -> dict:
 
 
 def seller_accounts(seller: dict) -> list:
-    """Alle Zahlungskonten in Anzeige-Reihenfolge: Hauptkonto (flache Felder) zuerst,
-    danach die weiteren aus seller['accounts']. Konten ohne IBAN werden ausgelassen."""
+    """Alle Zahlungskonten: Hauptkonto (flache Felder) zuerst, danach die weiteren
+    aus seller['accounts']. Konten ohne IBAN werden ausgelassen. Identifiziert wird
+    ein Konto über seine IBAN (stabil), nicht über die Listenposition."""
     out = []
     if (seller.get("iban") or "").strip():
         out.append({
-            "label": (seller.get("bank_name") or "").strip() or "Hauptkonto",
             "account_name": seller.get("account_name", ""),
             "bank_name": seller.get("bank_name", ""),
             "iban": seller.get("iban", ""), "bic": seller.get("bic", ""),
@@ -446,8 +445,6 @@ def seller_accounts(seller: dict) -> list:
     for a in (seller.get("accounts") or []):
         if (a.get("iban") or "").strip():
             out.append({
-                "label": (a.get("label") or "").strip()
-                or (a.get("bank_name") or "").strip() or a.get("iban", ""),
                 "account_name": a.get("account_name", ""),
                 "bank_name": a.get("bank_name", ""),
                 "iban": a.get("iban", ""), "bic": a.get("bic", ""),
@@ -455,14 +452,26 @@ def seller_accounts(seller: dict) -> list:
     return out
 
 
-def select_account(seller: dict, idx) -> dict | None:
-    """Konto nach Index (aus dem Formular) wählen; 0 = Hauptkonto. Fällt bei
-    ungültigem Index auf das erste Konto zurück; None, wenn keins hinterlegt ist."""
+def _norm_iban(s) -> str:
+    return "".join(str(s or "").split()).upper()
+
+
+def select_account(seller: dict, key) -> dict | None:
+    """Konto anhand der IBAN (stabiler Schlüssel aus dem Formular) wählen.
+    Alt-Sidecars enthalten noch einen numerischen Index – der wird weiter
+    unterstützt. Fallback: erstes Konto; None, wenn keins hinterlegt ist."""
     accts = seller_accounts(seller)
     if not accts:
         return None
+    k = str(key or "").strip()
+    if k and not k.isdigit():  # IBANs beginnen mit Buchstaben
+        kn = _norm_iban(k)
+        for a in accts:
+            if _norm_iban(a["iban"]) == kn:
+                return a
+        return accts[0]
     try:
-        i = int(idx)
+        i = int(k)
     except (TypeError, ValueError):
         i = 0
     if i < 0 or i >= len(accts):
@@ -1148,20 +1157,28 @@ def download_zip(filename):
     )
 
 
-@app.route("/reveal/<path:filename>", methods=["POST"])
-def reveal(filename):
-    """Datei im Finder zeigen (macOS). In der Desktop-App ersetzt das den Download –
-    die Belege liegen ohnehin schon im output/-Ordner."""
+def reveal_in_finder(path) -> bool:
+    """Datei im Finder zeigen (macOS) – gemeinsamer Helfer für reveal() und den
+    Desktop-CSV-Export."""
+    if sys.platform != "darwin":
+        return False
     import subprocess
 
-    path = OUTPUT_DIR / filename
-    if path.name != filename or not path.exists():
-        abort(404)
-    if sys.platform != "darwin":
-        return {"ok": False, "error": "unsupported"}
     try:
         subprocess.run(["open", "-R", str(path)], timeout=10)
     except Exception:
+        return False
+    return True
+
+
+@app.route("/reveal/<path:filename>", methods=["POST"])
+def reveal(filename):
+    """Datei im Finder zeigen. In der Desktop-App ersetzt das den Download –
+    die Belege liegen ohnehin schon im output/-Ordner."""
+    path = OUTPUT_DIR / filename
+    if path.name != filename or not path.exists():
+        abort(404)
+    if not reveal_in_finder(path):
         return {"ok": False, "error": "failed"}
     return {"ok": True}
 
@@ -1194,7 +1211,8 @@ def archive_delete():
     # Pfad-Traversal verhindern: nur einfache Dateinamen direkt im Ausgabeordner.
     if filename and path.name == filename and path.suffix == ".pdf" and path.exists():
         path.unlink()
-        for sib in (f"{path.stem}.json", f"{path.stem}.xml"):  # Sidecar + XRechnung-XML
+        # Sidecar + XRechnung-XML + evtl. exportierte Einzel-CSV mitlöschen
+        for sib in (f"{path.stem}.json", f"{path.stem}.xml", f"{path.stem}.csv"):
             p = OUTPUT_DIR / sib
             if p.exists():
                 p.unlink()
@@ -1383,14 +1401,9 @@ def export_csv():
     if app.config.get("DESKTOP") and sys.platform == "darwin":
         # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
         # schreiben und im Finder zeigen.
-        import subprocess
-
         out = OUTPUT_DIR / name
         out.write_bytes(data)
-        try:
-            subprocess.run(["open", "-R", str(out)], timeout=10)
-        except Exception:
-            pass
+        reveal_in_finder(out)
         return {"ok": True, "name": name}
     return Response(
         data, mimetype="text/csv",  # Flask ergänzt charset=utf-8 automatisch
