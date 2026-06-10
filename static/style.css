@@ -154,7 +154,10 @@ details.card summary::-webkit-details-marker { display: none; }
 h2 { margin: 0 0 14px; font-size: var(--text-lg); }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 14px; margin-top: 14px; }
 .grid.grid-3 { grid-template-columns: repeat(3, 1fr); }
-label { display: flex; flex-direction: column; font-size: var(--text-sm); color: var(--muted); gap: 4px; }
+/* justify-content: flex-end -> Inputs einer Grid-Zeile bleiben auf einer Linie,
+   auch wenn ein langes Label (z. B. "Kundenreferenz / Bestellnr. (optional)")
+   zweizeilig umbricht: das Label wächst dann nach oben statt das Feld zu schieben. */
+label { display: flex; flex-direction: column; justify-content: flex-end; font-size: var(--text-sm); color: var(--muted); gap: 4px; }
 .wide { grid-column: 1 / -1; }
 label.span-2 { grid-column: span 2; }
 label.span-3 { grid-column: span 3; }
