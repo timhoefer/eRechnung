@@ -103,7 +103,8 @@
     <label>{{ t.bic }}<input name="bic" value="{{ seller.bic or '' }}"></label>
     <label>{{ t.bank_name }}<input name="bank_name" value="{{ seller.bank_name or '' }}"></label>
     <label>{{ t.account_holder }}<input name="account_name" value="{{ seller.account_name or '' }}"></label>
-    <label title="{{ t.payment_term_days_hint }}">{{ t.payment_term_days }}<input name="payment_term_days" type="number" min="0" step="1" value="{{ seller.payment_term_days or 14 }}"></label>
+    {# Zahlungsziel lebt beim KUNDEN (immer sichtbar, mit diesem Standard vorbelegt);
+       seller.payment_term_days bleibt als interner Default bestehen. #}
 
     {# Eine Konto-Zeile – EINMAL definiert, genutzt für bestehende Konten (Loop)
        und als klonbare Vorlage (<template>); so können beide nicht auseinanderlaufen. #}
@@ -206,7 +207,7 @@
       <label>{{ t.attn }}<input name="buyer_contact" placeholder="z.Hd. Frau Müller"></label>
       <label><span class="label-row"><span class="lbl">{{ t.email }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_email" type="email" data-xr-required></label>
       <label><span class="label-row"><span class="lbl" data-zug="{{ t.buyer_reference }}" data-xr="{{ t.buyer_reference_xr }}">{{ t.buyer_reference }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_reference" data-xr-required></label>
-      <label title="{{ t.buyer_term_days_hint }}">{{ t.buyer_term_days }}<input name="buyer_payment_term_days" type="number" min="0" step="1"></label>
+      <label title="{{ t.buyer_term_days_hint }}">{{ t.buyer_term_days }}<input name="buyer_payment_term_days" type="number" min="0" step="1" value="{{ seller.payment_term_days or 14 }}"></label>
     </div>
     <div class="customer-bar">
       <span class="spacer"></span>
@@ -440,6 +441,7 @@
   window.ARCHIVE_DELETE_URL = {{ url_for('archive_delete')|tojson }};
   window.EXPORT_CSV_URL = {{ url_for('export_csv')|tojson }};
   window.IS_DESKTOP = {{ is_desktop|tojson }};
+  window.DEFAULT_TERM_DAYS = {{ (seller.payment_term_days or 14)|tojson }};
   window.MSG_CONFIRM_DELETE = {{ t['confirm_delete_text']|tojson }};
   window.MSG_LIVE_PREVIEW = {{ t['live_preview']|tojson }};
   window.MSG_NO_PREVIEW = {{ t['no_preview']|tojson }};

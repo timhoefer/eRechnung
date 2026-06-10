@@ -506,10 +506,14 @@ function fillCustomer(idx) {
   const cc = document.querySelector('[name="buyer_country"]');
   if (cc && !cc.value) cc.value = "DE";
   updateStateField(c.state);
-  // Kundenspezifisches Zahlungsziel -> "Fällig am" vorbelegen (Rechnungsdatum + Tage).
-  // Ohne eigenes Ziel bleibt das Datum unangetastet (Standard galt schon beim Laden).
-  const days = parseInt(c.payment_term_days, 10);
-  if (days > 0) setDueDateFromTerm(days);
+  // Zahlungsziel: eigenes des Kunden, sonst Standard – Feld ist immer befüllt,
+  // "Fällig am" wird daraus vorbelegt (bleibt pro Rechnung manuell änderbar).
+  const termEl = document.querySelector('[name="buyer_payment_term_days"]');
+  const days = parseInt(c.payment_term_days, 10) >= 0
+    ? parseInt(c.payment_term_days, 10)
+    : parseInt(window.DEFAULT_TERM_DAYS, 10) || 14;
+  if (termEl) termEl.value = days;
+  setDueDateFromTerm(days);
 }
 
 // "Fällig am" aus Rechnungsdatum + Zahlungsziel (Tage) berechnen.
@@ -1225,6 +1229,11 @@ document.addEventListener("input", (e) => {
   }
   recalc();
   schedulePreview();
+  // Zahlungsziel getippt oder Rechnungsdatum geändert -> "Fällig am" live nachziehen.
+  if (e.target.name === "buyer_payment_term_days" || e.target.name === "issue_date") {
+    const t = parseInt((document.querySelector('[name="buyer_payment_term_days"]') || {}).value, 10);
+    if (t >= 0) setDueDateFromTerm(t);
+  }
   if (e.target.classList.contains("qty")) {
     const qu = e.target.closest(".qtyunit");
     if (qu) syncUnitDisplay(qu.querySelector(".unit")); // Plural/Singular nachziehen
