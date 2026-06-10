@@ -405,9 +405,10 @@ button.secondary:hover { background: var(--surface-2-h); }
 .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: var(--text-lg); margin-top: 4px; }
 .back-link { margin: 16px 2px; }
 /* Aktionsleiste der Ergebnisseite (result.html) – im Fluss, nicht sticky */
-.extra-account { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
-.extra-account input { flex: 1 1 130px; min-width: 0; }
-.extra-account .acct-remove { flex: 0 0 auto; }
+/* Zusätzliche Konten: gleiches 3-Spalten-Grid wie das Hauptkonto darüber; Konten
+   durch eine dezente Linie getrennt, Löschen rechts unten neben dem Kontoinhaber. */
+.extra-account { margin-top: 0; padding-top: 12px; border-top: 1px solid var(--line); margin-bottom: 12px; }
+.extra-account .acct-remove { grid-column: -2 / -1; justify-self: end; align-self: end; }
 .bank-select[hidden] { display: none; }
 .actions { display: flex; align-items: center; gap: 12px; margin: 20px auto; }
 .result-note { max-width: 1080px; margin: 0 auto 10px; padding: 0 23px; box-sizing: border-box; }

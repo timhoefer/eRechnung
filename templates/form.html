@@ -100,13 +100,14 @@
     {# Zahlungsziel lebt beim KUNDEN (Default 14 Tage, pro Kunde änderbar). #}
 
     {# Eine Konto-Zeile – EINMAL definiert, genutzt für bestehende Konten (Loop)
-       und als klonbare Vorlage (<template>); so können beide nicht auseinanderlaufen. #}
+       und als klonbare Vorlage (<template>); so können beide nicht auseinanderlaufen.
+       Gleiches 3-Spalten-Grid + Labels wie beim Hauptkonto darüber. #}
     {% macro acct_row(a={}) -%}
-    <div class="extra-account">
-      <input name="acct_iban" placeholder="IBAN" value="{{ a.iban or '' }}">
-      <input name="acct_bic" placeholder="BIC" value="{{ a.bic or '' }}">
-      <input name="acct_bank_name" placeholder="{{ t.bank_name }}" value="{{ a.bank_name or '' }}">
-      <input name="acct_account_name" placeholder="{{ t.account_holder }}" value="{{ a.account_name or '' }}">
+    <div class="extra-account grid grid-3">
+      <label>{{ t.iban }}<input name="acct_iban" value="{{ a.iban or '' }}"></label>
+      <label>{{ t.bic }}<input name="acct_bic" value="{{ a.bic or '' }}"></label>
+      <label>{{ t.bank_name }}<input name="acct_bank_name" value="{{ a.bank_name or '' }}"></label>
+      <label>{{ t.account_holder }}<input name="acct_account_name" value="{{ a.account_name or '' }}"></label>
       <button type="button" class="del acct-remove" title="{{ t.acct_remove }}" aria-label="{{ t.acct_remove }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
     </div>
     {%- endmacro %}
