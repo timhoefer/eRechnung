@@ -90,6 +90,8 @@ LANG = {
         "buyer_reference": "Kundenreferenz / Bestellnr. (optional)",
         "buyer_term_days": "Zahlungsziel (Tage)",
         "buyer_term_days_hint": "„Fällig am“ = Rechnungsdatum + Tage. Wird mit dem Kunden gespeichert; das Datum bleibt pro Rechnung änderbar.",
+        "customer_saved": "Kunde „{name}“ gespeichert.",
+        "customer_name_missing": "Kundenname fehlt – nicht gespeichert.",
         "buyer_reference_xr": "Leitweg-ID (Käuferreferenz)",
         # Steuer
         "tax_treatment": "Steuerliche Behandlung",
@@ -353,6 +355,8 @@ LANG = {
         "buyer_reference": "Customer reference / PO no. (optional)",
         "buyer_term_days": "Payment term (days)",
         "buyer_term_days_hint": "“Due date” = issue date + days. Saved with the customer; the date stays adjustable per invoice.",
+        "customer_saved": "Customer “{name}” saved.",
+        "customer_name_missing": "Customer name missing – not saved.",
         "buyer_reference_xr": "Leitweg ID (buyer reference)",
         "tax_treatment": "Tax treatment",
         "tax_disclaimer": "These notes are not tax advice. Please verify the correct treatment yourself (or with your tax advisor).",

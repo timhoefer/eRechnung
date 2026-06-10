@@ -1408,6 +1408,33 @@ document.addEventListener("click", (e) => {
     chooseFormat(fmtOpt.dataset.profile);
     return;
   }
+  // "Kunde speichern" ohne Seiten-Reload: Scrollposition bleibt, Bestätigung als
+  // Toast; die Combobox-Datenbasis (window.CUSTOMERS) wird aus der Antwort erneuert.
+  if (e.target.id === "cust-save-btn") {
+    e.preventDefault();
+    const form = document.getElementById("invoice-form");
+    const btn = e.target;
+    btn.disabled = true;
+    fetch(btn.getAttribute("formaction"), {
+      method: "POST",
+      body: new FormData(form),
+      headers: { "X-Requested-With": "fetch" },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) {
+          if (d.customers) window.CUSTOMERS = d.customers;
+          const nameEl = form.querySelector('[name="buyer_name"]');
+          lastSavedCustomerName = nameEl ? nameEl.value.trim() : "";
+          flashOk(d.message);
+        } else {
+          flashError(d.message);
+        }
+      })
+      .catch(() => flashError())
+      .finally(() => { btn.disabled = false; });
+    return;
+  }
   if (e.target.id === "cust-delete-btn") {
     const nameEl = document.querySelector("[name='buyer_name']");
     const name = nameEl ? nameEl.value.trim() : "";
@@ -1698,7 +1725,18 @@ function makeToast(id, className, role) {
 
 function flashError(msg) {
   const el = makeToast("toast", "toast", "alert");
+  el.className = "toast"; // ggf. Erfolgs-Stil vom letzten flashOk zurücksetzen
   el.textContent = msg || window.MSG_ACTION_FAILED || "Fehler";
+  el.hidden = false;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+}
+
+// Erfolgs-Toast (grün) – gleiche Mechanik wie flashError, andere Optik.
+function flashOk(msg) {
+  const el = makeToast("toast", "toast", "status");
+  el.className = "toast toast-ok";
+  el.textContent = msg || "";
   el.hidden = false;
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => { el.hidden = true; }, 4000);

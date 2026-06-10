@@ -211,7 +211,7 @@
     <div class="customer-bar">
       <span class="spacer"></span>
       <button type="button" class="secondary danger" id="cust-delete-btn">{{ t.delete }}</button>
-      <button type="submit" class="secondary" formaction="{{ url_for('customers_save') }}" formnovalidate>{{ t.save_customer }}</button>
+      <button type="submit" class="secondary" id="cust-save-btn" formaction="{{ url_for('customers_save') }}" formnovalidate>{{ t.save_customer }}</button>
     </div>
 
     <div class="modal-backdrop" id="cust-delete-modal" hidden>

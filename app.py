@@ -959,11 +959,21 @@ def customers_items_save():
 @app.route("/customers/save", methods=["POST"])
 def customers_save():
     buyer = buyer_from_form(request.form)
+    ui = translate(get_ui_lang(request))
+    is_fetch = request.headers.get("X-Requested-With") == "fetch"
     if not buyer["name"]:
-        flash("Kundenname fehlt – nicht gespeichert.", "err")
+        msg = ui["customer_name_missing"]
+        if is_fetch:
+            return {"ok": False, "message": msg}
+        flash(msg, "err")
         return redirect(url_for("index"))
     upsert_customer(buyer)
-    flash(f"Kunde „{buyer['name']}“ gespeichert.", "ok")
+    msg = ui["customer_saved"].replace("{name}", buyer["name"])
+    # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner;
+    # aktualisierte Kundenliste mitliefern, damit die Combobox frisch bleibt.
+    if is_fetch:
+        return {"ok": True, "message": msg, "customers": load_customers()}
+    flash(msg, "ok")
     return redirect(url_for("index"))
 
 

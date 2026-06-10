@@ -194,6 +194,21 @@ def test_export_csv_browser_downloads(client):
     assert "text/csv" in r.headers["Content-Type"]
 
 
+def test_customers_save_fetch_returns_json(client):
+    # Per fetch (JS): JSON statt Redirect -> kein Reload, Toast im Client.
+    hdr = {"X-Requested-With": "fetch"}
+    r = client.post("/customers/save", headers=hdr,
+                    data={"buyer_name": "Muster GmbH", "buyer_country": "DE"})
+    d = r.get_json()
+    assert d["ok"] and "Muster GmbH" in d["message"]
+    assert any(c["name"] == "Muster GmbH" for c in d["customers"])
+    # Fehlender Name -> ok: False mit Meldung
+    assert client.post("/customers/save", headers=hdr, data={}).get_json()["ok"] is False
+    # Ohne fetch-Header bleibt der klassische Redirect (No-JS-Fallback)
+    r2 = client.post("/customers/save", data={"buyer_name": "X", "buyer_country": "DE"})
+    assert r2.status_code in (302, 303)
+
+
 def test_customer_payment_term_roundtrip(client):
     # Kundenspezifisches Zahlungsziel: Formular -> buyer -> Kundenspeicher.
     from werkzeug.datastructures import MultiDict
