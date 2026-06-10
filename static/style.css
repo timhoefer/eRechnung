@@ -225,6 +225,10 @@ select {
   border: none; background: transparent; flex: 0 0 auto; width: 64px; padding: 7px 2px 7px 8px; text-align: right;
 }
 .qtyunit .qty:focus { outline: none; box-shadow: none; }
+/* Pauschal: Menge fest auf 1 (readonly) -> ausgrauen, Spinner ausblenden */
+.qtyunit .qty[readonly] { color: var(--muted); cursor: default; -moz-appearance: textfield; appearance: textfield; }
+.qtyunit .qty[readonly]::-webkit-inner-spin-button,
+.qtyunit .qty[readonly]::-webkit-outer-spin-button { display: none; }
 /* Abstand zwischen Zahl und den nativen Hoch/Runter-Pfeilen */
 .qtyunit .qty::-webkit-inner-spin-button,
 .qtyunit .qty::-webkit-outer-spin-button { margin-left: 10px; }

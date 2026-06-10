@@ -683,11 +683,14 @@ def parse_items(form) -> list[dict]:
     ):
         if not desc.strip():
             continue
+        unit_code = unit or "C62"
         items.append(
             {
                 "description": desc.strip(),
-                "quantity": _num_str(qty or "1"),
-                "unit": unit or "C62",
+                # Pauschal (LS) = Festbetrag: Menge immer 1 (Client sperrt das Feld,
+                # hier zusätzlich normalisiert für No-JS/alte Drafts).
+                "quantity": "1" if unit_code == "LS" else _num_str(qty or "1"),
+                "unit": unit_code,
                 "unit_price": _num_str(price or "0"),
                 "item_start": (starts[i] if i < len(starts) else "") or None,
                 "item_end": (ends[i] if i < len(ends) else "") or None,

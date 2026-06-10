@@ -387,3 +387,18 @@ def test_data_dir_set_onboarding_redirects_to_form(client, monkeypatch):
     assert r.status_code in (302, 303) and "validate" not in r.headers["Location"]
     r2 = client.post("/data-dir", data={"data_dir": "/x"})  # ohne origin -> Einstellungen
     assert r2.status_code in (302, 303) and "validate" in r2.headers["Location"]
+
+
+def test_parse_items_lump_sum_forces_quantity_one():
+    """Pauschal (LS) ist ein Festbetrag: Menge wird serverseitig auf 1 normalisiert
+    (Client sperrt das Feld; hier der No-JS-/Alt-Draft-Pfad)."""
+    from werkzeug.datastructures import MultiDict
+    form = MultiDict([
+        ("description", "Projektpauschale"), ("quantity", "3"),
+        ("unit", "LS"), ("unit_price", "1000"),
+        ("description", "Beratung"), ("quantity", "2"),
+        ("unit", "HUR"), ("unit_price", "100"),
+    ])
+    items = appmod.parse_items(form)
+    assert items[0]["unit"] == "LS" and items[0]["quantity"] == "1"
+    assert items[1]["quantity"] == "2"  # andere Einheiten bleiben unangetastet

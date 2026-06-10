@@ -940,11 +940,17 @@ function syncUnitDisplay(select) {
   const span = select.parentElement.querySelector(".unitsel-label");
   if (!span || !opt) return;
   let text = opt.text;
-  // Plural anzeigen, wenn es eine Mengen-Einheit ist und die Menge > 1 ist.
   const qtyunit = select.closest(".qtyunit");
-  if (qtyunit && opt.dataset.plural) {
+  if (qtyunit) {
     const qty = qtyunit.querySelector(".qty");
-    if (qty && num(qty.value) > 1) text = opt.dataset.plural;
+    if (qty) {
+      // Pauschal = Festbetrag: Menge fest auf 1, nicht editierbar ("2 pauschal" ist sinnlos).
+      const lump = select.value === "LS";
+      if (lump && qty.value !== "1") { qty.value = "1"; recalc(); schedulePreview(); }
+      qty.readOnly = lump;
+      // Plural anzeigen, wenn es eine Mengen-Einheit ist und die Menge > 1 ist.
+      if (opt.dataset.plural && num(qty.value) > 1) text = opt.dataset.plural;
+    }
   }
   span.textContent = text;
 }
