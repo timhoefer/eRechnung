@@ -405,10 +405,15 @@ button.secondary:hover { background: var(--surface-2-h); }
 .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: var(--text-lg); margin-top: 4px; }
 .back-link { margin: 16px 2px; }
 /* Aktionsleiste der Ergebnisseite (result.html) – im Fluss, nicht sticky */
-/* Zusätzliche Konten: gleiches 3-Spalten-Grid wie das Hauptkonto darüber; Konten
-   durch eine dezente Linie getrennt, Löschen rechts unten neben dem Kontoinhaber. */
-.extra-account { margin-top: 0; padding-top: 12px; border-top: 1px solid var(--line); margin-bottom: 12px; }
-.extra-account .acct-remove { grid-column: -2 / -1; justify-self: end; align-self: end; }
+/* Zusätzliche Konten: Optik wie die Positionen – eingefasste Box, Trash AUSSERHALB
+   rechts (absolut am relativen .acct-head, an der Unterkante der Feldzeile);
+   innen 4-spaltig (.grid-Default) mit Labels. */
+.extra-account {
+  margin-right: 49px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); padding: 14px 16px; margin-bottom: 12px;
+}
+.extra-account .acct-head { position: relative; margin-top: 0; }
+.extra-account .acct-head > .acct-remove { position: absolute; bottom: 0; left: 100%; margin-left: 28px; }
 .bank-select[hidden] { display: none; }
 .bank-select .unitsel { display: block; }
 .actions { display: flex; align-items: center; gap: 12px; margin: 20px auto; }
