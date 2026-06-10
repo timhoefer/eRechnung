@@ -506,12 +506,11 @@ function fillCustomer(idx) {
   const cc = document.querySelector('[name="buyer_country"]');
   if (cc && !cc.value) cc.value = "DE";
   updateStateField(c.state);
-  // Zahlungsziel: eigenes des Kunden, sonst Standard – Feld ist immer befüllt,
-  // "Fällig am" wird daraus vorbelegt (bleibt pro Rechnung manuell änderbar).
+  // Zahlungsziel: eigenes des Kunden, sonst Default 14 Tage – Feld ist immer
+  // befüllt, "Fällig am" wird daraus vorbelegt (pro Rechnung manuell änderbar).
   const termEl = document.querySelector('[name="buyer_payment_term_days"]');
-  const days = parseInt(c.payment_term_days, 10) >= 0
-    ? parseInt(c.payment_term_days, 10)
-    : parseInt(window.DEFAULT_TERM_DAYS, 10) || 14;
+  const own = parseInt(c.payment_term_days, 10);
+  const days = own >= 0 ? own : 14;
   if (termEl) termEl.value = days;
   setDueDateFromTerm(days);
 }

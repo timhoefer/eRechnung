@@ -396,7 +396,7 @@ def save_seller(data: dict) -> None:
 SELLER_FIELDS = [
     "name", "subtitle", "address_line", "postcode", "city", "country", "vat_id",
     "tax_number", "email", "phone", "web", "iban", "bic", "bank_name",
-    "account_name", "payment_term_days",
+    "account_name",
 ]
 
 
@@ -871,18 +871,17 @@ def archived_invoices() -> list[dict]:
     return uniq
 
 
+DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änderbar)
+
+
 @app.route("/")
 def index():
     seller = load_seller()
     today = date.today()
-    try:
-        term_days = int(seller.get("payment_term_days") or 14)
-    except (TypeError, ValueError):
-        term_days = 14
     defaults = {
         "number": suggest_invoice_number(seller),
         "issue_date": today.isoformat(),
-        "due_date": (today + timedelta(days=term_days)).isoformat(),
+        "due_date": (today + timedelta(days=DEFAULT_TERM_DAYS)).isoformat(),
     }
     draft = load_draft(request.args.get("from"))
     # Erststart: noch kein Datenordner gewählt UND keine Stammdaten -> beim ersten
