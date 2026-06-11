@@ -1958,7 +1958,8 @@ function openSettings() {
   loadSettingsPanel().then(() => {
     pane.hidden = false;
     content.hidden = true;
-    pane.focus(); // Fokus ins Panel ziehen (Tastatur/Screenreader behalten den Kontext)
+    pane.focus({ preventScroll: true }); // Fokus ins Panel, aber nicht hinscrollen
+    window.scrollTo(0, 0); // oben starten – Scrollposition des Formulars nicht übernehmen
     announce(window.MSG_SETTINGS_OPENED);
   });
   if (btn) {
