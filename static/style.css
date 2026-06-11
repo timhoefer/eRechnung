@@ -557,7 +557,7 @@ table.archive td.arch-buyer { white-space: nowrap; }
   overflow: hidden; text-overflow: ellipsis; }
 .arch-amt { font-size: var(--text-sm); color: var(--muted); margin-left: 10px;
   font-variant-numeric: tabular-nums; }
-table.archive td.arch-date { color: var(--muted); }
+table.archive td.arch-date { color: var(--muted); white-space: nowrap; }
 /* Archiv-Aktionen: zwei sichtbare Buttons + Overflow-Menü (⋯) */
 .arch-actions > * + * { margin-left: 8px; }
 .arch-actions form.check-file-form { display: inline; margin-left: 8px; }
