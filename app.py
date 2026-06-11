@@ -1440,7 +1440,24 @@ def export_csv():
     writer.writerow(header)
     writer.writerows([[csv_safe(c) for c in r] for r in rows])
     data = ("\ufeff" + buf.getvalue()).encode("utf-8")  # BOM -> Umlaute in Excel
-    name = f"{Path(only).stem}.csv" if only else "rechnungen.csv"
+    if only:
+        name = f"{Path(only).stem}.csv"
+    else:
+        # Datumsbereich in den Dateinamen (nur echte ISO-Daten: der Name wird im
+        # Desktop-Modus als Datei geschrieben -> keine freien Strings zulassen).
+        def iso(s: str) -> str:
+            return s if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s) else ""
+
+        base = "rechnungen" if de else "invoices"
+        ab, bis = ("_ab_", "_bis_") if de else ("_from_", "_to_")
+        rng = ""
+        if iso(frm) and iso(to):
+            rng = f"_{frm}{bis}{to}"
+        elif iso(frm):
+            rng = f"{ab}{frm}"
+        elif iso(to):
+            rng = f"{bis}{to}"
+        name = f"{base}{rng}.csv"
     if app.config.get("DESKTOP") and sys.platform == "darwin":
         # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
         # schreiben und im Finder zeigen.

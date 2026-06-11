@@ -74,6 +74,13 @@ def test_export_csv(client):
     # Datumsfilter: außerhalb -> Rechnung nicht enthalten
     r2 = client.get("/export/csv?from=2025-01-01&to=2025-12-31")
     assert "2026-001" not in r2.get_data(as_text=True)
+    # Datumsbereich steht im Dateinamen (DE-Default: rechnungen_<from>_bis_<to>.csv)
+    assert 'filename="rechnungen_2026-01-01_bis_2026-12-31.csv"' in r.headers["Content-Disposition"]
+    r3 = client.get("/export/csv?from=2026-01-01")
+    assert 'filename="rechnungen_ab_2026-01-01.csv"' in r3.headers["Content-Disposition"]
+    # Kein/ungültiger Bereich -> schlichter Name (nichts Ungeprüftes in den Dateinamen)
+    r4 = client.get("/export/csv?from=..%2Fevil")
+    assert 'filename="rechnungen.csv"' in r4.headers["Content-Disposition"]
 
 
 _FORM = {
