@@ -72,7 +72,7 @@
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
   <table class="archive">
-    <thead><tr><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th class="amt">{{ t.amount }}</th><th>{{ t.created }}</th><th></th></tr></thead>
+    <thead><tr><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
       {% for a in archive %}
       <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename) }}"{% if a.has_draft %} data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}"{% endif %}>
@@ -80,9 +80,11 @@
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
         <td class="arch-file" title="{{ a.filename }}"><span class="arch-id">{{ a.number or a.filename }}</span></td>
-        <td class="arch-buyer">{{ a.buyer or "" }}</td>
-        <td class="amt">{% if a.amount is not none %}{{ a.currency }} {{ a.amount|money(lang) }}{% endif %}</td>
-        <td>{{ a.modified }}</td>
+        <td class="arch-buyer">
+          <span class="arch-name">{{ a.buyer or "" }}</span>
+          {% if a.amount is not none %}<span class="arch-amt">{{ a.currency }} {{ a.amount|money(lang) }}</span>{% endif %}
+        </td>
+        <td class="arch-date">{{ a.modified }}</td>
         <td class="r arch-actions">
           {% if is_desktop %}
           <button type="button" class="secondary small reveal-btn" data-file="{{ a.filename }}">{{ t.reveal_finder }}</button>
