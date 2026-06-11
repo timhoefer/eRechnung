@@ -58,16 +58,6 @@
 {% endif %}
 
 <div class="card">
-  <h2>{{ t.check_file }}</h2>
-  <form method="post" enctype="multipart/form-data" class="check-file-form"
-        action="{{ url_for('settings_panel') if inplace else '' }}">
-    <p class="hint">{{ t.check_file_hint }}</p>
-    <input type="file" name="file" accept=".pdf,.xml" required>
-    <div style="margin-top:12px"><button type="submit">{{ t.check }}</button></div>
-  </form>
-</div>
-
-<div class="card">
   <h2>{{ t.archive }} ({{ archive|length }})</h2>
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
@@ -141,6 +131,16 @@
   {% else %}
   <p class="hint">{{ t.no_invoices }}</p>
   {% endif %}
+</div>
+
+<div class="card">
+  <h2>{{ t.check_file }}</h2>
+  <form method="post" enctype="multipart/form-data" class="check-file-form"
+        action="{{ url_for('settings_panel') if inplace else '' }}">
+    <p class="hint">{{ t.check_file_hint }}</p>
+    <input type="file" name="file" accept=".pdf,.xml" required>
+    <div style="margin-top:12px"><button type="submit">{{ t.check }}</button></div>
+  </form>
 </div>
 
 <div class="card">
