@@ -551,11 +551,15 @@ table.archive form { margin-left: 12px; }
    die Spalte nicht aufspannen — der volle Name steht im Tooltip. */
 table.archive td.arch-file { white-space: nowrap; width: 1%; padding-right: 18px; }
 .arch-id { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-/* Kunde in Volltonfarbe, Summe klein/gedämpft dahinter, Datum gedämpft */
-table.archive td.arch-buyer { white-space: nowrap; }
-.arch-name { display: inline-block; max-width: 240px; vertical-align: bottom;
-  overflow: hidden; text-overflow: ellipsis; }
-.arch-amt { font-size: var(--text-sm); color: var(--muted); margin-left: 10px;
+/* Kunde in Volltonfarbe, Summe klein/gedämpft dahinter, Datum gedämpft.
+   width:99% + max-width:0: die Kunden-Spalte bekommt den Restplatz und kann
+   unter Druck schrumpfen — auch in WebKit (das sonst die Tabelle über die
+   Karte hinaus aufspannt). Innen Flex: der Name ellipsiert zuerst, die Summe
+   bleibt stehen. */
+table.archive td.arch-buyer { width: 99%; max-width: 0; }
+.arch-line { display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; }
+.arch-name { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arch-amt { flex: 0 0 auto; font-size: var(--text-sm); color: var(--muted);
   font-variant-numeric: tabular-nums; }
 table.archive td.arch-date { color: var(--muted); white-space: nowrap; }
 /* Archiv-Aktionen: zwei sichtbare Buttons + Overflow-Menü (⋯) */

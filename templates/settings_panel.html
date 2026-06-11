@@ -81,8 +81,10 @@
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
         <td class="arch-file" title="{{ a.filename }}"><span class="arch-id">{{ a.number or a.filename }}</span></td>
         <td class="arch-buyer">
-          <span class="arch-name">{{ a.buyer or "" }}</span>
-          {% if a.amount is not none %}<span class="arch-amt">{{ a.currency }} {{ a.amount|money(lang) }}</span>{% endif %}
+          <div class="arch-line">
+            <span class="arch-name">{{ a.buyer or "" }}</span>
+            {% if a.amount is not none %}<span class="arch-amt">{{ a.currency }} {{ a.amount|money(lang) }}</span>{% endif %}
+          </div>
         </td>
         <td class="arch-date">{{ a.modified }}</td>
         <td class="r arch-actions">
