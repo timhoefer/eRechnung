@@ -507,6 +507,12 @@ a:focus-visible, button:focus-visible, summary:focus-visible,
 }
 
 /* CSV-Export im Archiv */
+/* CSV-Export: Innen-Box am Ende der Archiv-Karte (Optik wie .position) */
+.export-box {
+  margin-top: 18px; padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+}
+.export-box h3 { margin: 0 0 4px; font-size: var(--text-base); }
 .export-bar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .export-bar label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); color: var(--muted); }
 .export-presets { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
@@ -523,6 +529,12 @@ button.danger:hover { background: var(--err-bg-3); }
 button.small { padding: 5px 11px; font-size: var(--text-sm); }
 .actions .spacer { flex: 1; }
 a.link { color: var(--accent); text-decoration: none; font-weight: 600; font-size: var(--text-base); align-self: center; }
+/* Buttons mit .link sehen wie Links aus (z. B. Export-Presets);
+   :not(.danger-link) — der rote Lösch-Stil behält seine Farbe */
+button.link { background: none; border: none; padding: 0; margin: 0;
+  font-weight: 600; font-size: var(--text-base); cursor: pointer; }
+button.link:not(.danger-link) { color: var(--accent); }
+button.link:hover { background: none; text-decoration: underline; }
 a.link:hover { text-decoration: underline; }
 .actions a { display: inline-flex; }
 

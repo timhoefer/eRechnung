@@ -120,30 +120,28 @@
       {% endfor %}
     </tbody>
   </table>
+  {# CSV-Export als Innen-Box des Archivs (Optik wie die Positions-Boxen) #}
+  <div class="export-box">
+    <h3>{{ t.export_title }}</h3>
+    <p class="hint">{{ t.export_hint }}</p>
+    <div class="export-bar">
+      <label>{{ t.export_from }}<input type="date" id="export-from"></label>
+      <label>{{ t.export_to }}<input type="date" id="export-to"></label>
+      <button type="button" class="secondary" id="export-csv">{{ t.export_csv }}</button>
+    </div>
+    <div class="export-presets">
+      <button type="button" class="link" data-preset="thisyear">{{ t.export_this_year }}</button>
+      <button type="button" class="link" data-preset="lastyear">{{ t.export_last_year }}</button>
+      <button type="button" class="link" data-preset="q1">Q1</button>
+      <button type="button" class="link" data-preset="q2">Q2</button>
+      <button type="button" class="link" data-preset="q3">Q3</button>
+      <button type="button" class="link" data-preset="q4">Q4</button>
+    </div>
+  </div>
   {% else %}
   <p class="hint">{{ t.no_invoices }}</p>
   {% endif %}
 </div>
-
-{% if archive %}
-<div class="card">
-  <h2>{{ t.export_title }}</h2>
-  <p class="hint">{{ t.export_hint }}</p>
-  <div class="export-bar">
-    <label>{{ t.export_from }}<input type="date" id="export-from"></label>
-    <label>{{ t.export_to }}<input type="date" id="export-to"></label>
-    <button type="button" class="secondary" id="export-csv">{{ t.export_csv }}</button>
-  </div>
-  <div class="export-presets">
-    <button type="button" class="link" data-preset="thisyear">{{ t.export_this_year }}</button>
-    <button type="button" class="link" data-preset="lastyear">{{ t.export_last_year }}</button>
-    <button type="button" class="link" data-preset="q1">Q1</button>
-    <button type="button" class="link" data-preset="q2">Q2</button>
-    <button type="button" class="link" data-preset="q3">Q3</button>
-    <button type="button" class="link" data-preset="q4">Q4</button>
-  </div>
-</div>
-{% endif %}
 
 <div class="card">
   <h2>{{ t.datadir_title }}</h2>
