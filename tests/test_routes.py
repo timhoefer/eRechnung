@@ -402,3 +402,25 @@ def test_parse_items_lump_sum_forces_quantity_one():
     items = appmod.parse_items(form)
     assert items[0]["unit"] == "LS" and items[0]["quantity"] == "1"
     assert items[1]["quantity"] == "2"  # andere Einheiten bleiben unangetastet
+
+
+def test_archive_check_targets_xml_for_xrechnung(client):
+    """Bei XRechnung-Einträgen (standalone .xml + Sicht-PDF) muss "prüfen" die
+    einreichbare XML prüfen, nicht das PDF (das PDF hat kein eingebettetes XML)."""
+    out = appmod.OUTPUT_DIR
+    (out / "Rechnung_2026-001.pdf").write_bytes(b"%PDF-1.4")
+    (out / "Rechnung_2026-001.xml").write_bytes(b"<x/>")
+    (out / "Rechnung_2026-001.json").write_text(json.dumps({
+        "invoice": {"number": "2026-001", "issue_date": "2026-03-15",
+                    "profile": "xrechnung"},
+        "buyer": {"name": "K"}, "items": [],
+    }), encoding="utf-8")
+    # Hybrid-Eintrag ohne .xml daneben: prüft weiterhin das PDF.
+    (out / "Rechnung_2026-002.pdf").write_bytes(b"%PDF-1.4")
+    html = client.get("/settings/panel").get_data(as_text=True)
+    assert 'value="Rechnung_2026-001.xml"' in html
+    assert 'value="Rechnung_2026-002.pdf"' in html
+    # Die Prüfung der XML läuft direkt über den XML-Pfad (kein PDF-Extrakt).
+    r = client.post("/settings/panel", data={"filename": "Rechnung_2026-001.xml"})
+    assert r.status_code == 200
+    assert "Rechnung_2026-001.xml" in r.get_data(as_text=True)

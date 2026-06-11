@@ -78,27 +78,34 @@
       <tr class="arch-row" tabindex="0" aria-label="{{ a.filename }}" data-view-url="{{ url_for('view', filename=a.filename) }}"{% if a.has_draft %} data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}"{% endif %}>
         <td>{{ a.filename }}</td>
         <td>{{ a.modified }}</td>
-        <td class="r">
-          <a href="{{ url_for('view', filename=a.filename) }}" target="_blank" class="link">{{ t.act_view }}</a>
+        <td class="r arch-actions">
           {% if is_desktop %}
-          <button type="button" class="link reveal-btn" data-file="{{ a.filename }}">{{ t.reveal_finder }}</button>
+          <button type="button" class="secondary small reveal-btn" data-file="{{ a.filename }}">{{ t.reveal_finder }}</button>
           {% else %}
-          <a href="{{ url_for('download', filename=a.filename) }}" class="link">{{ t.act_download }}</a>
-          {% if a.xml_filename %}<a href="{{ url_for('download', filename=a.xml_filename) }}" class="link">XML</a>{% endif %}
+          <a href="{{ url_for('download', filename=a.filename) }}" class="abtn">{{ t.act_download }}</a>
           {% endif %}
-          {% if a.has_draft %}
-            {% if is_desktop %}
-            <button type="button" class="link csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename) }}">CSV</button>
-            {% else %}
-            <a href="{{ url_for('export_csv', file=a.filename) }}" class="link">CSV</a>
-            {% endif %}
-          {% endif %}
-          {% if a.has_draft %}<a href="{{ url_for('index', **{'from': a.filename}) }}" class="link">{{ t.act_edit }}</a>{% endif %}
-          <button type="button" class="link danger-link js-delete" data-filename="{{ a.filename }}">{{ t.act_delete }}</button>
-          <form method="post" action="{{ url_for('settings_panel') if inplace else '' }}" style="display:inline" class="check-file-form">
-            <input type="hidden" name="filename" value="{{ a.filename }}">
-            <button type="submit" class="secondary small">{{ t.act_check }}</button>
+          {# Prüfen: bei XRechnung die einreichbare .xml prüfen, nicht das Sicht-PDF
+             (das PDF ist dort nur Beilage und enthält kein eingebettetes XML). #}
+          <form method="post" action="{{ url_for('settings_panel') if inplace else '' }}" class="check-file-form">
+            <input type="hidden" name="filename" value="{{ a.xml_filename or a.filename }}">
+            <button type="submit" class="secondary small" {% if a.xml_filename %}title="{{ t.check_xml_title }}"{% endif %}>{{ t.act_check }}</button>
           </form>
+          <details class="row-menu">
+            <summary role="button" aria-haspopup="menu" aria-label="{{ t.act_more }}" title="{{ t.act_more }}">⋯</summary>
+            <div class="row-menu-list" role="menu">
+              <a href="{{ url_for('view', filename=a.filename) }}" target="_blank" role="menuitem">{{ t.act_view }}</a>
+              {% if a.has_draft %}<a href="{{ url_for('index', **{'from': a.filename}) }}" role="menuitem">{{ t.act_edit }}</a>{% endif %}
+              {% if a.has_draft %}
+                {% if is_desktop %}
+                <button type="button" class="csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename) }}" role="menuitem">CSV</button>
+                {% else %}
+                <a href="{{ url_for('export_csv', file=a.filename) }}" role="menuitem">CSV</a>
+                {% endif %}
+              {% endif %}
+              {% if not is_desktop and a.xml_filename %}<a href="{{ url_for('download', filename=a.xml_filename) }}" role="menuitem">XML</a>{% endif %}
+              <button type="button" class="js-delete danger-item" data-filename="{{ a.filename }}" role="menuitem">{{ t.act_delete }}</button>
+            </div>
+          </details>
         </td>
       </tr>
       {% endfor %}

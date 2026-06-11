@@ -1716,7 +1716,18 @@ document.addEventListener("keydown", (e) => {
     const m = document.getElementById("cust-delete-modal");
     if (m && !m.hidden) m.hidden = true;
     closeFormatMenu();
+    closeRowMenus();
   }
+});
+
+// Archiv-Overflow-Menüs (⋯): Klick außerhalb oder Escape schließt.
+function closeRowMenus(except) {
+  document.querySelectorAll("details.row-menu[open]").forEach((d) => {
+    if (d !== except) d.removeAttribute("open");
+  });
+}
+document.addEventListener("click", (e) => {
+  closeRowMenus(e.target.closest("details.row-menu"));
 });
 
 showNote();
@@ -2013,6 +2024,11 @@ function closeSettings() {
   });
 
   pane.addEventListener("click", (e) => {
+    // Aktion im Overflow-Menü (⋯) gewählt -> Menü schließen, Aktion läuft weiter.
+    if (e.target.closest(".row-menu-list")) {
+      const menu = e.target.closest("details.row-menu");
+      if (menu) menu.removeAttribute("open");
+    }
     // Löschen (mit Bestätigung) -> danach Panel neu laden.
     const del = e.target.closest(".js-delete");
     if (del) {

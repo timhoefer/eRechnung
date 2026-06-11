@@ -66,7 +66,20 @@
     });
     document.getElementById("del-cancel").addEventListener("click", close);
     modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+    // Overflow-Menüs (⋯): Klick außerhalb/auf eine Aktion oder Escape schließt.
+    function closeRowMenus(except) {
+      document.querySelectorAll("details.row-menu[open]").forEach((d) => {
+        if (d !== except) d.removeAttribute("open");
+      });
+    }
+    document.addEventListener("click", (e) => {
+      if (e.target.closest(".row-menu-list")) closeRowMenus();
+      else closeRowMenus(e.target.closest("details.row-menu"));
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { close(); closeRowMenus(); }
+    });
 
     const browseBtn = document.getElementById("dd-browse");
     if (browseBtn) {
