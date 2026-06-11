@@ -431,3 +431,21 @@ def test_archive_check_targets_xml_for_xrechnung(client):
     r = client.post("/settings/panel", data={"filename": "Rechnung_2026-001.xml"})
     assert r.status_code == 200
     assert "Rechnung_2026-001.xml" in r.get_data(as_text=True)
+
+
+def test_archive_shows_buyer_and_amount(client):
+    """Archiv-Zeile zeigt Kunde (zweite Zeile) und Brutto-Betrag aus dem Sidecar."""
+    out = appmod.OUTPUT_DIR
+    (out / "Rechnung_2026-003.pdf").write_bytes(b"%PDF-1.4")
+    (out / "Rechnung_2026-003.json").write_text(json.dumps({
+        "invoice": {"number": "2026-003", "issue_date": "2026-03-15",
+                    "currency": "EUR", "tax_treatment": "de_19"},
+        "buyer": {"name": "Muster GmbH", "country": "DE"},
+        "items": [{"description": "L", "quantity": "2", "unit": "C62",
+                   "unit_price": "100"}],
+    }), encoding="utf-8")
+    # Eintrag ohne Sidecar: Zeile bleibt ohne Kunde/Betrag, Panel rendert trotzdem.
+    (out / "Rechnung_2026-004.pdf").write_bytes(b"%PDF-1.4")
+    html = client.get("/settings/panel").get_data(as_text=True)
+    assert "Muster GmbH" in html
+    assert "238,00" in html  # 2x100 netto + 19 %

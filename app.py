@@ -1319,16 +1319,37 @@ def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
     for p in sorted(OUTPUT_DIR.glob("*.pdf"), reverse=True):
+        # Kunde + Rechnungsbetrag aus dem Sidecar (fehlt es / ist es defekt: ohne).
+        buyer_name, amount, currency = None, None, "EUR"
+        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+        if sidecar.exists():
+            try:
+                d = json.loads(sidecar.read_text(encoding="utf-8"))
+                inv = d.get("invoice") or {}
+                buyer_name = (d.get("buyer") or {}).get("name")
+                treatment = TAX_TREATMENTS.get(
+                    inv.get("tax_treatment") or "de_19", TAX_TREATMENTS["de_19"]
+                )
+                *_, amount = compute_totals(
+                    d.get("items") or [], cast(Decimal, treatment["rate"]),
+                    _dec(inv.get("discount") or "0"), inv.get("discount_type") or "abs",
+                )
+                currency = inv.get("currency") or "EUR"
+            except (ValueError, OSError, ArithmeticError):
+                logger.warning("Sidecar %s nicht lesbar/berechenbar", sidecar.name, exc_info=True)
         archive.append(
             {
                 "filename": p.name,
                 "modified": datetime.fromtimestamp(p.stat().st_mtime).strftime(
                     "%Y-%m-%d %H:%M"
                 ),
-                "has_draft": (OUTPUT_DIR / f"{p.stem}.json").exists(),
+                "has_draft": sidecar.exists(),
                 "xml_filename": (
                     f"{p.stem}.xml" if (OUTPUT_DIR / f"{p.stem}.xml").exists() else None
                 ),
+                "buyer": buyer_name,
+                "amount": amount,
+                "currency": currency,
             }
         )
     return {

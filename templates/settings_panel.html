@@ -72,12 +72,16 @@
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
   <table class="archive">
-    <thead><tr><th>{{ t.file }}</th><th>{{ t.created }}</th><th></th></tr></thead>
+    <thead><tr><th>{{ t.file }}</th><th>{{ t.created }}</th><th class="amt">{{ t.amount }}</th><th></th></tr></thead>
     <tbody>
       {% for a in archive %}
-      <tr class="arch-row" tabindex="0" aria-label="{{ a.filename }}" data-view-url="{{ url_for('view', filename=a.filename) }}"{% if a.has_draft %} data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}"{% endif %}>
-        <td>{{ a.filename }}</td>
+      <tr class="arch-row" tabindex="0" aria-label="{{ a.filename }}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename) }}"{% if a.has_draft %} data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}"{% endif %}>
+        <td class="arch-file">
+          {{ a.filename }}
+          {% if a.buyer %}<div class="arch-sub">{{ a.buyer }}</div>{% endif %}
+        </td>
         <td>{{ a.modified }}</td>
+        <td class="amt">{% if a.amount is not none %}{{ a.currency }} {{ a.amount|money(lang) }}{% endif %}</td>
         <td class="r arch-actions">
           {% if is_desktop %}
           <button type="button" class="secondary small reveal-btn" data-file="{{ a.filename }}">{{ t.reveal_finder }}</button>
