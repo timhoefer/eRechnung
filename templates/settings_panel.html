@@ -79,7 +79,7 @@
         {# Primär die Rechnungsnummer (der Dateiname ist Implementierungsdetail —
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
-        <td class="arch-file" title="{{ a.filename }}">{{ a.number or a.filename }}</td>
+        <td class="arch-file" title="{{ a.filename }}"><span class="arch-id">{{ a.number or a.filename }}</span></td>
         <td class="arch-buyer">{{ a.buyer or "" }}</td>
         <td class="amt">{% if a.amount is not none %}{{ a.currency }} {{ a.amount|money(lang) }}{% endif %}</td>
         <td>{{ a.modified }}</td>

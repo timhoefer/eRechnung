@@ -546,7 +546,11 @@ table.archive td.r { text-align: right; white-space: nowrap; }
 table.archive td.r .link { margin-left: 12px; }
 table.archive form { margin-left: 12px; }
 /* Archiv: Nummer | Kunde | Summe | Erstellt — einzeilig */
-table.archive td.arch-file { white-space: nowrap; }
+/* width:1% + nowrap: Spalte schrumpft auf Inhaltsbreite, Kunde bekommt den Rest.
+   Lange Fallback-Dateinamen (Einträge ohne Sidecar) werden ellipsiert, damit sie
+   die Spalte nicht aufspannen — der volle Name steht im Tooltip. */
+table.archive td.arch-file { white-space: nowrap; width: 1%; padding-right: 18px; }
+.arch-id { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 table.archive td.arch-buyer { color: var(--muted); max-width: 220px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 table.archive th.amt, table.archive td.amt {

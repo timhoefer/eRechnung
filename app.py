@@ -1338,6 +1338,10 @@ def _settings_context() -> dict:
                 currency = inv.get("currency") or "EUR"
             except (ValueError, OSError, ArithmeticError):
                 logger.warning("Sidecar %s nicht lesbar/berechenbar", sidecar.name, exc_info=True)
+        if not number and p.stem.startswith("Rechnung_"):
+            # Ohne Sidecar: Nummer aus dem Tool-Namensschema ableiten (wie
+            # used_invoice_numbers); fremde Dateien zeigen den Dateinamen.
+            number = p.stem[len("Rechnung_"):]
         archive.append(
             {
                 "filename": p.name,
