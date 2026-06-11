@@ -572,11 +572,15 @@ table.archive td.arch-date { color: var(--muted); white-space: nowrap;
   font-weight: 600; text-decoration: none;
 }
 .abtn:hover { background: var(--surface-2-h); }
+/* Kompakte Buttons in der Archivliste: kleinerer Radius als die großen Buttons */
+.arch-actions button.secondary.small, .arch-actions .abtn { border-radius: 6px; }
 .row-menu { display: inline-block; position: relative; }
 .row-menu > summary {
-  list-style: none; display: inline-block; cursor: pointer;
-  padding: 5px 11px; border-radius: 8px; background: var(--surface-2);
-  color: var(--ink); font-size: var(--text-sm); font-weight: 700; line-height: 1.45;
+  list-style: none; cursor: pointer; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; vertical-align: middle;
+  border-radius: 6px; background: var(--surface-2);
+  color: var(--ink); font-size: var(--text-sm); font-weight: 700; line-height: 1;
 }
 .row-menu > summary::-webkit-details-marker { display: none; }
 .row-menu > summary:hover, .row-menu[open] > summary { background: var(--surface-2-h); }
