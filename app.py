@@ -1319,13 +1319,14 @@ def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
     for p in sorted(OUTPUT_DIR.glob("*.pdf"), reverse=True):
-        # Kunde + Rechnungsbetrag aus dem Sidecar (fehlt es / ist es defekt: ohne).
-        buyer_name, amount, currency = None, None, "EUR"
+        # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
+        number, buyer_name, amount, currency = None, None, None, "EUR"
         sidecar = OUTPUT_DIR / f"{p.stem}.json"
         if sidecar.exists():
             try:
                 d = json.loads(sidecar.read_text(encoding="utf-8"))
                 inv = d.get("invoice") or {}
+                number = (inv.get("number") or "").strip() or None
                 buyer_name = (d.get("buyer") or {}).get("name")
                 treatment = TAX_TREATMENTS.get(
                     inv.get("tax_treatment") or "de_19", TAX_TREATMENTS["de_19"]
@@ -1347,6 +1348,7 @@ def _settings_context() -> dict:
                 "xml_filename": (
                     f"{p.stem}.xml" if (OUTPUT_DIR / f"{p.stem}.xml").exists() else None
                 ),
+                "number": number,
                 "buyer": buyer_name,
                 "amount": amount,
                 "currency": currency,

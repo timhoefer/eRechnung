@@ -449,3 +449,8 @@ def test_archive_shows_buyer_and_amount(client):
     html = client.get("/settings/panel").get_data(as_text=True)
     assert "Muster GmbH" in html
     assert "238,00" in html  # 2x100 netto + 19 %
+    # Angezeigt wird die Rechnungsnummer (Datei nur als Tooltip) ...
+    import re as _re
+    assert _re.search(r'arch-file" title="Rechnung_2026-003\.pdf">\s*2026-003\b', html)
+    # ... ohne Sidecar fällt die Zeile auf den Dateinamen zurück.
+    assert _re.search(r'arch-file" title="Rechnung_2026-004\.pdf">\s*Rechnung_2026-004\.pdf', html)
