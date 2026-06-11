@@ -545,9 +545,10 @@ table.archive td { padding: 8px 4px; border-bottom: 1px solid var(--line); font-
 table.archive td.r { text-align: right; white-space: nowrap; }
 table.archive td.r .link { margin-left: 12px; }
 table.archive form { margin-left: 12px; }
-/* Archiv: Kunde als zweite Zeile unter dem Dateinamen, Betrag rechtsbündig */
-table.archive td.arch-file { line-height: 1.35; }
-.arch-sub { font-size: var(--text-sm); color: var(--muted); margin-top: 1px; }
+/* Archiv: Nummer | Kunde | Summe | Erstellt — einzeilig */
+table.archive td.arch-file { white-space: nowrap; }
+table.archive td.arch-buyer { color: var(--muted); max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 table.archive th.amt, table.archive td.amt {
   text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
   padding-right: 14px;
