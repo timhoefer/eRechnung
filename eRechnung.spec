@@ -73,7 +73,7 @@ app = BUNDLE(
     coll,
     name="eRechnung.app",
     icon="assets/icon.icns",
-    bundle_identifier="com.machineandfolk.erechnung",
+    bundle_identifier="com.timhoefer.erechnung",
     info_plist={
         "CFBundleName": "eRechnung",
         "CFBundleDisplayName": "eRechnung",
