@@ -1,9 +1,6 @@
 # E-Rechnung (ZUGFeRD & XRechnung)
 
-Lokale Web-App zur Erstellung von E-Rechnungen (**ZUGFeRD / Factur-X** und
-**XRechnung 3.0**, EN 16931) als PDF/A-3 mit eingebettetem XML. Läuft komplett
-lokal — keine Cloud, keine Daten verlassen den Rechner. Optional als
-macOS-Doppelklick-App.
+Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler. Rechnungsexport als PDF/A-3 mit eingebettetem XML (**ZUGFeRD / Factur-X**) oder als XML mit PDF als Sichtexemplar (**XRechnung 3.0** nach EN 16931). Läuft komplett lokal, keine Daten verlassen den Rechner. Optional als macOS-Doppelklick-App.
 
 > **Status:** Persönliches Projekt, bereitgestellt **„wie besehen" (as is)**, ohne
 > aktive Wartung oder Support. Der E-Rechnungs-Standard ändert sich jährlich —
