@@ -2,10 +2,7 @@
 
 Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler. Rechnungsexport als PDF/A-3 mit eingebettetem XML (**ZUGFeRD / Factur-X**) oder als XML mit PDF als Sichtexemplar (**XRechnung 3.0** nach EN 16931). Läuft komplett lokal, keine Daten verlassen den Rechner. Optional als macOS-Doppelklick-App.
 
-> **Status:** Persönliches Projekt, bereitgestellt **„wie besehen" (as is)**, ohne
-> aktive Wartung oder Support. Der E-Rechnungs-Standard ändert sich jährlich —
-> bitte jede erzeugte Rechnung selbst prüfen (siehe Haftungsausschluss unten).
-> Forks willkommen.
+> **Status:** Persönliches Projekt, bereitgestellt **„wie besehen" (as is)**, ohne aktive Wartung oder Support. Der E-Rechnungs-Standard ändert sich jährlich. Bitte jede erzeugte Rechnung selbst prüfen (siehe Haftungsausschluss unten). Forks willkommen.
 
 ## Start
 
@@ -73,9 +70,7 @@ Validatoren wie dem [KoSIT-Validator] oder Mustang prüfen.
 
 ## Als macOS-App bauen (optional)
 
-Für eine Doppelklick-App ohne Terminal/Browser (eigenes Fenster via pywebview)
-gibt es einen PyInstaller-Build. Voraussetzung ist Homebrew-Pango (liefert die
-nativen Bibliotheken, die ins Bundle eingebettet werden):
+Für eine Doppelklick-App ohne Terminal/Browser (eigenes Fenster via pywebview) gibt es einen PyInstaller-Build. Voraussetzung ist Homebrew-Pango (liefert die nativen Bibliotheken, die ins Bundle eingebettet werden):
 
 ```bash
 brew install pango
@@ -83,25 +78,15 @@ brew install pango
 ./build_macos.sh        # -> dist/eRechnung.app
 ```
 
-Die App ist self-contained (Pango-Stack + SaxonC sind eingebettet) und legt ihre
-Daten unter `~/Library/Application Support/eRechnung` ab. Ein headless-Selbsttest
-prüft die nativen Bibliotheken:
+Die App ist self-contained (Pango-Stack + SaxonC sind eingebettet) und legt ihre Daten unter `~/Library/Application Support/eRechnung` ab. Ein headless-Selbsttest prüft die nativen Bibliotheken:
 
 ```bash
 ./dist/eRechnung.app/Contents/MacOS/eRechnung --selftest
 ```
 
-Die App ist **unsigniert**. Auf einem fremden Mac blockt Gatekeeper sie beim ersten
-Start; danach unter **Systemeinstellungen › Datenschutz & Sicherheit** auf
-**„Trotzdem öffnen"** klicken (auf macOS 15 Sequoia und neuer funktioniert der frühere
-Rechtsklick-›-Öffnen-Weg nicht mehr). Alternativ das Quarantäne-Flag entfernen:
-`xattr -dr com.apple.quarantine eRechnung.app`.
+Die App ist **unsigniert**. Auf einem fremden Mac blockt Gatekeeper sie beim ersten Start; danach unter **Systemeinstellungen › Datenschutz & Sicherheit** auf **„Trotzdem öffnen"** klicken (auf macOS 15 Sequoia und neuer funktioniert der frühere Rechtsklick-›-Öffnen-Weg nicht mehr). Alternativ das Quarantäne-Flag entfernen: `xattr -dr com.apple.quarantine eRechnung.app`.
 
-Für eine Weitergabe **ohne** diese Warnung sind Code-Signing und Notarisierung
-(Apple Developer Program) nötig — der Build unterstützt das bereits über die
-Umgebungsvariablen `SIGN_IDENTITY` und `NOTARY_PROFILE` (siehe Kopf von
-`build_macos.sh`). Der klassische Start über `run.sh` / `start.command` bleibt
-unverändert nutzbar.
+Für eine Weitergabe **ohne** diese Warnung sind Code-Signing und Notarisierung (Apple Developer Program) nötig — der Build unterstützt das bereits über die Umgebungsvariablen `SIGN_IDENTITY` und `NOTARY_PROFILE` (siehe Kopf von `build_macos.sh`). Der klassische Start über `run.sh` / `start.command` bleibt unverändert nutzbar.
 
 ## Lizenz & Haftungsausschluss
 
@@ -111,10 +96,6 @@ IBM-Plex-Schriften) stehen unter eigenen Lizenzen; die vollständige Auflistung
 mit Attribution findest du in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-**Ohne Gewähr.** Dieses Tool wird bereitgestellt „wie besehen", ohne jede
-Gewährleistung. Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder
-rechtliche bzw. steuerliche Konformität der erzeugten Rechnungen übernommen.
-Bitte prüfe jede Rechnung selbst (bei Bedarf mit deinem Steuerberater). Die
-Nutzung erfolgt auf eigenes Risiko.
+**Ohne Gewähr.** Dieses Tool wird bereitgestellt „wie besehen", ohne jede Gewährleistung. Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder rechtliche bzw. steuerliche Konformität der erzeugten Rechnungen übernommen. Bitte prüfe jede Rechnung selbst (bei Bedarf mit deinem Steuerberater). Die Nutzung erfolgt auf eigenes Risiko.
 
 [KoSIT-Validator]: https://github.com/itplr-kosit/validator
