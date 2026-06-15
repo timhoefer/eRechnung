@@ -49,11 +49,17 @@ sich mit einem Satz. Das ist steuerlich einwandfrei und hält das Tool einfach.
 
 ## Was erzeugt wird
 
-- **PDF/A-3** mit lesbarem Rechnungslayout
-- eingebettetes **`factur-x.xml`** (Profil EN 16931 / „COMFORT"), validiert gegen die
-  offizielle Factur-X-XSD
+Das Format wählst du pro Rechnung oben im Kopf:
 
-Das Ergebnis lässt sich mit Validatoren wie dem [KoSIT-Validator] oder Mustang prüfen.
+- **ZUGFeRD / Factur-X** (Standard): ein **PDF/A-3** mit lesbarem Rechnungslayout und
+  eingebettetem **`factur-x.xml`** (Profil EN 16931 / „COMFORT") — ein Hybrid-Dokument,
+  das zugleich Sicht- und Datenbeleg ist.
+- **XRechnung 3.0**: eine eigenständige, einreichbare **`.xml`** (XSD- und
+  BR-DE-valide) plus ein **PDF als Sichtexemplar**. Hier ist die XML die eigentliche
+  Rechnung; das PDF dient nur der menschlichen Ansicht.
+
+Beide werden gegen die offizielle XSD validiert; das Ergebnis lässt sich zusätzlich mit
+Validatoren wie dem [KoSIT-Validator] oder Mustang prüfen.
 
 ## Hinweise
 
@@ -88,10 +94,17 @@ prüft die nativen Bibliotheken:
 ./dist/eRechnung.app/Contents/MacOS/eRechnung --selftest
 ```
 
-Die App ist **unsigniert** – beim ersten Öffnen auf einem fremden Mac per
-Rechtsklick › „Öffnen". Für eine Weitergabe ohne Gatekeeper-Warnung sind
-Code-Signing und Notarisierung (Apple Developer Program) nötig. Der klassische
-Start über `run.sh` / `start.command` bleibt unverändert nutzbar.
+Die App ist **unsigniert**. Auf einem fremden Mac blockt Gatekeeper sie beim ersten
+Start; danach unter **Systemeinstellungen › Datenschutz & Sicherheit** auf
+**„Trotzdem öffnen"** klicken (auf macOS 15 Sequoia und neuer funktioniert der frühere
+Rechtsklick-›-Öffnen-Weg nicht mehr). Alternativ das Quarantäne-Flag entfernen:
+`xattr -dr com.apple.quarantine eRechnung.app`.
+
+Für eine Weitergabe **ohne** diese Warnung sind Code-Signing und Notarisierung
+(Apple Developer Program) nötig — der Build unterstützt das bereits über die
+Umgebungsvariablen `SIGN_IDENTITY` und `NOTARY_PROFILE` (siehe Kopf von
+`build_macos.sh`). Der klassische Start über `run.sh` / `start.command` bleibt
+unverändert nutzbar.
 
 ## Lizenz & Haftungsausschluss
 
