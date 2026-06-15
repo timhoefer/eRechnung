@@ -4,16 +4,19 @@ Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler.
 
 > **Status:** Persönliches Projekt, bereitgestellt **„wie besehen" (as is)**, ohne aktive Wartung oder Support. Der E-Rechnungs-Standard ändert sich jährlich. Bitte jede erzeugte Rechnung selbst prüfen (siehe Haftungsausschluss unten). Forks willkommen.
 
+## Voraussetzungen
+
+- **Python 3.12+**
+- **Pango** — native Bibliothek, die WeasyPrint für die PDF-Erzeugung braucht (auch für die Web-App, nicht nur für den App-Build). Auf macOS: `brew install pango`.
+
 ## Start
 
-```bash
-./run.sh
-```
+Zwei Wege:
 
-Dann im Browser öffnen: http://127.0.0.1:5000
+- **Im Browser** (Terminal): `./run.sh` legt beim ersten Mal automatisch ein virtuelles Environment an, installiert die Abhängigkeiten und startet die App. Dann im Browser öffnen: http://127.0.0.1:5000
+- **Als macOS-Doppelklick-App** (ohne Terminal/Browser): siehe [Als macOS-App bauen](#als-macos-app-bauen-optional) — eigenes Fenster, self-contained.
 
-Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern — sie
-werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
+Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern — sie werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 
 ## Steuerliche Behandlungen
 
