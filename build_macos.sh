@@ -54,12 +54,18 @@ APP="dist/eRechnung.app"
 if [ -n "${SIGN_IDENTITY:-}" ]; then
   echo
   echo "Signiere mit: $SIGN_IDENTITY"
-  # Erst alle eingebetteten Mach-O-Dateien (PyInstaller-Bundles enthalten .so/.dylib
-  # von WeasyPrint/Pango, lxml, SaxonC), dann das Bundle selbst. Inside-out ist
-  # robuster als --deep (Apple rät von --deep ab).
-  find "$APP" \( -name "*.so" -o -name "*.dylib" \) -print0 | while IFS= read -r -d '' f; do
-    codesign --force --options runtime --timestamp \
-      --entitlements entitlements.plist --sign "$SIGN_IDENTITY" "$f"
+  # Erst alle eingebetteten Mach-O-Dateien, dann das Bundle selbst. Inside-out ist
+  # robuster als --deep (Apple rät von --deep ab). WICHTIG: nicht nur nach *.so/*.dylib
+  # filtern — Framework-Binärdateien heißen ohne Endung (z. B. Python.framework/.../Python)
+  # und würden sonst durchrutschen -> Notarisierung lehnt ab ("not signed with a valid
+  # Developer ID certificate / no secure timestamp"). Daher jede Datei per `file` prüfen
+  # und alles Mach-O signieren.
+  find "$APP" -type f -print0 | while IFS= read -r -d '' f; do
+    case "$(file -b "$f")" in
+      *Mach-O*)
+        codesign --force --options runtime --timestamp \
+          --entitlements entitlements.plist --sign "$SIGN_IDENTITY" "$f" ;;
+    esac
   done
   codesign --force --options runtime --timestamp \
     --entitlements entitlements.plist --sign "$SIGN_IDENTITY" "$APP"

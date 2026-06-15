@@ -4,6 +4,10 @@ Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler.
 
 > **Status:** Persönliches Projekt, bereitgestellt **„wie besehen" (as is)**, ohne aktive Wartung oder Support. Der E-Rechnungs-Standard ändert sich jährlich. Bitte jede erzeugte Rechnung selbst prüfen (siehe Haftungsausschluss unten). Forks willkommen.
 
+## Download (macOS)
+
+Eine fertige, **signierte und notarisierte** macOS-App gibt es unter [Releases](../../releases) — herunterladen, entpacken, in den Programme-Ordner ziehen, fertig. Sie öffnet sich ohne Gatekeeper-Warnung (Apple Silicon). Wer lieber aus dem Quellcode startet oder selbst baut: siehe unten.
+
 ## Voraussetzungen
 
 - **Python 3.12+**
@@ -68,9 +72,9 @@ Die App ist self-contained (Pango-Stack + SaxonC sind eingebettet) und legt ihre
 ./dist/eRechnung.app/Contents/MacOS/eRechnung --selftest
 ```
 
-Die App ist **unsigniert**. Auf einem fremden Mac blockt Gatekeeper sie beim ersten Start; danach unter **Systemeinstellungen › Datenschutz & Sicherheit** auf **„Trotzdem öffnen"** klicken (auf macOS 15 Sequoia und neuer funktioniert der frühere Rechtsklick-›-Öffnen-Weg nicht mehr). Alternativ das Quarantäne-Flag entfernen: `xattr -dr com.apple.quarantine eRechnung.app`.
+So gebaut ist die App **unsigniert** — auf einem fremden Mac blockt Gatekeeper sie dann beim ersten Start (danach unter **Systemeinstellungen › Datenschutz & Sicherheit** auf **„Trotzdem öffnen"**; der frühere Rechtsklick-›-Öffnen-Weg ist ab macOS 15 Sequoia weg). Für den fertigen, ohne Warnung lauffähigen Download siehe [Releases](../../releases).
 
-Für eine Weitergabe **ohne** diese Warnung sind Code-Signing und Notarisierung (Apple Developer Program) nötig — der Build unterstützt das bereits über die Umgebungsvariablen `SIGN_IDENTITY` und `NOTARY_PROFILE` (siehe Kopf von `build_macos.sh`). Der klassische Start über `run.sh` / `start.command` bleibt unverändert nutzbar.
+Für einen **signierten + notarisierten** Build (wie in den Releases) unterstützt das Skript Code-Signing und Notarisierung über die Umgebungsvariablen `SIGN_IDENTITY` und `NOTARY_PROFILE` (Apple Developer Program nötig; Details im Kopf von `build_macos.sh`). Der klassische Start über `run.sh` / `start.command` bleibt unverändert nutzbar.
 
 ## Lizenz & Haftungsausschluss
 
