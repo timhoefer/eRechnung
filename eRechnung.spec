@@ -9,6 +9,12 @@ import os
 
 from PyInstaller.utils.hooks import collect_all, collect_data_files, copy_metadata
 
+# App-Version aus der einzigen Quelle (version.py) lesen -> kein Drift mit app.py.
+_ver: dict = {}
+with open("version.py", encoding="utf-8") as _vf:
+    exec(_vf.read(), _ver)
+APP_VERSION = _ver["__version__"]
+
 datas = [
     ("templates", "templates"),
     ("static", "static"),
@@ -77,7 +83,7 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "eRechnung",
         "CFBundleDisplayName": "eRechnung",
-        "CFBundleShortVersionString": "1.0.0",
+        "CFBundleShortVersionString": APP_VERSION,
         "NSHighResolutionCapable": True,
         # WKWebView darf den lokalen Server über http://127.0.0.1 ansprechen.
         "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},

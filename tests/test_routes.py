@@ -454,3 +454,36 @@ def test_archive_shows_buyer_and_amount(client):
     assert _re.search(r'arch-file" title="Rechnung_2026-003\.pdf"><span class="arch-id">\s*2026-003\b', html)
     # ... ohne Sidecar wird die Nummer aus dem Tool-Namensschema abgeleitet.
     assert _re.search(r'arch-file" title="Rechnung_2026-004\.pdf"><span class="arch-id">\s*2026-004\b', html)
+
+
+def test_check_updates_compares_version(client, monkeypatch):
+    """/check-updates: neueste GitHub-Tag-Version vs. App-Version, nur auf Klick."""
+
+    class _Resp:
+        def __init__(self, payload):
+            self._b = json.dumps(payload).encode()
+        def read(self):
+            return self._b
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    # Neuere Version verfügbar -> update_available True, Tag-"v" wird gestrippt.
+    monkeypatch.setattr("urllib.request.urlopen",
+                        lambda *a, **k: _Resp({"tag_name": "v9.9.9", "html_url": "https://x/rel"}))
+    r = client.post("/check-updates")
+    d = r.get_json()
+    assert d["update_available"] is True and d["latest"] == "9.9.9"
+    assert d["current"] == appmod.APP_VERSION and d["url"] == "https://x/rel"
+
+    # Gleiche Version -> kein Update.
+    monkeypatch.setattr("urllib.request.urlopen",
+                        lambda *a, **k: _Resp({"tag_name": "v" + appmod.APP_VERSION}))
+    assert client.post("/check-updates").get_json()["update_available"] is False
+
+    # Netzwerkfehler -> error=offline, kein Crash.
+    def _boom(*a, **k):
+        raise OSError("no net")
+    monkeypatch.setattr("urllib.request.urlopen", _boom)
+    assert client.post("/check-updates").get_json()["error"] == "offline"

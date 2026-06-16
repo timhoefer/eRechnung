@@ -27,6 +27,7 @@ from flask import (
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
+from version import __version__ as APP_VERSION
 from zugferd import (
     TAX_TREATMENTS,
     _dec,
@@ -1315,6 +1316,41 @@ def drafthorse_version_info() -> dict:
     return info
 
 
+# Repo für den (vom Nutzer ausgelösten) App-Update-Check. Bewusst nur auf Klick –
+# kein automatischer Call beim Start, damit das Offline-Prinzip gewahrt bleibt.
+GITHUB_REPO = "timhoefer/eRechnung"
+GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
+
+
+@app.route("/check-updates", methods=["POST"])
+def check_updates():
+    """Neueste GitHub-Release-Version mit der laufenden App-Version vergleichen.
+    Nur auf ausdrücklichen Klick – der einzige App-bezogene Netzwerk-Call."""
+    import json as _json
+    import urllib.request as _req
+
+    info: dict[str, Any] = {
+        "current": APP_VERSION, "latest": None, "update_available": False,
+        "error": None, "url": GITHUB_RELEASES_URL,
+    }
+    try:
+        req = _req.Request(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "eRechnung"},
+        )
+        with _req.urlopen(req, timeout=6) as resp:  # noqa: S310 (feste https-URL)
+            data = _json.loads(resp.read().decode("utf-8"))
+        tag = (data.get("tag_name") or "").lstrip("vV").strip()
+        info["latest"] = tag or None
+        info["url"] = data.get("html_url") or GITHUB_RELEASES_URL
+        if tag:
+            info["update_available"] = _version_gt(tag, APP_VERSION)
+    except Exception:
+        logger.warning("check_updates failed", exc_info=True)
+        info["error"] = "offline"
+    return info
+
+
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
@@ -1364,6 +1400,7 @@ def _settings_context() -> dict:
         "data_dir_custom": DATA_DIR.resolve() != BASE.resolve(),
         "can_browse": (sys.platform == "darwin"),
         "conflicts": data_conflicts(),
+        "app_version": APP_VERSION,
     }
 
 

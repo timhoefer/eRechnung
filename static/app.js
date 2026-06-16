@@ -2029,6 +2029,35 @@ function closeSettings() {
       const menu = e.target.closest("details.row-menu");
       if (menu) menu.removeAttribute("open");
     }
+    // Nach Updates suchen (nur auf Klick -> einziger App-Netzwerk-Call).
+    const upd = e.target.closest("#check-updates-btn");
+    if (upd) {
+      e.preventDefault();
+      const out = pane.querySelector("#update-result");
+      upd.disabled = true;
+      if (out) { out.hidden = false; out.textContent = window.MSG_UPDATE_CHECKING || "…"; }
+      fetch("/check-updates", { method: "POST" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!out) return;
+          if (d.error) {
+            out.textContent = window.MSG_UPDATE_OFFLINE || "Offline.";
+          } else if (d.update_available) {
+            out.innerHTML = "";
+            const strong = document.createElement("strong");
+            strong.textContent = (window.MSG_UPDATE_AVAILABLE || "Update verfügbar:") + " " + d.latest + " ";
+            const a = document.createElement("a");
+            a.href = d.url; a.target = "_blank"; a.className = "link";
+            a.textContent = window.MSG_UPDATE_OPEN || "Releases öffnen";
+            out.appendChild(strong); out.appendChild(a);
+          } else {
+            out.textContent = "✓ " + (window.MSG_UPDATE_UPTODATE || "Aktuell.");
+          }
+        })
+        .catch(() => { if (out) out.textContent = window.MSG_UPDATE_OFFLINE || "Offline."; })
+        .finally(() => { upd.disabled = false; });
+      return;
+    }
     // Löschen (mit Bestätigung) -> danach Panel neu laden.
     const del = e.target.closest(".js-delete");
     if (del) {

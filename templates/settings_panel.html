@@ -163,3 +163,15 @@
 {% else %}
 {% include "_deps_card.html" %}
 {% endif %}
+
+<div class="card">
+  <h2>{{ t.app_version_title }}</h2>
+  <table class="summary" style="margin-top:8px">
+    <tr><td>{{ t.app_version_current }}</td><td>{{ app_version }}</td></tr>
+  </table>
+  <div style="margin-top:12px">
+    <button type="button" class="secondary" id="check-updates-btn">{{ t.app_check_updates }}</button>
+  </div>
+  {# Ergebnis wird per JS hier eingefügt (nur auf Klick – kein Auto-Call). #}
+  <p class="hint" id="update-result" style="margin-top:10px" hidden></p>
+</div>
