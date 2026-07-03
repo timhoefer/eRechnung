@@ -401,6 +401,9 @@ SELLER_FIELDS = [
     "name", "subtitle", "address_line", "postcode", "city", "country", "vat_id",
     "tax_number", "email", "phone", "web", "iban", "bic", "bank_name",
     "account_name",
+    # Hauptkonto-Kontotyp + Nicht-IBAN-Felder (International): Kontonummer,
+    # Routing/ABA und SWIFT stehen neben den flachen IBAN-Feldern.
+    "bank_kind", "account_number", "routing", "swift",
 ]
 
 
@@ -419,45 +422,84 @@ def apply_seller_form(seller: dict, form) -> dict:
     # (iban/bic/...); zusätzliche Konten landen in seller["accounts"]. Nur anfassen,
     # wenn das Formular die Sektion wirklich enthält -> Teil-Posts wischen nichts weg.
     if form.get("has_accounts_section"):
+        kinds = form.getlist("acct_kind")
         holders = form.getlist("acct_account_name")
         banks = form.getlist("acct_bank_name")
         ibans = form.getlist("acct_iban")
         bics = form.getlist("acct_bic")
+        accnums = form.getlist("acct_account_number")
+        routings = form.getlist("acct_routing")
+        swifts = form.getlist("acct_swift")
 
         def at(lst: list, j: int) -> str:
             return lst[j].strip() if j < len(lst) else ""
 
+        # Jede Konto-Zeile liefert genau einen Eintrag in jeder getlist (alle Felder
+        # sind stets im DOM), daher fluchten die Listen über den Zeilenindex.
         extras = []
-        for i, raw_iban in enumerate(ibans):
-            iban = (raw_iban or "").strip()
-            if not iban:  # leere Blöcke überspringen
-                continue
-            extras.append({
-                "account_name": at(holders, i),
-                "bank_name": at(banks, i), "iban": iban, "bic": at(bics, i),
-            })
+        n = max(len(kinds), len(ibans), len(accnums))
+        for i in range(n):
+            if at(kinds, i) == "intl":
+                accnum = at(accnums, i)
+                if not accnum:  # leere Blöcke überspringen
+                    continue
+                extras.append({
+                    "kind": "intl", "account_name": at(holders, i),
+                    "bank_name": at(banks, i), "account_number": accnum,
+                    "routing": at(routings, i), "swift": at(swifts, i),
+                })
+            else:
+                iban = at(ibans, i)
+                if not iban:  # leere Blöcke überspringen
+                    continue
+                extras.append({
+                    "kind": "iban", "account_name": at(holders, i),
+                    "bank_name": at(banks, i), "iban": iban, "bic": at(bics, i),
+                })
         seller["accounts"] = extras
     return seller
 
 
+def _norm_account(a: dict) -> dict:
+    """Ein Konto-Dict auf einheitliche Form bringen: alle Felder gesetzt (leer, falls
+    unbenutzt), 'kind' abgeleitet ("intl", wenn eine Kontonummer da ist, sonst "iban").
+    So können Templates und XML jedes Konto gleich behandeln."""
+    kind = a.get("kind") or ("intl" if (a.get("account_number") or "").strip() else "iban")
+    return {
+        "kind": kind,
+        "account_name": a.get("account_name", ""),
+        "bank_name": a.get("bank_name", ""),
+        "iban": a.get("iban", ""), "bic": a.get("bic", ""),
+        "account_number": a.get("account_number", ""),
+        "routing": a.get("routing", ""), "swift": a.get("swift", ""),
+    }
+
+
+def _acct_id(a: dict) -> str:
+    """Stabiler Schlüssel eines Kontos: Kontonummer (International) bzw. IBAN (SEPA)."""
+    return a["account_number"] if a["kind"] == "intl" else a["iban"]
+
+
 def seller_accounts(seller: dict) -> list:
     """Alle Zahlungskonten: Hauptkonto (flache Felder) zuerst, danach die weiteren
-    aus seller['accounts']. Konten ohne IBAN werden ausgelassen. Identifiziert wird
-    ein Konto über seine IBAN (stabil), nicht über die Listenposition."""
+    aus seller['accounts']. Konten ohne Schlüssel (IBAN bzw. Kontonummer) werden
+    ausgelassen. Identifiziert wird ein Konto über diesen Schlüssel (stabil), nicht
+    über die Listenposition."""
     out = []
-    if (seller.get("iban") or "").strip():
-        out.append({
-            "account_name": seller.get("account_name", ""),
-            "bank_name": seller.get("bank_name", ""),
-            "iban": seller.get("iban", ""), "bic": seller.get("bic", ""),
-        })
+    primary = _norm_account({
+        "kind": seller.get("bank_kind"),
+        "account_name": seller.get("account_name", ""),
+        "bank_name": seller.get("bank_name", ""),
+        "iban": seller.get("iban", ""), "bic": seller.get("bic", ""),
+        "account_number": seller.get("account_number", ""),
+        "routing": seller.get("routing", ""), "swift": seller.get("swift", ""),
+    })
+    if _acct_id(primary).strip():
+        out.append(primary)
     for a in (seller.get("accounts") or []):
-        if (a.get("iban") or "").strip():
-            out.append({
-                "account_name": a.get("account_name", ""),
-                "bank_name": a.get("bank_name", ""),
-                "iban": a.get("iban", ""), "bic": a.get("bic", ""),
-            })
+        na = _norm_account(a)
+        if _acct_id(na).strip():
+            out.append(na)
     return out
 
 
@@ -466,26 +508,24 @@ def _norm_iban(s) -> str:
 
 
 def select_account(seller: dict, key) -> dict | None:
-    """Konto anhand der IBAN (stabiler Schlüssel aus dem Formular) wählen.
-    Alt-Sidecars enthalten noch einen numerischen Index – der wird weiter
-    unterstützt. Fallback: erstes Konto; None, wenn keins hinterlegt ist."""
+    """Konto anhand seines Schlüssels (IBAN bzw. Kontonummer) wählen. Zuerst per
+    Schlüssel matchen – so übersteht die Auswahl Umsortieren/Entfernen. Alt-Sidecars
+    enthalten noch einen numerischen Index; der greift nur, wenn kein Schlüssel passt.
+    Fallback: erstes Konto; None, wenn keins hinterlegt ist."""
     accts = seller_accounts(seller)
     if not accts:
         return None
     k = str(key or "").strip()
-    if k and not k.isdigit():  # IBANs beginnen mit Buchstaben
-        kn = _norm_iban(k)
+    if k:
+        kn = _norm_iban(k)  # tolerant gegen Leerzeichen/Kleinschreibung
         for a in accts:
-            if _norm_iban(a["iban"]) == kn:
+            if _norm_iban(_acct_id(a)) == kn:
                 return a
-        return accts[0]
-    try:
+    if k.isdigit():  # Alt-Sidecar: numerischer Index (nur ohne Schlüssel-Treffer)
         i = int(k)
-    except (TypeError, ValueError):
-        i = 0
-    if i < 0 or i >= len(accts):
-        i = 0
-    return accts[i]
+        if 0 <= i < len(accts):
+            return accts[i]
+    return accts[0]
 
 
 def payment_terms_text(days: int, lang: str) -> str:

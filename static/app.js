@@ -239,7 +239,7 @@ function updateTaxnrHint() {
 
 // Pflichtangaben der Stammdaten prüfen: grüner Haken vs. Warnung + Feldmarkierung.
 // USt-IdNr. ist Pflicht (EN16931 BR-CO-26); Steuernummer ist optional.
-const MASTER_REQUIRED = ["name", "address_line", "postcode", "city", "vat_id", "iban"];
+const MASTER_REQUIRED = ["name", "address_line", "postcode", "city", "vat_id"];
 function markField(el, bad) {
   const label = el && el.closest("label");
   if (label) label.classList.toggle("field-error", !!bad);
@@ -254,6 +254,14 @@ function validateMasterData() {
     markField(el, !ok);
     if (!ok) complete = false;
   });
+  // Zahlungskonto: je nach Kontotyp ist die IBAN oder die Kontonummer Pflicht; das
+  // jeweils andere (ausgeblendete) Feld nie rot markieren.
+  const intl = (form.querySelector('[name="bank_kind"]') || {}).value === "intl";
+  const keyEl = form.querySelector(`[name="${intl ? "account_number" : "iban"}"]`);
+  const keyOk = keyEl && keyEl.value.trim();
+  markField(keyEl, !keyOk);
+  markField(form.querySelector(`[name="${intl ? "iban" : "account_number"}"]`), false);
+  if (!keyOk) complete = false;
   const check = document.querySelector(".ok-check");
   const warn = document.querySelector(".warn-badge");
   if (check) check.hidden = !complete;
@@ -1228,7 +1236,7 @@ document.addEventListener("input", (e) => {
     scheduleSellerSave();
     if (e.target.name === "vat_id" || e.target.name === "tax_number") updateTaxnrHint();
     // Bank-/Kontofelder ändern -> Auswähler live nachziehen.
-    if (e.target.name === "iban" || e.target.name === "bank_name"
+    if (["iban", "bank_name", "account_number", "bank_kind"].includes(e.target.name)
         || (e.target.name || "").startsWith("acct_")) syncBankSelector();
     validateMasterData();
     return;
@@ -1254,6 +1262,13 @@ document.addEventListener("change", (e) => {
   if (e.target.name === "service_start" || e.target.name === "service_end") updatePeriodHint();
   // Bankkonto über das Custom-Menü gewählt (chooseUnit feuert "change") -> Vorschau.
   if (e.target.id === "bank-account-select") schedulePreview();
+  // Kontotyp umgeschaltet -> passende Feldgruppe (data-kind) zeigen, Auswähler + Save.
+  if (e.target.classList.contains("acct-kind")) {
+    const head = e.target.closest(".acct-head");
+    if (head) head.dataset.kind = e.target.value === "intl" ? "intl" : "iban";
+    syncBankSelector();
+    if (e.target.closest("#settings-form")) { scheduleSellerSave(); validateMasterData(); }
+  }
 });
 document.addEventListener("focusin", (e) => {
   if (e.target.matches('#items [name="description"]')) openComboMenu(e.target);
@@ -1756,17 +1771,21 @@ function announce(msg) {
 // Kurz sichtbare Fehlermeldung (macht still scheiternde AJAX-Aktionen sichtbar).
 let _toastTimer;
 // Bankkonten aus dem Stammdaten-Formular sammeln – Hauptkonto (flache Felder) zuerst,
-// dann die weiteren Blöcke. Identifiziert wird ein Konto über seine IBAN; angezeigt
-// als "Bank · …1234" (kein eigenes Namensfeld nötig).
+// dann die weiteren Blöcke. Identifiziert wird ein Konto über seinen Schlüssel (IBAN
+// bzw. Kontonummer bei International); angezeigt als "Bank · …1234".
 function collectAccounts() {
   const accts = [];
   const sf = document.getElementById("settings-form");
   if (!sf) return accts;
-  const val = (el) => (el ? el.value : "").trim();
-  const push = (iban, bank) => { if (iban) accts.push({ iban: iban, bank: bank }); };
-  push(val(sf.querySelector('[name="iban"]')), val(sf.querySelector('[name="bank_name"]')));
-  sf.querySelectorAll(".extra-account").forEach((b) => {
-    push(val(b.querySelector('[name="acct_iban"]')), val(b.querySelector('[name="acct_bank_name"]')));
+  const val = (sel, box) => { const el = (box || sf).querySelector(sel); return el ? el.value.trim() : ""; };
+  const push = (box, k, i, a, b) => {
+    const kind = val('[name="' + k + '"]', box) || "iban";
+    const key = kind === "intl" ? val('[name="' + a + '"]', box) : val('[name="' + i + '"]', box);
+    if (key) accts.push({ key: key, bank: val('[name="' + b + '"]', box) });
+  };
+  push(sf, "bank_kind", "iban", "account_number", "bank_name");
+  sf.querySelectorAll(".extra-account").forEach((box) => {
+    push(box, "acct_kind", "acct_iban", "acct_account_number", "acct_bank_name");
   });
   return accts;
 }
@@ -1810,7 +1829,7 @@ function browseDataDir(btn, input) {
 
 // Anzeigetext eines Kontos: "Bank · …1234" (bzw. nur "…1234" ohne Bankname).
 function acctDisplay(a) {
-  const tail = "…" + a.iban.replace(/\s+/g, "").slice(-4);
+  const tail = "…" + a.key.replace(/\s+/g, "").slice(-4);
   return a.bank ? a.bank + " · " + tail : tail;
 }
 
@@ -1827,11 +1846,11 @@ function syncBankSelector() {
   sel.innerHTML = "";
   accts.forEach((a) => {
     const o = document.createElement("option");
-    o.value = a.iban;
+    o.value = a.key;
     o.textContent = acctDisplay(a);
     sel.appendChild(o);
   });
-  if (prev && accts.some((a) => a.iban === prev)) sel.value = prev;
+  if (prev && accts.some((a) => a.key === prev)) sel.value = prev;
   syncUnitDisplay(sel); // sichtbares Label des Custom-Triggers nachziehen
   wrap.hidden = false;
 }

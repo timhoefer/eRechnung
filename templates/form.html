@@ -104,31 +104,41 @@
     <div class="callout" id="taxnr-hint" {{ '' if (seller.vat_id and seller.tax_number) else 'hidden' }}>{{ t.taxnr_hint }}</div>
 
     <h3 class="form-section">{{ t.sec_payment }}</h3>
+    {# Konto-Felder – EINMAL definiert, genutzt für Hauptkonto (p='') und Zusatzkonten
+       (p='acct_'); so können die Varianten nicht auseinanderlaufen. Der Kontotyp-Select
+       schaltet zwischen IBAN (SEPA: IBAN+BIC) und International (Kontonummer/Routing/
+       SWIFT); data-kind + CSS blenden die jeweils andere Feldgruppe aus. #}
+    {% macro acct_fields(a={}, p='', kn='kind', rm=false) -%}
+    {% set kind = a.kind or a.bank_kind or ('intl' if a.account_number else 'iban') %}
+    <div class="acct-head grid" data-kind="{{ kind }}">
+      <label class="f-kind">{{ t.account_kind }}
+        <select name="{{ kn }}" class="acct-kind">
+          <option value="iban" {{ 'selected' if kind != 'intl' else '' }}>{{ t.kind_iban }}</option>
+          <option value="intl" {{ 'selected' if kind == 'intl' else '' }}>{{ t.kind_intl }}</option>
+        </select>
+      </label>
+      <label class="f-iban">{{ t.iban }}<input name="{{ p }}iban" value="{{ a.iban or '' }}"></label>
+      <label class="f-iban">{{ t.bic }}<input name="{{ p }}bic" value="{{ a.bic or '' }}"></label>
+      <label class="f-intl">{{ t.account_number }}<input name="{{ p }}account_number" value="{{ a.account_number or '' }}"></label>
+      <label class="f-intl">{{ t.routing }}<input name="{{ p }}routing" value="{{ a.routing or '' }}"></label>
+      <label class="f-intl">{{ t.swift }}<input name="{{ p }}swift" value="{{ a.swift or '' }}"></label>
+      <label class="f-bank">{{ t.bank_name }}<input name="{{ p }}bank_name" value="{{ a.bank_name or '' }}"></label>
+      <label>{{ t.account_holder }}<input name="{{ p }}account_name" value="{{ a.account_name or '' }}"></label>
+      {% if rm %}<button type="button" class="del acct-remove" title="{{ t.acct_remove }}" aria-label="{{ t.acct_remove }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>{% endif %}
+    </div>
+    {%- endmacro %}
+
     {# Hauptkonto: gleiche Box wie die Zusatzkonten, nur ohne Löschbutton.
        (Eigene Klasse, damit die :has(.extra-account)-Hinweis-Logik nicht anspringt.) #}
     <div class="wide primary-account">
-      <div class="acct-head grid">
-        <label>{{ t.iban }}<input name="iban" value="{{ seller.iban or '' }}"></label>
-        <label>{{ t.bic }}<input name="bic" value="{{ seller.bic or '' }}"></label>
-        <label>{{ t.bank_name }}<input name="bank_name" value="{{ seller.bank_name or '' }}"></label>
-        <label>{{ t.account_holder }}<input name="account_name" value="{{ seller.account_name or '' }}"></label>
-      </div>
+      {{ acct_fields(seller, '', 'bank_kind') }}
     </div>
     {# Zahlungsziel lebt beim KUNDEN (Default 14 Tage, pro Kunde änderbar). #}
 
-    {# Eine Konto-Zeile – EINMAL definiert, genutzt für bestehende Konten (Loop)
-       und als klonbare Vorlage (<template>); so können beide nicht auseinanderlaufen.
-       Optik wie die Positionen: eingefasste Box, Trash AUSSERHALB rechts; innen
-       4-spaltig (IBAN/BIC/Bank/Kontoinhaber) mit Labels. #}
+    {# Eine Konto-Zeile als klonbare Vorlage (<template>) und für bestehende Konten. #}
     {% macro acct_row(a={}) -%}
     <div class="extra-account">
-      <div class="acct-head grid">
-        <label>{{ t.iban }}<input name="acct_iban" value="{{ a.iban or '' }}"></label>
-        <label>{{ t.bic }}<input name="acct_bic" value="{{ a.bic or '' }}"></label>
-        <label>{{ t.bank_name }}<input name="acct_bank_name" value="{{ a.bank_name or '' }}"></label>
-        <label>{{ t.account_holder }}<input name="acct_account_name" value="{{ a.account_name or '' }}"></label>
-        <button type="button" class="del acct-remove" title="{{ t.acct_remove }}" aria-label="{{ t.acct_remove }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button>
-      </div>
+      {{ acct_fields(a, 'acct_', 'acct_kind', true) }}
     </div>
     {%- endmacro %}
 

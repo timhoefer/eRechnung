@@ -1,6 +1,11 @@
 """Round-trip-Test: build_xml erzeugt wohlgeformtes, EN-16931-XSD-valides CII-XML
 mit korrekten Beträgen. Fängt Regressionen in der XML-Erzeugung nach Dep-Updates."""
-from zugferd import build_xml, has_doctype, validate_xml_bytes
+from zugferd import (
+    build_xml,
+    has_doctype,
+    validate_schematron,
+    validate_xml_bytes,
+)
 
 
 def make_data():
@@ -90,6 +95,39 @@ def test_validate_rejects_doctype_xxe():
     ok, msgs = validate_xml_bytes(xxe)
     assert ok is False
     assert any("DOCTYPE" in m or "Sicherheit" in m for m in msgs)
+
+
+def test_intl_account_payment_means():
+    """Nicht-IBAN-Konto (International): PaymentMeans type_code 30 mit ProprietaryID
+    (Kontonummer) statt IBAN, SWIFT als BIC. XML bleibt EN-16931-XSD-valide."""
+    data = make_data()
+    data["bank"] = {
+        "kind": "intl", "account_number": "1234567890", "routing": "021000021",
+        "swift": "CHASUS33", "bank_name": "Chase", "account_name": "Selftest GmbH",
+    }
+    xml = build_xml(data)
+    ok, messages = validate_xml_bytes(xml)
+    assert ok, "XSD-Fehler:\n" + "\n".join(messages)
+    assert b"<ram:ProprietaryID>1234567890</ram:ProprietaryID>" in xml
+    assert b"CHASUS33" in xml           # SWIFT als BICID
+    assert b"DE02120300000000202051" not in xml  # kein IBAN-Fallback
+    # PaymentMeans-TypeCode 30 (Überweisung, nicht SEPA)
+    assert b"<ram:TypeCode>30</ram:TypeCode>" in xml
+
+
+def test_intl_account_passes_schematron():
+    """Geschäftsregeln (EN 16931 Schematron): Intl-Zahlungsweg wirft keine BR-Fehler.
+    Übersprungen, wenn SaxonC/Schematron im Testumfeld fehlt."""
+    data = make_data()
+    data["bank"] = {
+        "kind": "intl", "account_number": "1234567890",
+        "swift": "CHASUS33", "bank_name": "Chase", "account_name": "Selftest GmbH",
+    }
+    res = validate_schematron(build_xml(data))
+    if not res["available"] or res["ok"] is None:
+        import pytest
+        pytest.skip("Schematron/SaxonC nicht verfügbar")
+    assert res["ok"], "Schematron-Fehler:\n" + "\n".join(res["errors"])
 
 
 def test_xrechnung_profile_specid():

@@ -432,10 +432,22 @@ button.secondary:hover { background: var(--surface-2-h); }
 }
 /* Nur die Zusatzkonten brauchen rechts Platz für den außenliegenden Trash. */
 .extra-account { margin-right: 49px; }
-.acct-head { position: relative; margin-top: 0; }
+/* Konto-Box: 3 Felder pro Reihe (nicht 4) – der Rest bricht in die nächste Reihe um.
+   Ausgeblendete Felder (display:none) belegen keine Grid-Zelle, daher passt die
+   Aufteilung für beide Kontotypen automatisch (IBAN: Typ/IBAN/BIC · Bank/Inhaber;
+   International: Typ/Kontonr./Routing · SWIFT/Bank/Inhaber). */
+.acct-head { position: relative; margin-top: 0; grid-template-columns: repeat(3, 1fr); }
 /* kompakte Feldhöhe wie in den Positions-Boxen (.item input) */
 .primary-account input, .extra-account input { padding: 7px 8px; }
 .extra-account .acct-head > .acct-remove { position: absolute; bottom: 0; left: 100%; margin-left: 28px; }
+/* Kontotyp-Umschalter: je nach data-kind die andere Feldgruppe ausblenden.
+   IBAN (SEPA) zeigt IBAN/BIC, International zeigt Kontonummer/Routing/SWIFT. */
+.acct-head[data-kind="iban"] .f-intl { display: none; }
+.acct-head[data-kind="intl"] .f-iban { display: none; }
+/* IBAN-Modus: Reihe 2 hat nur Bank + Kontoinhaber -> Bank füllt 2 Spalten, damit
+   die Reihe nicht mit einer leeren dritten Spalte endet. (Nur bei IBAN: im
+   International-Modus füllt SWIFT/Bank/Inhaber die Reihe bereits.) */
+.acct-head[data-kind="iban"] .f-bank { grid-column: span 2; }
 .bank-select[hidden] { display: none; }
 /* Logo-Upload (Briefkopf) */
 .logo-label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: 4px; }

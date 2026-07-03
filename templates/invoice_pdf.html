@@ -197,14 +197,21 @@
   </div>
   {% endif %}
 
-  {% set acct = bank if bank else {'iban': seller.iban, 'bic': seller.bic, 'bank_name': seller.bank_name, 'account_name': seller.account_name} %}
-  {% if acct.iban %}
+  {% set acct = bank if bank else {'iban': seller.iban, 'bic': seller.bic, 'bank_name': seller.bank_name, 'account_name': seller.account_name, 'account_number': seller.account_number, 'routing': seller.routing, 'swift': seller.swift, 'kind': seller.bank_kind} %}
+  {% set akind = acct.kind or ('intl' if acct.account_number else 'iban') %}
+  {% if (akind == 'intl' and acct.account_number) or (akind != 'intl' and acct.iban) %}
   <div class="pay">
     <table>
       <tr><td class="k">{{ ti.pdf_payable_to }}</td><td class="v">{{ acct.account_name or seller.name }}</td></tr>
       {% if acct.bank_name %}<tr><td class="k">{{ ti.bank_name.split(' ')[0] }}</td><td class="v">{{ acct.bank_name }}</td></tr>{% endif %}
-      <tr><td class="k">{{ ti.iban }}</td><td class="v">{{ acct.iban }}</td></tr>
-      {% if acct.bic %}<tr><td class="k">{{ ti.bic }}</td><td class="v">{{ acct.bic }}</td></tr>{% endif %}
+      {% if akind == 'intl' %}
+        <tr><td class="k">{{ ti.pdf_account_number }}</td><td class="v">{{ acct.account_number }}</td></tr>
+        {% if acct.routing %}<tr><td class="k">{{ ti.pdf_routing }}</td><td class="v">{{ acct.routing }}</td></tr>{% endif %}
+        {% if acct.swift %}<tr><td class="k">{{ ti.pdf_swift }}</td><td class="v">{{ acct.swift }}</td></tr>{% endif %}
+      {% else %}
+        <tr><td class="k">{{ ti.iban }}</td><td class="v">{{ acct.iban }}</td></tr>
+        {% if acct.bic %}<tr><td class="k">{{ ti.bic }}</td><td class="v">{{ acct.bic }}</td></tr>{% endif %}
+      {% endif %}
     </table>
   </div>
   {% endif %}

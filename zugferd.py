@@ -456,12 +456,29 @@ def build_xml(data) -> bytes:
 
     doc.trade.settlement.currency_code = currency
 
-    # Zahlungsweg (SEPA-Überweisung) – gewähltes Konto (data["bank"]), sonst Hauptkonto.
+    # Zahlungsweg – gewähltes Konto (data["bank"]), sonst Hauptkonto (flache Felder).
     acct = data.get("bank") or {
+        "kind": seller.get("bank_kind")
+        or ("intl" if (seller.get("account_number") or "").strip() else "iban"),
         "iban": seller.get("iban", ""), "bic": seller.get("bic", ""),
         "account_name": seller.get("account_name", ""),
+        "account_number": seller.get("account_number", ""),
+        "swift": seller.get("swift", ""),
     }
-    if acct.get("iban"):
+    kind = acct.get("kind") or ("intl" if acct.get("account_number") else "iban")
+    if kind == "intl":
+        # International (kein SEPA): Kontonummer als ProprietaryID, SWIFT als BIC.
+        # Routing/ABA hat in EN16931 kein eigenes Feld -> nur im PDF-Zahlblock.
+        if acct.get("account_number"):
+            pm = PaymentMeans()
+            pm.type_code = "30"  # Credit transfer (non-SEPA / international)
+            pm.payee_account.proprietary_id = acct["account_number"]
+            if acct.get("account_name"):
+                pm.payee_account.account_name = acct["account_name"]
+            if acct.get("swift"):
+                pm.payee_institution.bic = acct["swift"]
+            doc.trade.settlement.payment_means.add(pm)
+    elif acct.get("iban"):
         pm = PaymentMeans()
         pm.type_code = "58"  # SEPA credit transfer
         pm.payee_account.iban = acct["iban"]

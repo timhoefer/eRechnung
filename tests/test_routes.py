@@ -356,8 +356,50 @@ def test_apply_seller_form_parses_extra_accounts():
     for k in ("acct_iban", "acct_bic", "acct_bank_name", "acct_account_name"):
         md.add(k, "")  # leerer Block -> wird verworfen
     seller = appmod.apply_seller_form({"name": "S", "iban": "DE11"}, md)
-    assert seller["accounts"] == [{"account_name": "Inh", "bank_name": "Wise",
-                                   "iban": "DE22", "bic": "B2"}]
+    assert seller["accounts"] == [{"kind": "iban", "account_name": "Inh",
+                                   "bank_name": "Wise", "iban": "DE22", "bic": "B2"}]
+
+
+def test_apply_seller_form_parses_intl_account():
+    """Kontotyp 'International' -> Kontonummer/Routing/SWIFT statt IBAN/BIC."""
+    from werkzeug.datastructures import MultiDict
+    md = MultiDict()
+    md.add("has_accounts_section", "1")
+    # Zwei Zeilen: eine International (mit Kontonummer), eine leere -> verworfen.
+    for k, vals in [
+        ("acct_kind", ["intl", "intl"]),
+        ("acct_account_number", ["123456789", ""]),
+        ("acct_routing", ["021000021", ""]),
+        ("acct_swift", ["CHASUS33", ""]),
+        ("acct_iban", ["", ""]), ("acct_bic", ["", ""]),
+        ("acct_bank_name", ["Chase", ""]), ("acct_account_name", ["Tim", ""]),
+    ]:
+        for v in vals:
+            md.add(k, v)
+    seller = appmod.apply_seller_form({"name": "S", "iban": "DE11"}, md)
+    assert seller["accounts"] == [{
+        "kind": "intl", "account_name": "Tim", "bank_name": "Chase",
+        "account_number": "123456789", "routing": "021000021", "swift": "CHASUS33",
+    }]
+
+
+def test_seller_accounts_and_select_intl():
+    """seller_accounts nimmt Intl-Konten auf; Auswahl per Kontonummer als Schlüssel."""
+    seller = {"name": "S", "iban": "DE11", "bic": "B1", "accounts": [
+        {"kind": "intl", "account_number": "999888", "swift": "CHASUS33",
+         "bank_name": "Chase"},
+    ]}
+    accts = appmod.seller_accounts(seller)
+    assert [a["kind"] for a in accts] == ["iban", "intl"]
+    # Auswahl per Kontonummer (stabiler Schlüssel), tolerant gegen Leerzeichen
+    assert appmod.select_account(seller, "999888")["bank_name"] == "Chase"
+    assert appmod.select_account(seller, "999 888")["swift"] == "CHASUS33"
+    # Intl-Hauptkonto (flache Felder) ohne IBAN wird über die Kontonummer erkannt
+    intl_primary = {"name": "S", "bank_kind": "intl", "account_number": "555",
+                    "swift": "ABCDUS33"}
+    accts2 = appmod.seller_accounts(intl_primary)
+    assert len(accts2) == 1 and accts2[0]["kind"] == "intl"
+    assert appmod.select_account(intl_primary, "555")["swift"] == "ABCDUS33"
 
 
 def test_invoice_form_has_account_selector_element(client):
