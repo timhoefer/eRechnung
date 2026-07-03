@@ -93,7 +93,8 @@ header { padding: 26px 24px 14px; max-width: 1640px; margin: 0 auto; }
    Pille bei schmalem Viewport im Browser auf eine zweite Zeile). */
 header h1 { margin: 0; font-size: var(--text-xl); display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap; }
 header .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
-.header-row { display: flex; justify-content: space-between; align-items: flex-start; }
+/* center: Theme-/Sprach-Schalter vertikal mittig zur Titelzeile (nicht oben kleben). */
+.header-row { display: flex; justify-content: space-between; align-items: center; }
 .langswitch { display: flex; gap: 4px; }
 .langswitch a {
   text-decoration: none; font-size: var(--text-sm); font-weight: 600; color: var(--muted);
