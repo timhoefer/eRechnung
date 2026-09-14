@@ -15,13 +15,23 @@
 #   Ohne diese Variablen verhält sich der Build wie bisher (unsigniert).
 #
 # Der klassische Start (run.sh / start.command) bleibt davon unberührt.
-set -e
+set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ ! -x .venv/bin/pyinstaller ]; then
   echo "PyInstaller/pywebview fehlen. Einmalig installieren mit:"
   echo "  .venv/bin/pip install -r requirements-build.txt"
   exit 1
+fi
+
+# Apple-Zugriff vor dem Build prüfen; ein Vertrags-/Loginfehler darf den
+# vorhandenen Build nicht löschen und wird nicht erst nach dem Signieren sichtbar.
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  if [ -z "${SIGN_IDENTITY:-}" ]; then
+    echo "NOTARY_PROFILE benötigt SIGN_IDENTITY." >&2
+    exit 1
+  fi
+  xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null
 fi
 
 # build/dist aufräumen. Eine laufende App hält dist/ offen ("rm: dist: Directory not
@@ -92,12 +102,21 @@ if [ -n "${NOTARY_PROFILE:-}" ]; then
   spctl --assess --type execute -vv "$APP"
 fi
 
+VERSION=$(.venv/bin/python -c 'from version import __version__; print(__version__)')
+RELEASE_ZIP="dist/eRechnung.app.zip"
+ditto -c -k --keepParent "$APP" "$RELEASE_ZIP"
+CHECK_ARGS=(--version "$VERSION" --app "$APP" --archive "$RELEASE_ZIP")
+if [ -z "${NOTARY_PROFILE:-}" ]; then
+  CHECK_ARGS+=(--unsigned)
+fi
+.venv/bin/python scripts/check_macos_release.py "${CHECK_ARGS[@]}"
+
 echo
 echo "Fertig: $APP"
 echo "Headless-Selbsttest: ./$APP/Contents/MacOS/eRechnung --selftest"
 echo
 if [ -z "${SIGN_IDENTITY:-}" ]; then
   echo "Hinweis: Die App ist unsigniert. Beim ersten Öffnen auf einem anderen Mac"
-  echo "Rechtsklick auf die App > 'Öffnen' wählen (Gatekeeper). Für eine Weitergabe"
+  echo "Die lokale Build-Prüfung ersetzt keine Signierung/Notarisierung. Für eine Weitergabe"
   echo "ohne Warnung: SIGN_IDENTITY + NOTARY_PROFILE setzen (siehe Kopf dieses Skripts)."
 fi

@@ -55,10 +55,15 @@ FROZEN = getattr(sys, "frozen", False)
 if FROZEN:
     RESOURCE_BASE = Path(sys._MEIPASS)  # type: ignore[attr-defined]  # nur im Bundle
     BASE = Path.home() / "Library" / "Application Support" / "eRechnung"
-    BASE.mkdir(parents=True, exist_ok=True)
 else:
     RESOURCE_BASE = Path(__file__).parent
     BASE = Path(__file__).parent
+
+
+if "--selftest" in sys.argv:
+    _SELFTEST_DIR = tempfile.TemporaryDirectory(prefix="erechnung-selftest-")
+    BASE = Path(_SELFTEST_DIR.name)
+BASE.mkdir(parents=True, exist_ok=True)
 
 
 def _patch_cffi_dlopen() -> None:

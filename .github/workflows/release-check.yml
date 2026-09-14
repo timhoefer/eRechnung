@@ -1,0 +1,95 @@
+name: Release verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release-Tag des vorhandenen Entwurfs (z. B. v1.1.1)"
+        required: true
+        type: string
+      publish:
+        description: "Nach erfolgreicher Prüfung veröffentlichen"
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-verification-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 15
+    outputs:
+      digest: ${{ steps.archive.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Verify release tag, source version and changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python - <<'PY'
+          import ast, json, os, re, subprocess
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+              raise SystemExit('Expected release tag vX.Y.Z')
+          release = json.loads(subprocess.check_output([
+              'gh', 'release', 'view', tag, '--json', 'tagName,targetCommitish']))
+          if release['tagName'] != tag:
+              raise SystemExit('Release tag mismatch')
+          tagged = subprocess.run(['git', 'rev-parse', '--verify', f'refs/tags/{tag}'],
+                                  capture_output=True, text=True)
+          ref = tagged.stdout.strip() if tagged.returncode == 0 else release['targetCommitish']
+          source = subprocess.check_output(['git', 'show', f'{ref}:version.py'], text=True)
+          version = next(ast.literal_eval(node.value) for node in ast.parse(source).body
+                         if isinstance(node, ast.Assign)
+                         and any(isinstance(t, ast.Name) and t.id == '__version__' for t in node.targets))
+          if tag != f'v{version}':
+              raise SystemExit('Source version does not match release tag')
+          changelog = subprocess.check_output(['git', 'show', f'{ref}:CHANGELOG.md'], text=True)
+          if f'## {version}' not in changelog.splitlines():
+              raise SystemExit('Version missing from changelog')
+          PY
+      - name: Download and verify the actual release archive
+        id: archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release download "$RELEASE_TAG" --pattern eRechnung.app.zip --dir release-download
+          python scripts/check_macos_release.py --version "${RELEASE_TAG#v}" --archive release-download/eRechnung.app.zip
+          DIGEST=$(shasum -a 256 release-download/eRechnung.app.zip | cut -d ' ' -f 1)
+          echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
+
+  publish:
+    if: ${{ inputs.publish }}
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Ensure the checked asset is unchanged and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_DIGEST: ${{ needs.verify.outputs.digest }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          tag = os.environ['RELEASE_TAG']
+          release = json.loads(subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'assets']))
+          assets = [a for a in release['assets'] if a['name'] == 'eRechnung.app.zip']
+          if len(assets) != 1 or assets[0].get('digest') != os.environ['EXPECTED_DIGEST']:
+              raise SystemExit('Release archive changed after verification')
+          subprocess.run(['gh', 'release', 'edit', tag, '--draft=false', '--latest'], check=True)
+          PY

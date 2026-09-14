@@ -83,3 +83,39 @@ Dieser Code steht unter der **Apache License 2.0** – siehe [`LICENSE`](LICENSE
 **Ohne Gewähr.** Dieses Tool wird bereitgestellt „wie besehen", ohne jede Gewährleistung. Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder rechtliche bzw. steuerliche Konformität der erzeugten Rechnungen übernommen. Bitte prüfe jede Rechnung selbst (bei Bedarf mit deinem Steuerberater). Die Nutzung erfolgt auf eigenes Risiko.
 
 [KoSIT-Validator]: https://github.com/itplr-kosit/validator
+
+
+## Automatische Prüfungen und Releases
+
+Bei Pull Requests und Pushes auf `main` laufen Python-Tests einschließlich echter
+PDF-Erzeugung, XSD- und Schematron-Prüfung, JavaScript-Tests, Ruff und mypy. Die
+Integrationstests prüfen ZUGFeRD und XRechnung jeweils auf Deutsch und Englisch.
+Fehlende PDF-/SaxonC-Abhängigkeiten sind in CI ein Fehler.
+
+Ein zusätzlicher Apple-Silicon-Job auf `macos-15` baut die App. Der Build prüft die
+Versionsnummer und führt den Selbsttest sowohl im Bundle als auch nach dem
+Entpacken des ZIP-Archivs aus. Diese CI-Builds benötigen keine Apple-Zugangsdaten
+und gelten nicht als signierte Veröffentlichungen. Der Selbsttest verwendet
+bereits beim Laden der App einen temporären Datenordner.
+
+Für lokale Prüfungen:
+
+```bash
+.venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt pypdf==6.12.2
+ERECHNUNG_REQUIRE_INTEGRATION=1 .venv/bin/python -m pytest -q
+./build_macos.sh
+```
+
+Bei einem Build mit `NOTARY_PROFILE` prüft das Skript den Apple-Zugriff vor dem
+Aufräumen und Bauen. Nach Signierung und Notarisierung werden zusätzlich die
+Developer-ID-Signatur, das angeheftete Notarisierungsticket und Gatekeeper geprüft,
+auch am entpackten Download-ZIP. Eine fehlende Notarisierung ist ein Fehler.
+
+Der manuell startbare GitHub-Ablauf **Release verification** prüft ein bereits
+hochgeladenes Release-Archiv (auch aus einem Entwurf): Tag, Quellcode-Version,
+Änderungsprotokoll, App-Version, Signatur, Notarisierung und Selbsttest. Dazu unter
+**Actions → Release verification → Run workflow** den Tag angeben. Mit der optionalen
+Auswahl **Nach erfolgreicher Prüfung veröffentlichen** wird der Entwurf erst nach
+allen Prüfungen veröffentlicht; vor der Veröffentlichung wird die Prüfsumme des
+hochgeladenen Archivs erneut verglichen. Ohne diese Auswahl wird nur geprüft.
+Apple-Zertifikate oder Apple-Passwörter müssen dafür nicht in GitHub gespeichert werden.
