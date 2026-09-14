@@ -96,3 +96,11 @@ def test_dec_robust_against_garbage():
     assert _dec(None) == Decimal("0")
     assert _dec("1.5") == Decimal("1.5")
     assert _dec("x", "7") == Decimal("7")
+
+
+def test_negative_quantity_and_price_are_zero():
+    for qty, price in [('-1', '100'), ('1', '-100'), ('-1', '-100')]:
+        computed, line_total, discount, basis, tax, grand = compute_totals(
+            [{'quantity': qty, 'unit_price': price}], Decimal('19'))
+        assert (line_total, discount, basis, tax, grand) == (0, 0, 0, 0, 0)
+        assert computed[0]['qty'] >= 0 and computed[0]['unit_price'] >= 0

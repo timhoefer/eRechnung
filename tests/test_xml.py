@@ -135,3 +135,13 @@ def test_xrechnung_profile_specid():
     data["invoice"]["profile"] = "xrechnung"
     xml = build_xml(data)
     assert b"xrechnung_3.0" in xml.lower()
+
+
+def test_unit_price_retains_subcent_precision():
+    from lxml import etree
+    data = make_data()
+    data['items'][0].update(quantity='1000', unit_price='0.004')
+    root = etree.fromstring(build_xml(data))
+    ns = {'ram': 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100'}
+    assert root.find('.//ram:NetPriceProductTradePrice/ram:ChargeAmount', ns).text == '0.004'
+    assert root.find('.//ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount', ns).text == '4.00'

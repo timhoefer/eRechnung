@@ -529,3 +529,91 @@ def test_check_updates_compares_version(client, monkeypatch):
         raise OSError("no net")
     monkeypatch.setattr("urllib.request.urlopen", _boom)
     assert client.post("/check-updates").get_json()["error"] == "offline"
+
+
+def test_csv_storno_offsets_original(client):
+    import csv
+    import io
+    for name, kind in (("Original", "380"), ("Storno", "381")):
+        (appmod.OUTPUT_DIR / f"{name}.pdf").write_bytes(b"%PDF")
+        (appmod.OUTPUT_DIR / f"{name}.json").write_text(json.dumps({
+            "invoice": {"number": name, "doc_type": kind, "issue_date": "2026-01-01",
+                        "ref_number": "Original" if kind == "381" else "",
+                        "tax_treatment": "de_19"},
+            "items": [{"quantity": "2", "unit_price": "100"}],
+        }))
+    rows = list(csv.DictReader(io.StringIO(client.get('/export/csv').get_data(as_text=True).lstrip('\ufeff')), delimiter=';'))
+    assert [r['Brutto'] for r in rows] == ['238,00', '-238,00']
+    assert rows[1]['Belegart'] == '381'
+    assert rows[1]['Originalrechnung'] == 'Original'
+
+
+def _mock_generation(monkeypatch):
+    monkeypatch.setattr(appmod, 'build_xml', lambda data: b'<xml/>')
+    monkeypatch.setattr(appmod, 'build_pdf', lambda html, xml: b'%PDF-test')
+    monkeypatch.setattr(appmod, 'extract_xml_from_pdf', lambda pdf: b'<xml/>')
+    monkeypatch.setattr(appmod, 'validate_xml_bytes', lambda xml: (True, []))
+    monkeypatch.setattr(appmod, 'validate_schematron', lambda xml: {
+        'available': True, 'ok': True, 'errors': [], 'error': None,
+    })
+
+
+@pytest.mark.parametrize('sch', [
+    {'available': False, 'ok': None, 'errors': [], 'error': None},
+    {'available': False, 'ok': None, 'errors': [], 'error': 'Validator failed'},
+    {'available': True, 'ok': False, 'errors': ['Business rule failed'], 'error': None},
+])
+def test_generation_never_claims_unverified_success(client, monkeypatch, sch):
+    _mock_generation(monkeypatch)
+    monkeypatch.setattr(appmod, 'validate_schematron', lambda xml: sch)
+    response = client.post('/generate', data=_FORM)
+    assert response.status_code == 200
+    assert 'Validierung bestanden' not in response.get_data(as_text=True)
+    if sch['error']:
+        assert sch['error'] in response.get_data(as_text=True)
+
+
+def test_generate_preserves_updated_seller(client, monkeypatch):
+    _mock_generation(monkeypatch)
+    def render(html, xml):
+        seller = appmod.load_seller()
+        seller['name'] = 'Updated seller'
+        appmod.save_seller(seller)
+        return b'%PDF-test'
+    monkeypatch.setattr(appmod, 'build_pdf', render)
+    assert client.post('/generate', data=_FORM).status_code == 200
+    assert appmod.load_seller()['name'] == 'Updated seller'
+    assert appmod.load_seller()['last_invoice_number'] == _FORM['number']
+
+
+def test_parallel_generate_preserves_all_invoices(client, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    _mock_generation(monkeypatch)
+    def generate(i):
+        with appmod.app.test_client() as c:
+            return c.post('/generate', data=dict(_FORM, buyer_name=f'Buyer {i}')).status_code
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert list(pool.map(generate, range(8))) == [200] * 8
+    assert len(list(appmod.OUTPUT_DIR.glob('*.pdf'))) == 8
+    buyers = {json.loads(p.read_text())['buyer']['name'] for p in appmod.OUTPUT_DIR.glob('*.json')}
+    assert buyers == {f'Buyer {i}' for i in range(8)}
+
+
+def test_precise_price_in_invoice_preview(client):
+    response = client.post('/preview-html', data=dict(_FORM, quantity='1000', unit_price='0.004'))
+    assert response.status_code == 200
+    assert '0,004' in response.get_data(as_text=True)
+
+
+def test_uploaded_validation_requires_schematron(client, monkeypatch):
+    import io
+    _mock_generation(monkeypatch)
+    monkeypatch.setattr(appmod, 'validate_schematron', lambda xml: {
+        'available': False, 'ok': None, 'errors': [], 'error': None,
+    })
+    with appmod.app.test_request_context('/validate', method='POST', data={
+        'file': (io.BytesIO(b'<xml/>'), 'invoice.xml'),
+    }):
+        result = appmod._validate_request()
+    assert result['xsd_ok'] is True
+    assert result['ok'] is False

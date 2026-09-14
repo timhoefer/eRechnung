@@ -35,6 +35,7 @@
       <ul>{% for m in sch.errors %}<li>{{ m }}</li>{% endfor %}</ul>
     {% endif %}
   {% endif %}
+  {% if sch and sch.error %}<p>{{ sch.error }}</p>{% endif %}
   {% if sch and not sch.available %}<p class="hint">{{ t.val_sch_unavailable }}</p>{% endif %}
   <p class="hint">{{ t.valid_hint }}</p>
 </div>

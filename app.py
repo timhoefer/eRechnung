@@ -7,6 +7,8 @@ import os
 import re
 import secrets
 import sys
+import tempfile
+import threading
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -18,6 +20,7 @@ from flask import (
     Response,
     abort,
     flash,
+    g,
     redirect,
     render_template,
     request,
@@ -283,6 +286,8 @@ app.jinja_env.auto_reload = True
 
 # Die App ist ein rein lokales Tool (127.0.0.1). Hostnamen, die als „lokal"
 # gelten – schützt gegen DNS-Rebinding und Cross-Site-Zugriffe von Webseiten.
+DATA_LOCK = threading.RLock()
+
 LOCAL_HOSTNAMES = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -315,6 +320,49 @@ def _guard_local_only():
             referer = request.headers.get("Referer")
             if referer is not None and not _netloc_is_local(urlparse(referer).netloc):
                 abort(403)
+
+
+@app.before_request
+def _lock_data_changes():
+    # Serialize writes in the threaded local server, including read-modify-write
+    # operations. Pure previews do not need to wait for invoice generation.
+    if request.method == "POST" and request.endpoint in {
+        "settings", "settings_autosave", "customers_autosave",
+        "customers_items_save", "customers_save", "customers_delete",
+        "generate", "archive_delete", "data_dir_set",
+    }:
+        DATA_LOCK.acquire()
+        g.data_locked = True
+
+
+@app.teardown_request
+def _unlock_data_changes(error):
+    if g.pop("data_locked", False):
+        DATA_LOCK.release()
+
+
+def _write_json(path: Path, data) -> None:
+    # Readers always see the complete old or new file, even during autosave.
+    name = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         dir=path.parent, delete=False) as f:
+            name = f.name
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(name, path)
+    finally:
+        if name and os.path.exists(name):
+            os.unlink(name)
+
+
+@app.template_filter("price")
+def price_filter(value, lang="de"):
+    amount = _dec(value)
+    decimals = max(2, -int(amount.normalize().as_tuple().exponent))
+    text = f"{amount:,.{decimals}f}"
+    return text if lang == "en" else text.translate(str.maketrans(",.", ".,"))
 
 
 @app.template_global()
@@ -392,9 +440,7 @@ def load_seller() -> dict:
 
 
 def save_seller(data: dict) -> None:
-    SELLER_FILE.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    _write_json(SELLER_FILE, data)
 
 
 SELLER_FIELDS = [
@@ -582,9 +628,7 @@ def load_customers() -> list[dict]:
 
 
 def save_customers(customers: list[dict]) -> None:
-    CUSTOMERS_FILE.write_text(
-        json.dumps(customers, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    _write_json(CUSTOMERS_FILE, customers)
 
 
 def upsert_customer(buyer: dict) -> None:
@@ -1151,14 +1195,19 @@ def generate():
     # evtl. korrekte Rechnung still zerstört. Bei Kollision eindeutigen Namen
     # vergeben; beide bleiben im Archiv sichtbar, der Fehler ist korrigierbar.
     stem = f"Rechnung_{safe_name(inv_number)}"
-    duplicate = (OUTPUT_DIR / f"{stem}.pdf").exists()
     name, n = stem, 2
-    while (OUTPUT_DIR / f"{name}.pdf").exists():
-        name = f"{stem} ({n})"
-        n += 1
-    filename = f"{name}.pdf"
+    while True:
+        filename = f"{name}.pdf"
+        try:
+            # Exclusive creation also protects against a second app process.
+            with (OUTPUT_DIR / filename).open("xb") as f:
+                f.write(pdf)
+            break
+        except FileExistsError:
+            name = f"{stem} ({n})"
+            n += 1
+    duplicate = name != stem
     file_stem = Path(filename).stem
-    (OUTPUT_DIR / filename).write_bytes(pdf)
     # XRechnung: standalone-XML neben das PDF legen (der eigentliche Beleg).
     xml_filename = None
     if is_xr:
@@ -1186,11 +1235,12 @@ def generate():
         embedded = extract_xml_from_pdf(pdf)
         ok, messages = validate_xml_bytes(embedded) if embedded else (False, ["Kein XML im PDF gefunden."])
         sch = validate_schematron(embedded) if embedded else None
-    valid = ok and (not sch or not sch["available"] or sch["ok"])
+    valid = bool(ok and sch and sch["available"] and sch["ok"] and not sch.get("error"))
 
     # Letzte Rechnungsnummer merken
-    seller["last_invoice_number"] = inv_number
-    save_seller(seller)
+    current_seller = load_seller()
+    current_seller["last_invoice_number"] = inv_number
+    save_seller(current_seller)
 
     return render_template(
         "result.html",
@@ -1520,18 +1570,21 @@ def export_csv():
             _dec(inv.get("discount") or "0"), inv.get("discount_type") or "abs",
         )
         buyer = d.get("buyer") or {}
+        doc_type = inv.get("doc_type") or "380"
+        sign = -1 if doc_type == "381" else 1
         rows.append([
             inv.get("number", ""), issue, buyer.get("name", ""), buyer.get("country", ""),
             loc(treatment["label"], lang), treatment["category"], str(treatment["rate"]),
-            fnum(net), fnum(vat), fnum(gross), inv.get("currency", "EUR"),
+            fnum(sign * net), fnum(sign * vat), fnum(sign * gross), inv.get("currency", "EUR"),
+            doc_type, inv.get("ref_number") or "",
         ])
     rows.sort(key=lambda r: (r[1], r[0]))  # nach Datum, dann Nummer
 
     header = (
         ["Nummer", "Datum", "Kunde", "Land", "Behandlung", "USt-Code",
-         "USt-Satz %", "Netto", "USt-Betrag", "Brutto", "Währung"] if de else
+         "USt-Satz %", "Netto", "USt-Betrag", "Brutto", "Währung", "Belegart", "Originalrechnung"] if de else
         ["Number", "Date", "Customer", "Country", "Treatment", "VAT code",
-         "VAT rate %", "Net", "VAT amount", "Gross", "Currency"]
+         "VAT rate %", "Net", "VAT amount", "Gross", "Currency", "Document type", "Original invoice"]
     )
     # CSV-Formel-Injection abwehren: Zellen, die mit =,+,-,@ (oder Tab/CR) beginnen,
     # werden in Excel/Calc sonst als Formel ausgewertet -> mit ' als Text entschärfen.
@@ -1542,7 +1595,8 @@ def export_csv():
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=";" if de else ",")
     writer.writerow(header)
-    writer.writerows([[csv_safe(c) for c in r] for r in rows])
+    writer.writerows([[c if i in (7, 8, 9) else csv_safe(c)
+                       for i, c in enumerate(r)] for r in rows])
     data = ("\ufeff" + buf.getvalue()).encode("utf-8")  # BOM -> Umlaute in Excel
     if only:
         name = f"{Path(only).stem}.csv"
@@ -1642,7 +1696,7 @@ def _validate_request():
         return {"label": label, "ok": False, "xsd_messages": ["Kein eingebettetes XML gefunden."], "sch": None}
     xsd_ok, xsd_messages = validate_xml_bytes(xml)
     sch = validate_schematron(xml)
-    overall = xsd_ok and (not sch["available"] or sch["ok"])
+    overall = bool(xsd_ok and sch["available"] and sch["ok"] and not sch.get("error"))
     return {
         "label": label,
         "ok": overall,

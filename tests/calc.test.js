@@ -117,3 +117,12 @@ test("totals: negative Eingaben werden auf 0 geklemmt", () => {
   assert.equal(t.prepaid, 0);
   assert.equal(t.grand, 119);
 });
+
+test("negative Mengen und Preise ergeben keine positiven oder negativen Positionen", () => {
+  for (const [qty, price] of [[-1, 100], [1, -100], [-1, -100]]) {
+    for (const discType of ["pct", "abs"]) {
+      assert.equal(calc.lineNet(qty, price, 0, discType), 0);
+      assert.equal(calc.totals({items: [{qty, price, discType}], rate: 19}).grand, 0);
+    }
+  }
+});

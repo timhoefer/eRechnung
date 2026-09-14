@@ -44,6 +44,8 @@ def _selftest() -> int:
             "description": "Tëst-Leistung", "quantity": "1", "unit": "C62",
             "unit_price": "100", "tax_treatment": "de_19", "language": "de",
             "buyer_name": "Muster GmbH", "buyer_country": "DE",
+            "buyer_address_line": "Teststr. 2", "buyer_postcode": "10115",
+            "buyer_city": "Berlin",
         },
     )
     pdf = resp.get_data()
@@ -55,7 +57,7 @@ def _selftest() -> int:
           f"Schematron available={sch.get('available')} ok={sch.get('ok')}")
     # saxonche ist optional fürs Erzeugen, aber wir wollen wissen, ob es im Bundle
     # läuft -> als Teil des Build-Checks verlangen wir 'available'.
-    return 0 if (pdf_ok and emb and xsd_ok and sch.get("available")) else 1
+    return 0 if (pdf_ok and emb and xsd_ok and sch.get("available") and sch.get("ok")) else 1
 
 
 def _free_port() -> int:

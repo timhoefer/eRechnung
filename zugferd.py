@@ -239,8 +239,8 @@ def compute_totals(items, rate: Decimal, discount=Decimal("0"), discount_type="a
     line_total = Decimal("0")
     computed = []
     for it in items:
-        qty = _dec(it["quantity"])
-        unit_price = _dec(it["unit_price"])
+        qty = max(Decimal("0"), _dec(it["quantity"]))
+        unit_price = max(Decimal("0"), _dec(it["unit_price"]))
         gross = q(qty * unit_price)
         # Positions-Rabatt (BG-27): Prozent oder fester Betrag, auf [0, gross] begrenzt.
         d_type = it.get("item_discount_type") or "pct"
@@ -292,7 +292,7 @@ def build_xml(data) -> bytes:
     note_text = loc(treatment["note"], lang)
     reason_text = loc(treatment["reason"], lang)
 
-    discount_in = Decimal(str(inv.get("discount") or "0"))
+    discount_in = _dec(inv.get("discount") or "0")
     computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
         data["items"], rate, discount_in, inv.get("discount_type") or "abs"
     )
@@ -403,7 +403,7 @@ def build_xml(data) -> bytes:
         li = LineItem()
         li.document.line_id = str(idx)
         li.product.name = it["description"]
-        li.agreement.net.amount = q(it["unit_price"])
+        li.agreement.net.amount = it["unit_price"]
         li.delivery.billed_quantity = (it["qty"], it.get("unit", "C62"))
         li.settlement.trade_tax.type_code = "VAT"
         li.settlement.trade_tax.category_code = treatment["category"]
@@ -694,8 +694,10 @@ def validate_schematron(xml: bytes) -> dict:
     is_xr = b"xrechnung" in xml.lower()  # Spec-ID enthält "...:xrechnung_3.0"
     if is_xr:
         xr_path = os.path.join(d, _SCH_XRECHNUNG)
-        if os.path.exists(xr_path):
-            paths.append(xr_path)
+        if not os.path.exists(xr_path):
+            out["error"] = "XRechnung-Schematron fehlt; BR-DE konnte nicht geprüft werden."
+            return out
+        paths.append(xr_path)
 
     err_counts: dict = {}
     warn_counts: dict = {}

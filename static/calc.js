@@ -27,7 +27,7 @@
   // Netto einer Position (gerundet wie compute_totals): Brutto = q(Menge x Preis),
   // minus Positionsrabatt (Prozent oder fester Betrag, gedeckelt aufs Brutto).
   function lineNet(qty, price, discVal, discType) {
-    var gross = q(num(qty) * num(price));
+    var gross = q(Math.max(0, num(qty)) * Math.max(0, num(price)));
     var d = num(discVal);
     if (d < 0) d = 0;
     var disc;
