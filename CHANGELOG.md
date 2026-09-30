@@ -5,6 +5,7 @@
 - Rechnungsvorlagen stellen internationale Kontonummern korrekt wieder her; ältere Vorlagen mit Konto-Index bleiben unterstützt.
 - Die XML-Validierung erkennt XRechnung ausschließlich anhand der Profil-ID. Das Wort „XRechnung“ in Beschreibung, Freitext oder Kontaktdaten löst keine zusätzlichen Prüfungen mehr aus.
 - Beim Sprachwechsel bleiben die Rabattbegründungen aller Positionen erhalten.
+- Die Rechnungstabelle trennt Menge, Einzelpreis und Betrag durch jeweils 5 mm seitlichen Abstand; lange Beschreibungen brechen entsprechend früher um.
 
 ## 1.1.1
 
