@@ -468,7 +468,7 @@ function snapshotForm(form) {
 }
 function restoreForm(form, data) {
   if (!form || !data) return;
-  const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end", "item_discount", "item_discount_type"];
+  const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end", "item_discount", "item_discount_type", "item_discount_reason"];
   const itemCount = (data.description || []).length;
   let rows = form.querySelectorAll("#items .item").length;
   while (rows < itemCount) {
@@ -569,17 +569,20 @@ function applyDraft() {
   set("language", inv.language);
   set("tax_treatment", inv.tax_treatment);
   set("profile", inv.profile);
-  // Bankkonto wiederherstellen: neue Sidecars speichern die IBAN (Option-value),
-  // alte einen numerischen Index – beides unterstützen. Setzt voraus, dass
-  // syncBankSelector() vorher lief (Optionen existieren).
+  // Neue Sidecars speichern IBAN/Kontonummer als Option-value. Erst den Schlüssel
+  // suchen, dann auf alte numerische Indizes zurückfallen: internationale
+  // Kontonummern können ebenfalls nur aus Ziffern bestehen.
+  // syncBankSelector() muss vorher gelaufen sein (Optionen existieren).
   const ba = inv.bank_account;
   const bsel = form.querySelector('[name="bank_account"]');
   if (bsel && ba != null && ba !== "") {
-    if (/^\d+$/.test(String(ba))) {
-      if (bsel.options[Number(ba)]) bsel.selectedIndex = Number(ba);
-    } else {
-      bsel.value = ba; // ohne Treffer bleibt die Auswahl unverändert (erste Option)
+    const key = String(ba);
+    if (Array.from(bsel.options).some((option) => option.value === key)) {
+      bsel.value = key;
+    } else if (/^\d+$/.test(key)) {
+      if (bsel.options[Number(key)]) bsel.selectedIndex = Number(key);
     }
+    // Ohne Treffer die bestehende Standardauswahl beibehalten.
     syncUnitDisplay(bsel); // Custom-Trigger-Label nachziehen
   }
   // Gesamtrabatt wiederherstellen und ggf. ausklappen.
