@@ -6,6 +6,7 @@
 - Die XML-Validierung erkennt XRechnung ausschließlich anhand der Profil-ID. Das Wort „XRechnung“ in Beschreibung, Freitext oder Kontaktdaten löst keine zusätzlichen Prüfungen mehr aus.
 - Beim Sprachwechsel bleiben die Rabattbegründungen aller Positionen erhalten.
 - Die Rechnungstabelle trennt Menge, Einzelpreis und Betrag durch jeweils 5 mm seitlichen Abstand; lange Beschreibungen brechen entsprechend früher um.
+- Der Haupttext einschließlich Rechnungspositionen, Absendername und Summen verwendet einheitlich 9 pt. Damit bleiben vier Schriftgrößen: 8, 9, 11 und 14 pt.
 
 ## 1.1.1
 
