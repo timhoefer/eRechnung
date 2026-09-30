@@ -47,7 +47,7 @@
   table.items th { text-align: left; font-size: 8pt; font-weight: 600; text-transform: uppercase;
     letter-spacing: .5px; color: #666; border-bottom: 1px solid #999; padding: 0 0 5px;
     vertical-align: top; }
-  table.items .column-currency { display: block; font-weight: 400; letter-spacing: 0; }
+  table.items .column-currency { font-weight: 400; letter-spacing: 0; }
   table.items td { padding: 9px 0; border-bottom: .5px solid #e2e2e2; vertical-align: top; }
   table.items tr:last-child td { border-bottom: none; }
   table.items td.r, table.items th.r { text-align: right; white-space: nowrap;
@@ -148,8 +148,8 @@
       <tr>
         <th>{{ ti.description }}</th>
         <th class="r">{{ ti.pdf_qty }}</th>
-        <th class="r">{{ ti.pdf_unit_price }}<span class="column-currency">({{ inv.currency }})</span></th>
-        <th class="r">{{ ti.pdf_amount }}<span class="column-currency">({{ inv.currency }})</span></th>
+        <th class="r">{{ ti.pdf_unit_price }} <span class="column-currency">({{ inv.currency }})</span></th>
+        <th class="r">{{ ti.pdf_amount }} <span class="column-currency">({{ inv.currency }})</span></th>
       </tr>
     </thead>
     <tbody>
