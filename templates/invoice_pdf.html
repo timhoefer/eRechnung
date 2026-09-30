@@ -45,7 +45,9 @@
 
   table.items { width: 100%; border-collapse: collapse; margin-top: 6mm; }
   table.items th { text-align: left; font-size: 8pt; font-weight: 600; text-transform: uppercase;
-    letter-spacing: .5px; color: #666; border-bottom: 1px solid #999; padding: 0 0 5px; }
+    letter-spacing: .5px; color: #666; border-bottom: 1px solid #999; padding: 0 0 5px;
+    vertical-align: top; }
+  table.items .column-currency { display: block; font-weight: 400; letter-spacing: 0; }
   table.items td { padding: 9px 0; border-bottom: .5px solid #e2e2e2; vertical-align: top; }
   table.items tr:last-child td { border-bottom: none; }
   table.items td.r, table.items th.r { text-align: right; white-space: nowrap;
@@ -146,8 +148,8 @@
       <tr>
         <th>{{ ti.description }}</th>
         <th class="r">{{ ti.pdf_qty }}</th>
-        <th class="r">{{ ti.pdf_unit_price }}</th>
-        <th class="r">{{ ti.pdf_amount }}</th>
+        <th class="r">{{ ti.pdf_unit_price }}<span class="column-currency">({{ inv.currency }})</span></th>
+        <th class="r">{{ ti.pdf_amount }}<span class="column-currency">({{ inv.currency }})</span></th>
       </tr>
     </thead>
     <tbody>
@@ -155,8 +157,8 @@
       <tr>
         <td>{{ it.description }}{% if it.item_start and it.item_end %}<div class="line-period">{{ ti.pdf_service_period }}: {{ it.item_start|datefmt }} – {{ it.item_end|datefmt }}</div>{% endif %}{% if it.line_disc and it.line_disc > 0 %}<div class="line-period">{{ it.item_discount_reason or ti.pdf_discount }}{% if it.disc_type == 'pct' %} {{ '%g'|format(it.disc_val) }}&nbsp;%{% endif %}: − {{ inv.currency }} {{ it.line_disc|money(inv.language) }}</div>{% endif %}</td>
         <td class="r">{{ it.qty|qtyfmt(inv.language) }} {{ (unit_labels_pl if it.qty > 1 else unit_labels).get(it.unit, '') }}</td>
-        <td class="r">{{ inv.currency }} {{ it.unit_price|price(inv.language) }}</td>
-        <td class="r">{{ inv.currency }} {{ it.net|money(inv.language) }}</td>
+        <td class="r">{{ it.unit_price|price(inv.language) }}</td>
+        <td class="r">{{ it.net|money(inv.language) }}</td>
       </tr>
       {% endfor %}
     </tbody>
