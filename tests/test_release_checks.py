@@ -3,6 +3,7 @@ import importlib.util
 import plistlib
 import subprocess
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 
@@ -62,3 +63,28 @@ assert app.OUTPUT_DIR.parent == app.BASE
 assert not app.SELLER_FILE.exists()
 """], capture_output=True, text=True, cwd=Path(__file__).resolve().parents[1])
     assert result.returncode == 0, result.stderr
+
+
+def test_archive_rejects_metadata_inside_framework_before_extraction(tmp_path, monkeypatch):
+    archive = tmp_path / "eRechnung.app.zip"
+    with ZipFile(archive, "w") as zipped:
+        zipped.writestr("eRechnung.app/Contents/Frameworks/Python.framework/._Python", b"metadata")
+    monkeypatch.setattr(checks.subprocess, "run", lambda *a, **k: pytest.fail("Must not extract"))
+    with pytest.raises(ValueError, match="AppleDouble"):
+        checks.check_archive(archive, "1.1.3")
+
+
+def test_archive_accepts_sequestered_metadata_and_checks_bundle(tmp_path, monkeypatch):
+    archive = tmp_path / "eRechnung.app.zip"
+    with ZipFile(archive, "w") as zipped:
+        zipped.writestr("eRechnung.app/Contents/Info.plist", b"placeholder")
+        zipped.writestr("__MACOSX/eRechnung.app/Contents/Frameworks/Python.framework/._Python",
+                        b"metadata")
+    commands = []
+    bundles = []
+    monkeypatch.setattr(checks.subprocess, "run", lambda cmd, **kw: commands.append(cmd))
+    monkeypatch.setattr(checks, "check_app", lambda app, version, **kw: bundles.append(
+        (app, version, kw)))
+    checks.check_archive(archive, "1.1.3")
+    assert commands[0][:3] == ["ditto", "-x", "-k"]
+    assert bundles == [(Path(commands[0][-1]) / "eRechnung.app", "1.1.3", {"unsigned": False})]

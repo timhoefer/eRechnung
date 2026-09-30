@@ -4,7 +4,8 @@ import plistlib
 import re
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from zipfile import ZipFile
 
 
 def check_app(app: Path, version: str, *, unsigned: bool = False) -> None:
@@ -27,6 +28,14 @@ def check_app(app: Path, version: str, *, unsigned: bool = False) -> None:
 
 
 def check_archive(archive: Path, version: str, *, unsigned: bool = False) -> None:
+    # ditto repariert AppleDouble-Einträge beim Entpacken automatisch. Andere
+    # Entpacker können sie als zusätzliche Dateien im signierten Bundle belassen.
+    # Deshalb die ZIP-Struktur prüfen, bevor ditto den Fehler verbergen kann.
+    with ZipFile(archive) as zipped:
+        if any(name.startswith("eRechnung.app/")
+               and any(part.startswith("._") for part in PurePosixPath(name).parts)
+               for name in zipped.namelist()):
+            raise ValueError("AppleDouble-Metadaten im App-Bundle: ZIP mit --sequesterRsrc packen")
     with tempfile.TemporaryDirectory(prefix="erechnung-archive-check-") as tmp:
         subprocess.run(["ditto", "-x", "-k", str(archive.resolve()), tmp], check=True)
         check_app(Path(tmp) / "eRechnung.app", version, unsigned=unsigned)
