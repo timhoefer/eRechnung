@@ -10,7 +10,7 @@
   @font-face { font-family: "IBM Plex Sans"; font-weight: 700;
     src: url("static/fonts/IBMPlexSans-600.woff2") format("woff2"); }
   @page { size: A4; margin: 22mm 18mm 24mm 18mm;
-    @bottom-center { content: "{{ ti.invoice }} {{ inv.number }} \00b7 {{ ti.pdf_page }} " counter(page) " {{ ti.pdf_of }} " counter(pages);
+    @bottom-center { content: "{{ ti.invoice }} {{ inv.number }} · {{ ti.pdf_page }} " counter(page) " {{ ti.pdf_of }} " counter(pages);
       font-family: "IBM Plex Sans", sans-serif; font-size: 8pt; color: #888; } }
   * { box-sizing: border-box; }
   body { font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
