@@ -1,5 +1,7 @@
 """Round-trip-Test: build_xml erzeugt wohlgeformtes, EN-16931-XSD-valides CII-XML
 mit korrekten Beträgen. Fängt Regressionen in der XML-Erzeugung nach Dep-Updates."""
+import pytest
+
 from zugferd import (
     build_xml,
     has_doctype,
@@ -145,3 +147,33 @@ def test_unit_price_retains_subcent_precision():
     ns = {'ram': 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100'}
     assert root.find('.//ram:NetPriceProductTradePrice/ram:ChargeAmount', ns).text == '0.004'
     assert root.find('.//ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount', ns).text == '4.00'
+
+
+@pytest.mark.parametrize("section,field", [
+    ("item", "description"), ("invoice", "note"),
+    ("buyer", "name"), ("seller", "email"),
+])
+def test_xrechnung_in_free_text_does_not_change_profile(section, field):
+    data = make_data()
+    target = data["items"][0] if section == "item" else data[section]
+    target[field] = "xrechnung@example.com" if field == "email" else "Beratung zur XRechnung"
+    result = validate_schematron(build_xml(data))
+    assert result["available"] and result["ok"] is True, result
+    assert result["error"] is None
+    assert result["xrechnung"] is False
+
+
+def test_xrechnung_profile_still_checks_required_seller_contact():
+    data = make_data()
+    data["invoice"]["profile"] = "xrechnung"
+    data["seller"]["phone"] = ""
+    result = validate_schematron(build_xml(data))
+    assert result["available"] and result["ok"] is False, result
+    assert result["xrechnung"] is True
+    assert any("BR-DE-6" in message for message in result["errors"]), result
+
+
+def test_schematron_returns_error_for_malformed_xml():
+    result = validate_schematron(b"<broken>")
+    assert result["ok"] is not True
+    assert result["error"]

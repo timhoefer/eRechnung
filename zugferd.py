@@ -675,6 +675,8 @@ def validate_schematron(xml: bytes) -> dict:
     """
     import os
 
+    from lxml import etree
+
     out: dict[str, Any] = {"available": False, "ok": None, "errors": [], "warnings": [], "error": None, "xrechnung": False}
     # XXE-Schutz: SaxonC löst externe Entities auf -> DOCTYPE-XML niemals an Saxon geben.
     if has_doctype(xml):
@@ -690,8 +692,23 @@ def validate_schematron(xml: bytes) -> dict:
     except ImportError:
         return out
 
+    # Nur BT-24 bestimmt das Profil; das Wort kann auch in Freitext, Namen oder
+    # E-Mail-Adressen einer normalen EN16931-Rechnung stehen.
+    try:
+        root = etree.fromstring(xml, _safe_parser())
+    except etree.XMLSyntaxError as exc:
+        out["error"] = str(exc)
+        return out
+    guideline = root.findtext(
+        "rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        default="",
+        namespaces={
+            "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
+            "ram": "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100",
+        },
+    )
     paths = [en_path]
-    is_xr = b"xrechnung" in xml.lower()  # Spec-ID enthält "...:xrechnung_3.0"
+    is_xr = "xrechnung" in guideline.lower()
     if is_xr:
         xr_path = os.path.join(d, _SCH_XRECHNUNG)
         if not os.path.exists(xr_path):

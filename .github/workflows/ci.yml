@@ -68,8 +68,8 @@ jobs:
           node-version: "20"
       - name: Syntax-Check
         run: node --check static/calc.js && node --check static/app.js
-      - name: JS-Tests (Rechenlogik)
-        run: node --test tests/calc.test.js
+      - name: JS-Tests (Rechenlogik und Formularwiederherstellung)
+        run: node --test tests/*.test.js
 
   macos-build:
     runs-on: macos-15

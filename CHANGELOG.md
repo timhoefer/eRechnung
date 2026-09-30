@@ -1,5 +1,14 @@
 # Änderungen
 
+## 1.1.2
+
+- Rechnungsvorlagen stellen internationale Kontonummern korrekt wieder her; ältere Vorlagen mit Konto-Index bleiben unterstützt.
+- Die XML-Validierung erkennt XRechnung ausschließlich anhand der Profil-ID. Das Wort „XRechnung“ in Beschreibung, Freitext oder Kontaktdaten löst keine zusätzlichen Prüfungen mehr aus.
+- Beim Sprachwechsel bleiben die Rabattbegründungen aller Positionen erhalten.
+- Die Rechnungstabelle trennt Menge, Einzelpreis und Betrag durch jeweils 5 mm seitlichen Abstand; lange Beschreibungen brechen entsprechend früher um.
+- Haupttext, Datumsangaben, Bankverbindung und Grußformel verwenden einheitlich 10 pt; der Gesamtbetrag wird mit 12 pt hervorgehoben. Damit bleiben vier Schriftgrößen: 8, 10, 12 und 14 pt.
+- Die Fußzeile enthält ein sichtbares Leerzeichen nach dem Mittelpunkt vor der Seitenangabe.
+
 ## 1.1.1
 
 - Validierung meldet nur dann Erfolg, wenn XSD und alle erforderlichen Schematron-Prüfungen erfolgreich waren. Fehlende Prüfungen und Ausführungsfehler ergeben keinen Erfolgsstatus; das gilt auch beim Prüfen vorhandener Dateien und beim macOS-Selbsttest.
