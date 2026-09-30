@@ -3,6 +3,7 @@
 ## 1.1.3
 
 - WeasyPrint auf 70.0 aktualisiert. Das Sicherheitsupdate behebt CVE-2026-55073 (Umgehung von Zugriffsbeschränkungen beim Laden von PDF-Metadaten und Stylesheets) und unterbindet die Verarbeitung von EPS-Bildern über Ghostscript.
+- Die macOS-ZIP-Verpackung hält Zusatzmetadaten außerhalb der signierten App. Dadurch hinterlässt das Entpacken keine zusätzlichen Dateien in eingebetteten Frameworks, die Gatekeeper blockieren würden. Die Release-Prüfung erkennt fehlerhaft gepackte Archive vor dem Entpacken.
 
 ## 1.1.2
 

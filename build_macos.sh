@@ -94,7 +94,7 @@ if [ -n "${NOTARY_PROFILE:-}" ]; then
   echo
   echo "Notarisiere (Profil: $NOTARY_PROFILE) – dauert meist 1–5 Minuten ..."
   ZIP="dist/eRechnung-notarize.zip"
-  ditto -c -k --keepParent "$APP" "$ZIP"
+  ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
   xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
   rm -f "$ZIP"
   xcrun stapler staple "$APP"
@@ -104,7 +104,9 @@ fi
 
 VERSION=$(.venv/bin/python -c 'from version import __version__; print(__version__)')
 RELEASE_ZIP="dist/eRechnung.app.zip"
-ditto -c -k --keepParent "$APP" "$RELEASE_ZIP"
+# AppleDouble-Metadaten außerhalb des Bundles halten. Manche Entpacker lassen
+# sonst ._*-Dateien an Framework-Symlinks zurück; Gatekeeper lehnt das Bundle ab.
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$RELEASE_ZIP"
 CHECK_ARGS=(--version "$VERSION" --app "$APP" --archive "$RELEASE_ZIP")
 if [ -z "${NOTARY_PROFILE:-}" ]; then
   CHECK_ARGS+=(--unsigned)
