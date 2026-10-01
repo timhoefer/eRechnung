@@ -530,7 +530,15 @@ def render_html_pdf(html: str, *, pdf_a: bool = False) -> bytes:
 
     base_url = str(Path(__file__).resolve().parent)
     kwargs = {"pdf_variant": "pdf/a-3b"} if pdf_a else {}
-    return weasyprint.HTML(string=html, base_url=base_url).write_pdf(**kwargs)
+    source = weasyprint.HTML(string=html, base_url=base_url)
+    document = source.render(**kwargs)
+    if len(document.pages) == 1:
+        # Erst nach der Paginierung steht fest, ob ein Seitenfuß nötig ist.
+        # Nur den Inhalt der Randbox ausblenden, die Druckränder bleiben gleich.
+        # !important: ein User-Stylesheet muss die Vorlage übersteuern können.
+        no_footer = weasyprint.CSS(string="@page { @bottom-center { content: none !important; } }")
+        document = source.render(stylesheets=[no_footer], **kwargs)
+    return document.write_pdf(**kwargs)
 
 
 def build_pdf(html: str, xml: bytes) -> bytes:

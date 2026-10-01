@@ -1,5 +1,12 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Überarbeitetes Rechnungslayout mit ruhigen Tabellenüberschriften, mehr Abstand vor der Leistungstabelle und einem hinterlegten Gesamtbetrag. Die Datumsangaben bleiben unter der Rechnungsnummer.
+- Bankdaten behalten gut lesbare 10 pt; ihre Labels verwenden 8 pt und die Zeilen sind kompakter. Zahlungsinformationen und Grußformel bleiben nach Möglichkeit zusammen.
+- Bei Kunden in einem anderen Land enthält die Absenderadresse den Ländernamen in der Rechnungssprache.
+- Einseitige Rechnungen verzichten auf die Fußzeile. Mehrseitige Rechnungen behalten Rechnungsnummer und Seitenzählung auf jeder Seite.
+
 ## 1.1.3
 
 - WeasyPrint auf 70.0 aktualisiert. Das Sicherheitsupdate behebt CVE-2026-55073 (Umgehung von Zugriffsbeschränkungen beim Laden von PDF-Metadaten und Stylesheets) und unterbindet die Verarbeitung von EPS-Bildern über Ghostscript.

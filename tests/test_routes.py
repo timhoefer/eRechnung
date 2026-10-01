@@ -47,6 +47,34 @@ def test_preview_html_renders(client):
     assert b"<" in r.data  # HTML-Fragment
 
 
+@pytest.mark.parametrize("mode", ["mini", "1"])
+@pytest.mark.parametrize("seller_country,buyer_country,language,expected", [
+    ("DE", "DE", "de", ""),
+    ("DE", "GB", "en", "Germany"),
+    ("DE", "GB", "de", "Deutschland"),
+    ("AT", "DE", "de", "Österreich"),
+    ("GB", "GB", "en", ""),
+    (" de ", "de", "en", ""),
+    ("", "DE", "en", ""),
+])
+def test_preview_sender_country(client, monkeypatch, mode, seller_country,
+                                buyer_country, language, expected):
+    from lxml import html
+
+    seller = appmod.load_seller()
+    seller["country"] = seller_country
+    monkeypatch.setattr(appmod, "load_seller", lambda: seller)
+    response = client.post("/preview-html", data={
+        "description": "Test", "quantity": "1", "unit_price": "100",
+        "buyer_country": buyer_country, "language": language, "_full": mode,
+    })
+    assert response.status_code == 200
+    document = html.fromstring(response.data)
+    rows = document.xpath('//div[@class="sender"]//td[contains(@class, "block-end")]')
+    assert len(rows) == 1
+    assert rows[0].text_content().strip() == (expected or "10829 Berlin")
+
+
 def test_settings_panel_renders(client):
     r = client.get("/settings/panel")
     assert r.status_code == 200

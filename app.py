@@ -732,6 +732,15 @@ def format_buyer_address(buyer: dict, lang: str) -> list[str]:
     return lines
 
 
+def format_seller_country(seller: dict, buyer: dict, lang: str) -> str:
+    """Absenderland in Rechnungssprache, wenn der Kunde im Ausland sitzt."""
+    seller_country = (seller.get("country") or "DE").strip().upper() or "DE"
+    buyer_country = (buyer.get("country") or "DE").strip().upper() or "DE"
+    if seller_country == buyer_country:
+        return ""
+    return loc(COUNTRY_NAME.get(seller_country, {"de": seller_country, "en": seller_country}), lang)
+
+
 # --- Helfer ----------------------------------------------------------------
 def suggest_invoice_number(seller: dict) -> str:
     last = seller.get("last_invoice_number", "")
@@ -846,6 +855,7 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
         ti=translate(inv_lang),
         body_class=body_class,
         seller=seller,
+        seller_country=format_seller_country(seller, buyer, inv_lang),
         bank=bank,
         buyer=buyer,
         buyer_address_lines=format_buyer_address(buyer, inv_lang),
