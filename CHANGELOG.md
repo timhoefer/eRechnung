@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 1.1.4
 
 - Überarbeitetes Rechnungslayout mit ruhigen Tabellenüberschriften, mehr Abstand vor der Leistungstabelle und einem hinterlegten Gesamtbetrag. Die Datumsangaben bleiben unter der Rechnungsnummer.
 - Bankdaten behalten gut lesbare 10 pt; ihre Labels verwenden 8 pt und die Zeilen sind kompakter. Zahlungsinformationen und Grußformel bleiben nach Möglichkeit zusammen.
