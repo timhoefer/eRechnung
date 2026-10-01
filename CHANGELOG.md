@@ -6,6 +6,8 @@
 - Bankdaten behalten gut lesbare 10 pt; ihre Labels verwenden 8 pt und die Zeilen sind kompakter. Zahlungsinformationen und Grußformel bleiben nach Möglichkeit zusammen.
 - Bei Kunden in einem anderen Land enthält die Absenderadresse den Ländernamen in der Rechnungssprache.
 - Einseitige Rechnungen verzichten auf die Fußzeile. Mehrseitige Rechnungen behalten Rechnungsnummer und Seitenzählung auf jeder Seite.
+- Lange Einzelpositionen können über mehrere Seiten umbrechen; die Tabellenüberschriften werden dabei wiederholt.
+- Die Archivvorschau und ihre vergrößerte Ansicht zeigen das unveränderte Original-PDF, auch ohne gespeicherte Vorlagendaten.
 
 ## 1.1.3
 

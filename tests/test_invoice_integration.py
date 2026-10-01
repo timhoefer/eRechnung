@@ -119,3 +119,33 @@ def test_invoice_footer_after_pagination(pdf_a, language, item_count):
         metadata = reader.trailer["/Root"]["/Metadata"].get_data()
         assert b'pdfaid:part="3"' in metadata
         assert b'pdfaid:conformance="B"' in metadata
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_single_long_position_flows_with_repeated_headers(language):
+    from pypdf import PdfReader
+
+    seller = {"name": "Layout GmbH", "country": "DE", "city": "Berlin"}
+    buyer = {"name": "Example Ltd", "country": "GB", "city": "London"}
+    invoice = {
+        "number": "LONG-1", "language": language, "issue_date": "2026-01-01",
+        "doc_type": "380", "currency": "EUR", "tax_treatment": "non_eu",
+    }
+    words = [f"Description{index:03d}" for index in range(450)]
+    items = [{"description": " ".join(words), "quantity": "1", "unit": "C62", "unit_price": "100"}]
+    with appmod.app.test_request_context("/"):
+        markup, _ = appmod.render_invoice_preview(seller, buyer, invoice, items)
+    reader = PdfReader(io.BytesIO(render_html_pdf(markup, pdf_a=True)))
+    texts = [page.extract_text() for page in reader.pages]
+    assert len(texts) > 1
+    assert words[0] in texts[0]  # No mostly empty first page before an oversized row.
+    all_words = "\n".join(texts).split()
+    for word in words:
+        assert all_words.count(word) == 1
+    headers = ("Beschreibung", "Menge", "Einzelpreis", "Betrag") if language == "de" else (
+        "Description", "Qty", "Unit price", "Amount",
+    )
+    for text in texts:
+        if any(word in text for word in words):
+            for header in headers:
+                assert header in text

@@ -1060,14 +1060,17 @@ function scaleMiniPreview() {
   const wrap = inner && inner.parentElement;
   if (!frame || !inner || !wrap) return;
   const wrapW = wrap.clientWidth;
+  const isPdf = frame.dataset.previewType === "pdf";
   // Nur bei tatsächlicher Breitenänderung neu skalieren -> verhindert eine
   // ResizeObserver-Rückkopplung (Zittern beim Öffnen, bevor das Layout steht).
-  if (wrapW <= 0 || wrapW === scaleMiniPreview._lastW) return;
+  if (wrapW <= 0 || (wrapW === scaleMiniPreview._lastW && isPdf === scaleMiniPreview._lastPdf)) return;
   scaleMiniPreview._lastW = wrapW;
+  scaleMiniPreview._lastPdf = isPdf;
   const s = wrapW / A4_W;
-  frame.style.width = A4_W + "px";
-  frame.style.height = A4_H + "px";
-  frame.style.transform = "scale(" + s + ")";
+  // Der PDF-Viewer passt die Seite selbst ein; seine Bedienelemente nicht skalieren.
+  frame.style.width = (isPdf ? wrapW : A4_W) + "px";
+  frame.style.height = (isPdf ? A4_H * s : A4_H) + "px";
+  frame.style.transform = isPdf ? "none" : "scale(" + s + ")";
   inner.style.height = A4_H * s + "px";
 }
 // force=true erzwingt ein Rendern trotz unveränderter Eingabe (z. B. nachdem sich
@@ -1093,7 +1096,7 @@ function updatePreview(force) {
     .then((html) => {
       // Stale-Guard wie im Drawer: war die Antwort schon gepuffert, ist abort() ein
       // No-op – ohne den Check könnte eine überholte Antwort die neuere überschreiben.
-      if (ctrl.signal.aborted) return;
+      if (ctrl.signal.aborted || settingsOpen) return;
       _previewLastKey = key; // erst nach Erfolg merken
       frame.srcdoc = html;
     })
@@ -1109,6 +1112,11 @@ function checkMiniPages() {
   const hint = document.getElementById("preview-pages-hint");
   if (!frame || !hint) return;
   const measure = () => {
+    if (settingsOpen || frame.dataset.previewType === "pdf") {
+      hint.textContent = "";
+      hint.hidden = true;
+      return;
+    }
     try {
       const doc = frame.contentDocument;
       const b = doc && doc.body;
@@ -1175,6 +1183,12 @@ function openPreviewDrawer() {
   drawer.hidden = false;
   document.body.classList.add("drawer-open");
   const frame = document.getElementById("drawer-frame");
+  if (frame && settingsOpen && lastPreviewUrl) {
+    if (_drawerAbort) _drawerAbort.abort();
+    frame.removeAttribute("srcdoc");
+    frame.src = lastPreviewUrl;
+    return;
+  }
   if (frame) {
     frame.removeAttribute("src");
     frame.srcdoc =
@@ -1910,24 +1924,21 @@ function flashUndo(msg, onUndo) {
 }
 
 function setPreviewHead(label) {
-  const head = document.querySelector(".preview-head span");
+  const head = document.getElementById("preview-label");
   if (head && label) head.textContent = label;
 }
 
-// Archiv-Vorschau = dasselbe HTML wie die Live-Vorschau (aus der Sidecar),
-// daher exakt derselbe Look, kein PDF-Viewer, kein dunkler Rand.
+// Original-PDF direkt laden: Layout, Seitenumbrüche und Daten bleiben erhalten.
+// Beim Zeilenwechsel verwirft der Browser die vorherige iframe-Navigation.
 function showInvoicePreview(url, label) {
-  fetch(url)
-    .then((r) => (r.ok ? r.text() : Promise.reject()))
-    .then((html) => {
-      const frame = document.getElementById("preview-frame");
-      if (!frame) return;
-      frame.removeAttribute("src");
-      frame.srcdoc = html;
-      scaleMiniPreview();
-      setPreviewHead(label);
-    })
-    .catch(() => { flashError(); showNoPreview(label); });
+  const frame = document.getElementById("preview-frame");
+  if (!frame) return;
+  frame.dataset.previewType = "pdf";
+  frame.removeAttribute("srcdoc");
+  frame.src = url + "#toolbar=0&navpanes=0&view=FitH";
+  scaleMiniPreview();
+  checkMiniPages();
+  setPreviewHead(label);
 }
 
 // Eine Archiv-Zeile in der Vorschau zeigen (für Hover UND Fokus).
@@ -1941,11 +1952,11 @@ function previewRow(row) {
   else showNoPreview(label);
 }
 
-// Platzhalter für Dateien ohne Sidecar (Fremd-/Altdateien): per Klick noch
-// öffenbar, aber keine Inline-Vorschau.
+// Platzhalter, falls ein Archiv-Eintrag keine Vorschau-URL enthält.
 function showNoPreview(label) {
   const frame = document.getElementById("preview-frame");
   if (!frame) return;
+  delete frame.dataset.previewType;
   const msg = (window.MSG_NO_PREVIEW || "Keine Vorschau vorhanden").replace(/[<>&]/g, "");
   frame.removeAttribute("src");
   frame.srcdoc =
@@ -1959,6 +1970,12 @@ function showNoPreview(label) {
 
 // Zurück in die Live-HTML-Vorschau.
 function restoreLivePreview() {
+  const frame = document.getElementById("preview-frame");
+  if (frame) {
+    frame.removeAttribute("src");
+    delete frame.dataset.previewType;
+    frame.srcdoc = "";
+  }
   setPreviewHead(window.MSG_LIVE_PREVIEW);
   scaleMiniPreview();
   schedulePreview(true); // Stammdaten könnten sich geändert haben -> Dedup umgehen
@@ -1988,6 +2005,8 @@ function openSettings() {
   const btn = document.getElementById("settings-toggle");
   if (!pane || !content) return;
   settingsOpen = true;
+  if (_previewAbort) _previewAbort.abort();
+  checkMiniPages();
   loadSettingsPanel().then(() => {
     pane.hidden = false;
     content.hidden = true;

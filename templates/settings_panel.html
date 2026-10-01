@@ -65,7 +65,7 @@
     <thead><tr><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
       {% for a in archive %}
-      <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename) }}"{% if a.has_draft %} data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}"{% endif %}>
+      <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename) }}" data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}">
         {# Primär die Rechnungsnummer (der Dateiname ist Implementierungsdetail —
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
