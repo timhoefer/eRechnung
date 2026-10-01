@@ -732,6 +732,15 @@ def format_buyer_address(buyer: dict, lang: str) -> list[str]:
     return lines
 
 
+def format_seller_country(seller: dict, buyer: dict, lang: str) -> str:
+    """Absenderland in Rechnungssprache, wenn der Kunde im Ausland sitzt."""
+    seller_country = (seller.get("country") or "DE").strip().upper() or "DE"
+    buyer_country = (buyer.get("country") or "DE").strip().upper() or "DE"
+    if seller_country == buyer_country:
+        return ""
+    return loc(COUNTRY_NAME.get(seller_country, {"de": seller_country, "en": seller_country}), lang)
+
+
 # --- Helfer ----------------------------------------------------------------
 def suggest_invoice_number(seller: dict) -> str:
     last = seller.get("last_invoice_number", "")
@@ -819,7 +828,7 @@ def load_draft(src: str | None) -> dict | None:
 
 
 def render_invoice_preview(seller, buyer, inv, items, mode=""):
-    """Rechnungs-HTML rendern – für Live-Vorschau und Archiv-Vorschau gleichermaßen.
+    """Rechnungs-HTML für Live-Vorschau und neue Exporte rendern.
     Rückgabe: (html, (line_total, discount, tax_basis, tax_total, grand_total, treatment))."""
     inv_lang = inv.get("language") or "de"
     tt = inv.get("tax_treatment", "de_19")
@@ -846,6 +855,7 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
         ti=translate(inv_lang),
         body_class=body_class,
         seller=seller,
+        seller_country=format_seller_country(seller, buyer, inv_lang),
         bank=bank,
         buyer=buyer,
         buyer_address_lines=format_buyer_address(buyer, inv_lang),
@@ -1323,17 +1333,10 @@ def view(filename):
 
 @app.route("/archive/preview/<path:filename>")
 def archive_preview(filename):
-    """HTML-Vorschau einer archivierten Rechnung aus ihrer Sidecar-JSON – gleicher
-    Look wie die Live-Vorschau. Nur für app-erzeugte Rechnungen (mit Sidecar)."""
-    draft = load_draft(filename)
-    if not draft:
-        return abort(404)
-    seller = draft.get("seller") or load_seller()  # Altbestände ohne seller -> aktuell
-    html, _ = render_invoice_preview(
-        seller, draft.get("buyer") or {}, draft.get("invoice") or {},
-        draft.get("items") or [], mode="mini",
-    )
-    return html
+    """Das gespeicherte Original-PDF anzeigen, unabhängig von Vorlage/Stammdaten."""
+    if Path(filename).suffix.lower() != ".pdf":
+        abort(404)
+    return _serve(filename, inline=True)
 
 
 @app.route("/archive/delete", methods=["POST"])

@@ -47,6 +47,34 @@ def test_preview_html_renders(client):
     assert b"<" in r.data  # HTML-Fragment
 
 
+@pytest.mark.parametrize("mode", ["mini", "1"])
+@pytest.mark.parametrize("seller_country,buyer_country,language,expected", [
+    ("DE", "DE", "de", ""),
+    ("DE", "GB", "en", "Germany"),
+    ("DE", "GB", "de", "Deutschland"),
+    ("AT", "DE", "de", "Österreich"),
+    ("GB", "GB", "en", ""),
+    (" de ", "de", "en", ""),
+    ("", "DE", "en", ""),
+])
+def test_preview_sender_country(client, monkeypatch, mode, seller_country,
+                                buyer_country, language, expected):
+    from lxml import html
+
+    seller = appmod.load_seller()
+    seller["country"] = seller_country
+    monkeypatch.setattr(appmod, "load_seller", lambda: seller)
+    response = client.post("/preview-html", data={
+        "description": "Test", "quantity": "1", "unit_price": "100",
+        "buyer_country": buyer_country, "language": language, "_full": mode,
+    })
+    assert response.status_code == 200
+    document = html.fromstring(response.data)
+    rows = document.xpath('//div[@class="sender"]//td[contains(@class, "block-end")]')
+    assert len(rows) == 1
+    assert rows[0].text_content().strip() == (expected or "10829 Berlin")
+
+
 def test_settings_panel_renders(client):
     r = client.get("/settings/panel")
     assert r.status_code == 200
@@ -160,6 +188,49 @@ def _make_archive_entry(out, number="2026-001"):
                    "unit": "C62", "unit_price": "100"}],
     }), encoding="utf-8")
     return f"{stem}.pdf"
+
+
+@pytest.mark.parametrize("sidecar", ["valid", "missing", "invalid"])
+def test_archive_preview_preserves_original_pdf(client, monkeypatch, sidecar):
+    filename = _make_archive_entry(appmod.OUTPUT_DIR)
+    original = b"%PDF-1.4\nOriginal archived invoice layout and seller\n%%EOF"
+    path = appmod.OUTPUT_DIR / filename
+    path.write_bytes(original)
+    if sidecar == "missing":
+        path.with_suffix(".json").unlink()
+    elif sidecar == "invalid":
+        path.with_suffix(".json").write_text("invalid JSON", encoding="utf-8")
+
+    def unexpected_render(*args, **kwargs):
+        pytest.fail("Archive previews must not render current templates or seller data")
+
+    monkeypatch.setattr(appmod, "render_invoice_preview", unexpected_render)
+    monkeypatch.setattr(appmod, "load_seller", unexpected_render)
+    response = client.get("/archive/preview/" + filename)
+    assert response.status_code == 200
+    assert response.mimetype == "application/pdf"
+    assert response.headers["Content-Disposition"].startswith("inline;")
+    assert response.data == client.get("/view/" + filename).data == original
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("filename", ["missing.pdf", "Rechnung_2026-001.json", "../outside.pdf"])
+def test_archive_preview_rejects_invalid_files(client, filename):
+    _make_archive_entry(appmod.OUTPUT_DIR)
+    assert client.get("/archive/preview/" + filename).status_code == 404
+
+
+@pytest.mark.parametrize("has_sidecar", [False, True])
+def test_archive_rows_offer_original_pdf_preview(client, has_sidecar):
+    from lxml import html
+
+    filename = _make_archive_entry(appmod.OUTPUT_DIR)
+    if not has_sidecar:
+        (appmod.OUTPUT_DIR / filename).with_suffix(".json").unlink()
+    doc = html.fromstring(client.get("/settings/panel").data)
+    rows = doc.xpath('//tr[@class="arch-row"]')
+    assert len(rows) == 1
+    assert rows[0].get("data-preview-url") == "/archive/preview/" + filename
 
 
 def test_reveal_missing_file_404(client):
