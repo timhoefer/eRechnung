@@ -447,9 +447,9 @@ def whats_new_context(lang: str) -> dict | None:
 def whats_new_seen():
     data = request.get_json(silent=True)
     if not ANNOUNCEMENT or not ANNOUNCEMENT["items"]:
-        abort(404)
+        return abort(404)
     if not isinstance(data, dict) or data.get("id") != ANNOUNCEMENT["id"]:
-        abort(400)
+        return abort(400)
     config = _load_app_config()
     seen = config.get("seen_announcements", [])
     if not isinstance(seen, list):
