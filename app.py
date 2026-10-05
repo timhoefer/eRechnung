@@ -31,6 +31,7 @@ from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
 from version import __version__ as APP_VERSION
+from whats_new import ANNOUNCEMENT
 from zugferd import (
     TAX_TREATMENTS,
     _dec,
@@ -119,12 +120,13 @@ def _patch_cffi_dlopen() -> None:
 if FROZEN:
     _patch_cffi_dlopen()
 
-CONFIG_FILE = BASE / "config.json"  # merkt sich den gewählten Datenordner
+CONFIG_FILE = BASE / "config.json"  # Datenordner und lokal gelesene Feature-Hinweise
 
 
 def _load_app_config() -> dict:
     try:
-        return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        return config if isinstance(config, dict) else {}
     except (OSError, ValueError):
         return {}
 
@@ -218,9 +220,7 @@ def set_data_dir(raw: str):
     cfg = _load_app_config()
     cfg["data_dir"] = "" if target.resolve() == BASE.resolve() else str(target)
     try:
-        CONFIG_FILE.write_text(
-            json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        _write_json(CONFIG_FILE, cfg)
     except OSError:
         return False, "data_dir_err_save"
 
@@ -334,7 +334,7 @@ def _lock_data_changes():
     if request.method == "POST" and request.endpoint in {
         "settings", "settings_autosave", "customers_autosave",
         "customers_items_save", "customers_save", "customers_delete",
-        "generate", "archive_delete", "data_dir_set",
+        "generate", "archive_delete", "data_dir_set", "whats_new_seen",
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
@@ -426,7 +426,42 @@ def inject_i18n():
         "loc": loc,
         "countries": countries,
         "is_desktop": bool(app.config.get("DESKTOP")),
+        "whats_new": whats_new_context(lang),
     }
+
+
+def whats_new_context(lang: str) -> dict | None:
+    if not ANNOUNCEMENT or not ANNOUNCEMENT["items"]:
+        return None
+    seen = _load_app_config().get("seen_announcements", [])
+    return {
+        "id": ANNOUNCEMENT["id"],
+        "version": ANNOUNCEMENT["version"],
+        "seen": isinstance(seen, list) and ANNOUNCEMENT["id"] in seen,
+        "items": [{"icon": item["icon"], "title": loc(item["title"], lang),
+                   "text": loc(item["text"], lang)} for item in ANNOUNCEMENT["items"]],
+    }
+
+
+@app.route("/whats-new/seen", methods=["POST"])
+def whats_new_seen():
+    data = request.get_json(silent=True)
+    if not ANNOUNCEMENT or not ANNOUNCEMENT["items"]:
+        abort(404)
+    if not isinstance(data, dict) or data.get("id") != ANNOUNCEMENT["id"]:
+        abort(400)
+    config = _load_app_config()
+    seen = config.get("seen_announcements", [])
+    if not isinstance(seen, list):
+        seen = []
+    if ANNOUNCEMENT["id"] not in seen:
+        config["seen_announcements"] = [*seen, ANNOUNCEMENT["id"]]
+        try:
+            _write_json(CONFIG_FILE, config)
+        except OSError:
+            logger.warning("Could not save announcement state", exc_info=True)
+            return {"ok": False}, 503
+    return {"ok": True}
 
 
 @app.route("/setlang/<code>")
@@ -1000,7 +1035,7 @@ def index():
     # Erststart: noch kein Datenordner gewählt UND keine Stammdaten -> beim ersten
     # Öffnen aktiv nach dem Speicherort fragen (Vorschlag: sichtbarer Dokumente-Ordner
     # statt des versteckten Application-Support-Standards).
-    first_run = not CONFIG_FILE.exists() and not SELLER_FILE.exists()
+    first_run = "data_dir" not in _load_app_config() and not SELLER_FILE.exists()
     return render_template(
         "form.html",
         seller=seller,
@@ -1012,6 +1047,7 @@ def index():
         used_numbers=used_invoice_numbers(),
         ref_invoices=archived_invoices(),
         first_run=first_run,
+        show_whats_new=not first_run,
         suggested_data_dir=str(Path.home() / "Documents" / "eRechnung"),
         can_browse=(sys.platform == "darwin"),
     )

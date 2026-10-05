@@ -87,6 +87,20 @@ Dieser Code steht unter der **Apache License 2.0** – siehe [`LICENSE`](LICENSE
 
 ## Automatische Prüfungen und Releases
 
+### Hinweise auf neue Funktionen
+
+`whats_new.py` enthält die kuratierten Highlights für „Neu in eRechnung“ (Deutsch
+und Englisch). Bei einem Feature-Release die `id`, die zugehörige `version` und
+die kurzen Texte gemeinsam aktualisieren. Die ID bleibt bei reinen Bugfix-Releases
+unverändert, damit der Dialog nicht erneut erscheint. `ANNOUNCEMENT = None`
+deaktiviert den Dialog und den Menüeintrag vollständig.
+
+Die App speichert gelesene IDs in ihrer lokalen `config.json`, unabhängig vom
+Browser-Speicher und vom gewählten Rechnungsordner. Die erste Ordnerauswahl hat
+Vorrang; über „Neuigkeiten“ in den Einstellungen bleiben die Hinweise erreichbar.
+
+### Prüfungen
+
 Bei Pull Requests und Pushes auf `main` laufen Python-Tests einschließlich echter
 PDF-Erzeugung, XSD- und Schematron-Prüfung, JavaScript-Tests, Ruff und mypy. Die
 Integrationstests prüfen ZUGFeRD und XRechnung jeweils auf Deutsch und Englisch.

@@ -171,6 +171,7 @@
   </table>
   <div style="margin-top:12px">
     <button type="button" class="secondary" id="check-updates-btn">{{ t.app_check_updates }}</button>
+    {% if whats_new %}<button type="button" class="secondary" data-open-whats-new>{{ t.whats_new_open }}</button>{% endif %}
   </div>
   {# Ergebnis wird per JS hier eingefügt (nur auf Klick – kein Auto-Call). #}
   <p class="hint" id="update-result" style="margin-top:10px" hidden></p>
