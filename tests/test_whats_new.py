@@ -9,6 +9,8 @@ import app as appmod
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    # Exercise an explicitly selected major feature announcement by default.
+    monkeypatch.setattr(appmod, "ANNOUNCEMENT", dict(appmod.ANNOUNCEMENT, auto_open=True))
     monkeypatch.setattr(appmod, "BASE", tmp_path)
     monkeypatch.setattr(appmod, "DATA_DIR", tmp_path)
     monkeypatch.setattr(appmod, "CONFIG_FILE", tmp_path / "config.json")
@@ -60,7 +62,7 @@ def test_acknowledgement_survives_new_client_port_and_preserves_config(client):
     assert dialog(new_client.get("/validate")).get("data-auto-open") == "false"
 
 
-def test_only_new_feature_ids_trigger_another_announcement(client, monkeypatch):
+def test_only_new_major_feature_ids_trigger_another_announcement(client, monkeypatch):
     old_id = appmod.ANNOUNCEMENT["id"]
     assert acknowledge(client).status_code == 200
     monkeypatch.setattr(appmod, "APP_VERSION", "1.1.5")
@@ -69,6 +71,24 @@ def test_only_new_feature_ids_trigger_another_announcement(client, monkeypatch):
     assert dialog(client.get("/")).get("data-auto-open") == "true"
     assert acknowledge(client).status_code == 200
     assert json.loads(appmod.CONFIG_FILE.read_text())["seen_announcements"] == [old_id, "new-feature"]
+
+
+@pytest.mark.parametrize("auto_open", [False, None])
+def test_news_stays_manual_unless_explicitly_selected_for_auto_open(client, monkeypatch, auto_open):
+    announcement = dict(appmod.ANNOUNCEMENT, id="new-small-feature", version="2.0.0")
+    announcement.pop("auto_open")
+    if auto_open is not None:
+        announcement["auto_open"] = auto_open
+    monkeypatch.setattr(appmod, "ANNOUNCEMENT", announcement)
+    monkeypatch.setattr(appmod, "APP_VERSION", "2.0.0")
+    modal = dialog(client.get("/"))
+    assert modal.get("data-auto-open") == "false"
+    assert modal.get("data-seen") == "false"
+    panel = html.fromstring(client.get("/settings/panel").data)
+    assert len(panel.xpath('//button[@data-open-whats-new]')) == 1
+    assert not appmod.CONFIG_FILE.exists()
+    assert acknowledge(client).status_code == 200
+    assert dialog(client.get("/")).get("data-seen") == "true"
 
 
 def test_onboarding_has_priority_without_marking_news_seen(client):

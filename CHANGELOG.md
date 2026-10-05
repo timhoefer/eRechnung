@@ -2,7 +2,7 @@
 
 ## Unveröffentlicht
 
-- Ein Dialog stellt neue Funktionen einmalig vor. Bereits gelesene Hinweise werden lokal gemerkt und lassen sich über „Neuigkeiten“ in den Einstellungen erneut öffnen. Der Dialog unterstützt Deutsch, Englisch sowie Hell- und Dunkelmodus.
+- Ein Dialog stellt ausgewählte größere Feature-Releases einmalig automatisch vor. Kleinere Neuerungen sind nur über „Neuigkeiten“ in den Einstellungen erreichbar. Bereits gelesene Hinweise werden lokal gemerkt. Der Dialog unterstützt Deutsch, Englisch sowie Hell- und Dunkelmodus.
 
 ## 1.1.4
 

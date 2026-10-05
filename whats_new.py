@@ -1,13 +1,15 @@
-"""Kuratierte Neuerungen. ID nur bei neuen Feature-Hinweisen ändern, nicht pro Build.
+"""Kuratierte Neuerungen. ID nur bei neuen Hinweisen ändern, nicht pro Build.
 
-Für ein Feature-Release ID, Version und Texte gemeinsam aktualisieren. Reine
-Bugfix-Releases behalten denselben Eintrag; ANNOUNCEMENT = None deaktiviert ihn.
+ID, Version und Texte gemeinsam aktualisieren. Nur für ausgewählte größere
+Feature-Releases auto_open ausdrücklich auf True setzen; sonst bleiben Hinweise
+manuell erreichbar. ANNOUNCEMENT = None deaktiviert auch den Menüeintrag.
 """
 from typing import Any
 
 ANNOUNCEMENT: dict[str, Any] | None = {
     "id": "invoice-layout-1.1.4",
     "version": "1.1.4",
+    "auto_open": False,
     "items": [
         {
             "icon": "invoice",

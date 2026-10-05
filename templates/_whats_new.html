@@ -1,7 +1,7 @@
 {% if whats_new %}
 <dialog id="whats-new-dialog" class="whats-new" aria-labelledby="whats-new-title"
         data-announcement-id="{{ whats_new.id }}" data-seen="{{ 'true' if whats_new.seen else 'false' }}"
-        data-auto-open="{{ 'true' if show_whats_new and not whats_new.seen else 'false' }}"
+        data-auto-open="{{ 'true' if show_whats_new and whats_new.auto_open and not whats_new.seen else 'false' }}"
         data-seen-url="{{ url_for('whats_new_seen') }}">
   <h2 id="whats-new-title">{{ t.whats_new_title }}</h2>
   <p class="whats-new-version">{{ t.whats_new_version }} {{ whats_new.version }}</p>

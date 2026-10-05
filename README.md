@@ -90,10 +90,13 @@ Dieser Code steht unter der **Apache License 2.0** – siehe [`LICENSE`](LICENSE
 ### Hinweise auf neue Funktionen
 
 `whats_new.py` enthält die kuratierten Highlights für „Neu in eRechnung“ (Deutsch
-und Englisch). Bei einem Feature-Release die `id`, die zugehörige `version` und
-die kurzen Texte gemeinsam aktualisieren. Die ID bleibt bei reinen Bugfix-Releases
-unverändert, damit der Dialog nicht erneut erscheint. `ANNOUNCEMENT = None`
-deaktiviert den Dialog und den Menüeintrag vollständig.
+und Englisch). Bei neuen Hinweisen die `id`, die zugehörige `version` und die kurzen
+Texte gemeinsam aktualisieren. **Nur bei ausgewählten größeren Feature-Releases**
+`auto_open: True` setzen. Bei kleineren Neuerungen und Fehlerkorrekturen bleibt es
+`False`; ohne dieses Feld öffnet sich der Dialog ebenfalls nur manuell. Eine neue
+ID oder Versionsnummer allein löst keine automatische Anzeige aus. Die Hinweise
+zu 1.1.4 sind zunächst nur manuell erreichbar. `ANNOUNCEMENT = None` deaktiviert
+den Dialog und den Menüeintrag vollständig.
 
 Die App speichert gelesene IDs in ihrer lokalen `config.json`, unabhängig vom
 Browser-Speicher und vom gewählten Rechnungsordner. Die erste Ordnerauswahl hat

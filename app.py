@@ -437,6 +437,7 @@ def whats_new_context(lang: str) -> dict | None:
     return {
         "id": ANNOUNCEMENT["id"],
         "version": ANNOUNCEMENT["version"],
+        "auto_open": ANNOUNCEMENT.get("auto_open") is True,
         "seen": isinstance(seen, list) and ANNOUNCEMENT["id"] in seen,
         "items": [{"icon": item["icon"], "title": loc(item["title"], lang),
                    "text": loc(item["text"], lang)} for item in ANNOUNCEMENT["items"]],
