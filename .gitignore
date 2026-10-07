@@ -18,6 +18,7 @@ output/
 
 # Lokaler Datenordner-Pfad (kein Commit)
 config.json
+integrations/codex/erechnung/runtime.json
 
 # PyInstaller Build-Artefakte
 /build/
@@ -32,3 +33,7 @@ docs/improvement-plan.md
 # Icon-Zwischenstufen (nur icon.icns wird getrackt)
 assets/eRechnung.iconset/
 assets/icon_master.png
+
+# Shared local app/assistant state
+.erechnung.lock
+.seller-*

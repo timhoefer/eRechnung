@@ -50,6 +50,82 @@ Das Format wählst du pro Rechnung oben im Kopf:
 
 Beide werden gegen die offizielle XSD validiert; das Ergebnis lässt sich zusätzlich mit Validatoren wie dem [KoSIT-Validator] oder Mustang prüfen.
 
+## Optionaler lokaler Assistent (Prototyp)
+
+Ein separat installierbarer Codex-Skill kann Kunden und frühere Rechnungen als
+Vorlagen lesen, Entwürfe vorbereiten und PDF-Vorschauen oder validierte
+ZUGFeRD-/XRechnung-Dateien erzeugen. Er verwendet denselben Rechnungskern und
+dieselbe Vorlage wie die App. Die App selbst benötigt weder den Skill noch einen
+LLM-API-Schlüssel; es wird kein zusätzlicher Server gestartet.
+
+Vor dem Erzeugen einer PDF oder dem finalen Export fasst der Skill die geplante
+Rechnung zusammen und wartet auf eine ausdrückliche Bestätigung. Offene Angaben
+fragt er mit passenden Vorschlägen aus dem Gespräch, Kundendaten und früheren
+Rechnungen ab; die Herkunft eines Vorschlags wird benannt. Erst nach Bestätigung
+erstellt er die vereinbarte Vorschau, den Export oder den Archiveintrag. Diese
+Gesprächsregel gilt für den Skill; direkte CLI-Aufrufe haben keinen Bestätigungsdialog.
+
+Der Prototyp unterstützt gewöhnliche Rechnungen (`380`) auf macOS/Linux. Kunden,
+Vorlagen und Nummernvorschläge werden gelesen; Entwürfe, Vorschauen und separate
+Exporte liegen außerhalb des Datenordners. Nur der ausdrückliche Befehl `archive`
+finalisiert eine geprüfte Rechnung im App-Archiv und aktualisiert die zuletzt
+verwendete Rechnungsnummer. Die Rechnung erscheint nach Aktualisieren des Archivs
+mit Vorschau, Vorlagenfunktion und CSV-Export. Beispielrechnungen bleiben Entwürfe.
+
+App und Skill verwenden dafür denselben Speicherweg und eine gemeinsame lokale
+Sperre. Identische Wiederholungen geben den bestehenden Beleg zurück; andere
+Inhalte mit derselben Nummer oder einem belegten Dateinamen werden abgelehnt.
+Die PDF wird erst sichtbar, wenn die zugehörigen Dateien vollständig bereitliegen.
+Bei einer Unterbrechung bleibt ein Wiederaufnahmeprotokoll erhalten; derselbe
+Auftrag oder der nächste schreibende App-Zugriff schließt die Speicherung ab.
+XML-Prüfungen müssen vor der Archivierung erfolgreich sein. Auch die App archiviert
+keine Rechnungen mit fehlgeschlagener oder nicht verfügbarer Validierung mehr.
+
+`next-number` berücksichtigt das Archiv, reserviert die vorgeschlagene Nummer aber
+noch nicht. Bei unklaren oder eigenen Nummernkreisen sowie einem Jahreswechsel
+fordert der Skill eine Klärung an, statt selbst eine Nummer festzulegen. Klare
+Vorgaben des Nutzers werden übernommen; Konflikte führen zu einer Rückfrage.
+Doppelte Nummern im Altbestand werden als Unklarheit gemeldet. Bei bekannten
+Testrechnungen ist die höchste Archivnummer kein verlässlicher Ausgangspunkt;
+der Skill fragt nach der letzten tatsächlich ausgestellten Rechnung. Bestehende
+Belege werden nicht automatisch als Tests eingeordnet oder umnummeriert. Ein separates `export` registriert ebenfalls keine Nummer im Archiv.
+Vor gleichzeitiger Nutzung von App und Skill muss die App auf diesen gemeinsamen
+Speicherweg aktualisiert sein; ältere Builds kennen die Sperre nicht. Sie gilt nur
+auf demselben Rechner, nicht über Dropbox/iCloud zwischen verschiedenen Geräten.
+Die Dateien im Datenordner müssen lokal verfügbar sein.
+
+Zum Ausprobieren mit ausschließlich fiktiven Daten (vorher Python-Abhängigkeiten
+und Pango wie oben installieren):
+
+```bash
+.venv/bin/python scripts/create_assistant_demo.py /tmp/erechnung-demo-daten
+.venv/bin/python scripts/install_assistant_skill.py --data-dir /tmp/erechnung-demo-daten
+```
+
+Der Installer speichert die Pfade dieses Checkouts und dieser Python-Umgebung im
+Skill. Beide müssen nach der Installation erhalten bleiben. In Codex lässt sich
+der Skill als `$erechnung` verwenden; falls er noch nicht aufgelistet wird, einen
+neuen Chat öffnen. Ein Beispielauftrag:
+
+> Nutze eRechnung mit den Beispieldaten. Erstelle nur eine Vorschau für Beispiel
+> GmbH: drei Tage Gestaltung à 800 EUR netto, Leistungszeitraum 1.–3. Oktober 2026,
+> Rechnungsdatum 7. Oktober 2026, fällig am 21. Oktober 2026, 19 % USt,
+> Rechnungsnummer DEMO-2026-002.
+
+Zum Entfernen ausschließlich des Skills:
+
+```bash
+.venv/bin/python scripts/install_assistant_skill.py --uninstall
+```
+
+Rechnungen, Arbeitsordner und App bleiben erhalten. Die Schnittstelle lässt sich
+auch direkt mit `.venv/bin/python assistant_cli.py --help` verwenden; sie ist keine
+Abhängigkeit der App. Befehle und Datenformat stehen in
+[`integrations/codex/erechnung/references/commands.md`](integrations/codex/erechnung/references/commands.md).
+Für echte Daten muss der betreffende Datenordner explizit ausgewählt werden.
+Die Dateien werden lokal erzeugt; Angaben, die der Assistent liest, gelangen aber
+in seinen Modellkontext und gegebenenfalls zum Cloud-Anbieter.
+
 ## Hinweise
 
 - Die E-Rechnungs-**pflicht** (ab 2025 Empfang, gestaffelt ab 2027/2028 Versand) gilt nur für **inländische B2B-Umsätze**. Rechnungen an Nicht-EU-Kunden sind freiwillig, lassen sich hier aber im selben Format erzeugen.
