@@ -57,7 +57,7 @@ jobs:
         # ignore_missing_imports (mypy.ini) -> Dritt-Libs müssen nicht installiert sein.
         run: |
           pip install mypy==2.1.0
-          mypy app.py zugferd.py i18n.py countries.py desktop.py scripts/check_macos_release.py
+          mypy app.py zugferd.py i18n.py countries.py desktop.py invoice_core.py assistant_cli.py scripts/check_macos_release.py scripts/create_assistant_demo.py scripts/install_assistant_skill.py integrations/codex/erechnung/scripts/erechnung.py
 
   js:
     runs-on: ubuntu-latest

@@ -18,6 +18,7 @@ output/
 
 # Lokaler Datenordner-Pfad (kein Commit)
 config.json
+integrations/codex/erechnung/runtime.json
 
 # PyInstaller Build-Artefakte
 /build/

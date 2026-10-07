@@ -1,5 +1,10 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Optionaler, separat entfernbarer eRechnung-Skill mit lokaler Schnittstelle für Kunden, Vorlagen, Entwürfe, PDF-Vorschauen und validierte Exporte. Der Prototyp liest vorhandene App-Daten nur und speichert Ergebnisse in einem getrennten Arbeitsordner.
+- App und Assistent verwenden denselben Rechnungskern. Die App bleibt ohne Skill und ohne LLM-Abhängigkeit nutzbar.
+
 ## 1.1.4
 
 - Überarbeitetes Rechnungslayout mit ruhigen Tabellenüberschriften, mehr Abstand vor der Leistungstabelle und einem hinterlegten Gesamtbetrag. Die Datumsangaben bleiben unter der Rechnungsnummer.
