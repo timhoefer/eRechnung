@@ -10,6 +10,10 @@ LANG = {
         # Kopf / allgemein
         "app_title": "E-Rechnung (ZUGFeRD)",
         "app_title_base": "E-Rechnung",
+        "whats_new_title": "Neu in eRechnung",
+        "whats_new_open": "Neuigkeiten",
+        "whats_new_continue": "Weiter",
+        "whats_new_version": "Version",
         "fmt_zugferd_desc": "für B2B",
         "fmt_xrechnung_desc": "für Behörden (B2G)",
         "app_sub": "Lokal erzeugt · EN 16931 · PDF/A-3 mit eingebettetem XML",
@@ -309,6 +313,10 @@ LANG = {
     "en": {
         "app_title": "E-Invoice (ZUGFeRD)",
         "app_title_base": "E-Invoice",
+        "whats_new_title": "What's new in eRechnung",
+        "whats_new_open": "What's new",
+        "whats_new_continue": "Continue",
+        "whats_new_version": "Version",
         "fmt_zugferd_desc": "for B2B",
         "fmt_xrechnung_desc": "for public authorities (B2G)",
         "app_sub": "Generated locally · EN 16931 · PDF/A-3 with embedded XML",

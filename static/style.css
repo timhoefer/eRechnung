@@ -641,6 +641,33 @@ table.archive td.arch-date { color: var(--muted); white-space: nowrap;
 .modal h3 { margin: 0 0 10px; font-size: var(--text-lg); }
 .modal p { margin: 0 0 20px; font-size: var(--text-base); color: var(--ink); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* Kuratierte Feature-Hinweise: ruhige, native Dialog-Anmutung in beiden Themes. */
+.whats-new {
+  width: min(640px, calc(100vw - 40px)); max-height: calc(100dvh - 40px);
+  margin: auto; padding: 48px 52px 32px; overflow-y: auto;
+  border: 1px solid var(--border-hi); border-radius: 24px;
+  background: var(--card); color: var(--ink); font-family: var(--font);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, .3);
+}
+.whats-new::backdrop { background: var(--scrim); }
+body:has(.whats-new[open]) { overflow: hidden; }
+.whats-new h2 { margin: 0; text-align: center; font-size: 30px; line-height: 1.2; font-weight: 600; }
+.whats-new-version { margin: 10px 0 0; color: var(--muted); font-size: var(--text-sm); text-align: center; }
+.whats-new-features { display: grid; gap: 28px; margin: 40px 0 44px; padding: 0; list-style: none; }
+.whats-new-features li { display: grid; grid-template-columns: 36px 1fr; gap: 22px; align-items: center; }
+.whats-new-icon { width: 36px; height: 36px; color: var(--accent); }
+.whats-new-features h3 { margin: 0 0 5px; font-size: 17px; line-height: 1.35; font-weight: 600; }
+.whats-new-features p { margin: 0; color: var(--muted); font-size: var(--text-base); line-height: 1.5; }
+.whats-new-actions { display: flex; justify-content: center; margin: 0; }
+.whats-new-actions button { min-width: 136px; }
+@media (max-width: 600px) {
+  .whats-new { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 32px 24px 24px; border-radius: 18px; }
+  .whats-new h2 { font-size: 25px; }
+  .whats-new-features { margin: 32px 0; gap: 24px; }
+  .whats-new-features li { grid-template-columns: 30px 1fr; gap: 16px; }
+  .whats-new-icon { width: 30px; height: 30px; }
+}
 input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%; background: var(--surface); }
 
 /* Zwei-Spalten-Layout: Formular links, Live-Vorschau rechts */
