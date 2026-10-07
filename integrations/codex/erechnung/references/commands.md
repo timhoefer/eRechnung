@@ -5,6 +5,12 @@ The launcher supplies the configured source directory; override it with
 `--data-dir /absolute/source/path` **before** the command. Quote paths and customer
 names; use argument arrays when invoking from code. Only `archive` modifies app data.
 
+The skill gathers evidence, clarifies missing details with suggested answers, and
+confirms a complete invoice summary with the user before `preview`, `export` or
+`archive`. Working draft JSON and `check` can be prepared beforehand to calculate
+and validate the proposal without producing a PDF. This is a conversational rule
+for the skill; the CLI itself cannot determine whether a human has confirmed it.
+
 | Command | Purpose |
 | --- | --- |
 | `schema` | Fields, formats, units and supported tax treatments |

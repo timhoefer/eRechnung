@@ -58,6 +58,13 @@ ZUGFeRD-/XRechnung-Dateien erzeugen. Er verwendet denselben Rechnungskern und
 dieselbe Vorlage wie die App. Die App selbst benötigt weder den Skill noch einen
 LLM-API-Schlüssel; es wird kein zusätzlicher Server gestartet.
 
+Vor dem Erzeugen einer PDF oder dem finalen Export fasst der Skill die geplante
+Rechnung zusammen und wartet auf eine ausdrückliche Bestätigung. Offene Angaben
+fragt er mit passenden Vorschlägen aus dem Gespräch, Kundendaten und früheren
+Rechnungen ab; die Herkunft eines Vorschlags wird benannt. Erst nach Bestätigung
+erstellt er die vereinbarte Vorschau, den Export oder den Archiveintrag. Diese
+Gesprächsregel gilt für den Skill; direkte CLI-Aufrufe haben keinen Bestätigungsdialog.
+
 Der Prototyp unterstützt gewöhnliche Rechnungen (`380`) auf macOS/Linux. Kunden,
 Vorlagen und Nummernvorschläge werden gelesen; Entwürfe, Vorschauen und separate
 Exporte liegen außerhalb des Datenordners. Nur der ausdrückliche Befehl `archive`
