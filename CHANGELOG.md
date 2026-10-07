@@ -1,5 +1,9 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Ein Dialog stellt ausgewählte größere Feature-Releases einmalig automatisch vor. Kleinere Neuerungen sind nur über „Neuigkeiten“ in den Einstellungen erreichbar. Bereits gelesene Hinweise werden lokal gemerkt. Der Dialog unterstützt Deutsch, Englisch sowie Hell- und Dunkelmodus.
+
 ## 1.1.4
 
 - Überarbeitetes Rechnungslayout mit ruhigen Tabellenüberschriften, mehr Abstand vor der Leistungstabelle und einem hinterlegten Gesamtbetrag. Die Datumsangaben bleiben unter der Rechnungsnummer.
