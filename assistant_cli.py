@@ -1,4 +1,4 @@
-"""Optional local assistant adapter. Source data is read-only; outputs are separate.
+"""Optional local assistant adapter. Only the explicit archive command writes app data.
 
 No HTTP server, LLM dependency, application import, or automatic invoice numbering.
 Every response is JSON. Exit 2 means invalid input or an unsuccessful validation.
@@ -16,6 +16,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from invoice_archive import ArchiveError, archive_invoice, archived_numbers, seller_details
 from invoice_core import (
     COUNTRY_NAME,
     UNITS,
@@ -24,6 +25,7 @@ from invoice_core import (
     render_invoice_preview,
     safe_name,
     select_account,
+    suggest_invoice_number,
     xrechnung_missing,
 )
 from version import __version__
@@ -175,7 +177,7 @@ def prepare(data, source: Path) -> tuple[dict, list[dict]]:
     if errors:
         return {}, errors
     seller, buyer, inv, items = data["seller"], data["buyer"], dict(data["invoice"]), data["items"]
-    if seller != seller_from(source):
+    if seller_details(seller) != seller_details(seller_from(source)):
         error("seller", "Issuer details differ from the source. Create a fresh draft; do not edit issuer data here.")
 
     def fields(value, allowed, prefix):
@@ -360,16 +362,45 @@ def export(data: dict, root: Path) -> dict:
         return {"ok": True, "reused": False, "directory": str(target), "files": [str(target / f) for f in payloads], "validation": validation}
 
 
+
+def number_proposal(source: Path) -> dict:
+    seller = seller_from(source)
+    numbers = archived_numbers(source / "output", strict=True)
+    last = seller.get("last_invoice_number") or ""
+    year = date.today().year
+    suggestion = suggest_invoice_number(seller, numbers)
+    reasons = []
+    match = re.fullmatch(r"(\d{4})-(\d+)", last)
+    current_standard = any(re.fullmatch(rf"{year}-\d+", number) for number in numbers)
+    if not last and not numbers:
+        reasons.append("No previous number is available; ask which numbering scheme to start.")
+    if last and match is None:
+        reasons.append("The last number uses a custom scheme; ask which scheme and next number to use.")
+    if match and int(match.group(1)) != year and not current_standard:
+        reasons.append("The year changed; ask whether to start a new yearly sequence.")
+    if any(str(year) in number and not re.fullmatch(r"\d{4}-\d+", number) for number in numbers):
+        reasons.append("The archive includes other numbering schemes for this year; ask which one applies.")
+    if numbers and not last and not current_standard:
+        reasons.append("The archive does not establish a current standard sequence; ask for the invoice number.")
+    return {"ok": True, "number": None if reasons else suggestion, "suggestion": suggestion,
+            "last_invoice_number": last or None, "requires_clarification": bool(reasons),
+            "reasons": reasons, "reserved": False}
+
+
 def run(args) -> dict:
     if args.command == "schema":
         return {"ok": True, "schema_version": 1, "version": __version__, "invoice_fields": sorted(INVOICE_FIELDS),
                 "item_fields": sorted(ITEM_FIELDS), "units": {unit[0]: unit[1] for unit in UNITS},
                 "tax_treatments": {key: value["label"] for key, value in TAX_TREATMENTS.items()},
                 "formats": ["en16931", "xrechnung"], "document_types": ["380"],
-                "source_access": "read-only", "exports": "separate output folder; no archive registration or number reservation"}
+                "source_access": "read-only except archive",
+                "exports": "separate output folder; no archive registration or number reservation",
+                "archive": "explicit validated finalization into the app archive; shared local number lock"}
     if args.data_dir is None:
         raise InputError("missing_data_dir", "Select the app's data directory explicitly with --data-dir.")
     source = args.data_dir.expanduser().resolve(strict=True)
+    if args.command == "next-number":
+        return number_proposal(source)
     if args.command == "customers":
         return {"ok": True, "customers": [{key: c.get(key, "") for key in BUYER_FIELDS}
                 for c in customers_from(source) if args.query.casefold() in str(c.get("name", "")).casefold()]}
@@ -395,6 +426,20 @@ def run(args) -> dict:
     if args.command == "check":
         validation = validate_xml(build_xml(data))
         return {"ok": validation["valid"], "summary": summary, "validation": validation}
+    if args.command == "archive":
+        xml = build_xml(data)
+        validation = validate_xml(xml)
+        if not validation["valid"]:
+            return {"ok": False, "validation": validation}
+        markup, _ = render_invoice_preview(data["seller"], data["buyer"], data["invoice"], data["items"])
+        is_xr = data["invoice"]["profile"] == "xrechnung"
+        pdf = render_html_pdf(markup) if is_xr else build_pdf(markup, xml)
+        if not is_xr and extract_xml_from_pdf(pdf) != xml:
+            raise InputError("embedding_failed", "The PDF does not contain the generated invoice XML.")
+        archived = archive_invoice(data, pdf, xml, source / "output", source / "seller.json",
+                                   expected_seller=data["seller"])
+        return {"ok": True, "archived": True, **archived, "summary": summary,
+                "validation": validation, "note": "Saved in the app archive. Refresh the archive to see this invoice."}
     root = output_path(args.out_dir, source)
     number = data["invoice"]["number"]
     if (source / "output" / ("Rechnung_" + safe_name(number) + ".pdf")).exists():
@@ -412,9 +457,10 @@ def run(args) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-dir", type=Path, help="Existing app data directory (read-only)")
+    parser.add_argument("--data-dir", type=Path, help="App data directory (only archive writes here)")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("schema")
+    commands.add_parser("next-number")
     customers = commands.add_parser("customers")
     customers.add_argument("--query", default="")
     templates = commands.add_parser("templates")
@@ -423,7 +469,7 @@ def main(argv=None) -> int:
     draft.add_argument("--customer", required=True)
     draft.add_argument("--template")
     draft.add_argument("--out", type=Path, required=True)
-    for command in ("check", "preview", "export"):
+    for command in ("check", "preview", "export", "archive"):
         action = commands.add_parser(command)
         action.add_argument("--draft", type=Path, required=True)
         if command == "preview":
@@ -433,7 +479,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         result = run(args)
-    except InputError as exc:
+    except (InputError, ArchiveError) as exc:
         result = {"ok": False, "error": {"code": exc.code, "message": str(exc)}}
     except (OSError, ValueError, InvalidOperation, KeyError, TypeError, AttributeError) as exc:
         result = {"ok": False, "error": {"code": "invalid_input_or_io", "message": str(exc)}}

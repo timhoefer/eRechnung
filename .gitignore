@@ -33,3 +33,7 @@ docs/improvement-plan.md
 # Icon-Zwischenstufen (nur icon.icns wird getrackt)
 assets/eRechnung.iconset/
 assets/icon_master.png
+
+# Shared local app/assistant state
+.erechnung.lock
+.seller-*

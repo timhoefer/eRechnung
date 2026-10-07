@@ -9,7 +9,7 @@ from pathlib import Path
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-dir", type=Path, help="Read-only source data (use demo data for a trial)")
+    parser.add_argument("--data-dir", type=Path, help="App data folder (archive writes here; use demo data for a trial)")
     parser.add_argument("--skills-dir", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "skills")
     parser.add_argument("--uninstall", action="store_true")
     args = parser.parse_args()

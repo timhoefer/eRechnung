@@ -30,6 +30,7 @@ from flask import (
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
+from invoice_archive import ArchiveError, archive_invoice, data_lock, recover_archive
 from invoice_core import (
     UNITS,
     datefmt_filter,
@@ -39,11 +40,11 @@ from invoice_core import (
     price_filter,
     qtyfmt_filter,
     render_invoice_preview,
-    safe_name,
     select_account,
     suggest_invoice_number,
     xrechnung_missing,
 )
+from invoice_core import safe_name as safe_name
 from invoice_core import seller_accounts as seller_accounts
 from version import __version__ as APP_VERSION
 from zugferd import (
@@ -351,10 +352,21 @@ def _lock_data_changes():
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
+        # The CLI uses this same process lock; hold it across read/modify/write.
+        lock = data_lock(SELLER_FILE.parent)
+        lock.__enter__()
+        g.archive_lock = lock
+        try:
+            recover_archive(OUTPUT_DIR, SELLER_FILE)
+        except (OSError, ValueError) as exc:
+            raise ArchiveError("archive_io", str(exc)) from exc
 
 
 @app.teardown_request
 def _unlock_data_changes(error):
+    lock = g.pop("archive_lock", None)
+    if lock is not None:
+        lock.__exit__(None, None, None)
     if g.pop("data_locked", False):
         DATA_LOCK.release()
 
@@ -738,7 +750,7 @@ def index():
     seller = load_seller()
     today = date.today()
     defaults = {
-        "number": suggest_invoice_number(seller),
+        "number": suggest_invoice_number(seller, used_invoice_numbers()),
         "issue_date": today.isoformat(),
         "due_date": (today + timedelta(days=DEFAULT_TERM_DAYS)).isoformat(),
     }
@@ -941,50 +953,11 @@ def generate():
             flash(ui["need_xrechnung"] + " " + ", ".join(ui[k] for k in missing), "err")
             return redirect(url_for("index"))
 
-    # Kunde automatisch sichern (anlegen/aktualisieren)
-    upsert_customer(data["buyer"])
-
-    inv_number = data["invoice"]["number"]
     is_xr = data["invoice"]["profile"] == "xrechnung"
     xml = build_xml(data)
     # XRechnung: die einreichbare .xml ist der Hauptbeleg; das PDF ist nur ein
     # visuelles Sichtexemplar (kein eingebettetes XML). ZUGFeRD: ein hybrides PDF.
     pdf = render_html_pdf(html) if is_xr else build_pdf(html, xml)
-
-    # Archivieren – eine vorhandene Datei NIE überschreiben. Wird dieselbe
-    # Rechnungsnummer erneut verwendet (z. B. versehentlich), würde sonst eine
-    # evtl. korrekte Rechnung still zerstört. Bei Kollision eindeutigen Namen
-    # vergeben; beide bleiben im Archiv sichtbar, der Fehler ist korrigierbar.
-    stem = f"Rechnung_{safe_name(inv_number)}"
-    name, n = stem, 2
-    while True:
-        filename = f"{name}.pdf"
-        try:
-            # Exclusive creation also protects against a second app process.
-            with (OUTPUT_DIR / filename).open("xb") as f:
-                f.write(pdf)
-            break
-        except FileExistsError:
-            name = f"{stem} ({n})"
-            n += 1
-    duplicate = name != stem
-    file_stem = Path(filename).stem
-    # XRechnung: standalone-XML neben das PDF legen (der eigentliche Beleg).
-    xml_filename = None
-    if is_xr:
-        xml_filename = f"{file_stem}.xml"
-        (OUTPUT_DIR / xml_filename).write_bytes(xml)
-
-    # Sidecar mit den Formulardaten – ermöglicht „als Vorlage öffnen" und die
-    # Archiv-Vorschau. seller wird mitgespeichert, damit die Vorschau dem Stand
-    # zum Erzeugungszeitpunkt entspricht (auch wenn die Stammdaten sich ändern).
-    sidecar = {
-        "seller": seller, "buyer": data["buyer"],
-        "invoice": data["invoice"], "items": data["items"],
-    }
-    (OUTPUT_DIR / f"{file_stem}.json").write_text(
-        json.dumps(sidecar, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
 
     # Validierung: XSD-Struktur + EN16931/BR-DE-Geschäftsregeln (Schematron).
     # XRechnung direkt aus der standalone-XML, ZUGFeRD aus dem eingebetteten XML.
@@ -998,10 +971,21 @@ def generate():
         sch = validate_schematron(embedded) if embedded else None
     valid = bool(ok and sch and sch["available"] and sch["ok"] and not sch.get("error"))
 
-    # Letzte Rechnungsnummer merken
-    current_seller = load_seller()
-    current_seller["last_invoice_number"] = inv_number
-    save_seller(current_seller)
+    filename = xml_filename = None
+    reused = False
+    if valid:
+        try:
+            archived = archive_invoice(data, pdf, xml, OUTPUT_DIR, SELLER_FILE)
+        except ArchiveError:
+            raise
+        except (OSError, ValueError) as exc:
+            logger.exception("Invoice could not be archived")
+            raise ArchiveError("archive_io", str(exc)) from exc
+        filename = archived["filename"]
+        reused = archived["reused"]
+        xml_filename = str(Path(filename).with_suffix(".xml")) if is_xr else None
+        # Only update customer data after a successful final archive operation.
+        upsert_customer(data["buyer"])
 
     return render_template(
         "result.html",
@@ -1014,8 +998,18 @@ def generate():
         valid=valid,
         messages=messages,
         sch=sch,
-        duplicate=duplicate,
+        reused=reused,
     )
+
+
+@app.errorhandler(ArchiveError)
+def archive_error(error):
+    ui = translate(get_ui_lang(request))
+    key = "archive_number_conflict" if error.code == "number_conflict" else "archive_save_failed"
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"ok": False, "message": ui[key]}, 409
+    flash(ui[key], "err")
+    return redirect(url_for("index"))
 
 
 @app.route("/download/<path:filename>")

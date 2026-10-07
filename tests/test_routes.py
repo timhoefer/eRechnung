@@ -116,6 +116,7 @@ _FORM = {
     "description": "Leistung", "quantity": "1", "unit": "C62", "unit_price": "100",
     "tax_treatment": "de_19", "language": "de",
     "buyer_name": "Muster GmbH", "buyer_country": "DE",
+    "buyer_city": "Berlin", "buyer_postcode": "10115", "buyer_address_line": "Teststr. 2",
 }
 
 
@@ -162,16 +163,19 @@ def test_xrechnung_writes_standalone_xml(client):
 
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
-def test_generate_duplicate_number_keeps_both(client):
+def test_generate_retry_reuses_original_and_conflict_is_rejected(client):
     client.post("/generate", data=dict(_FORM))
-    r2 = client.post("/generate", data=dict(_FORM))  # gleiche Nummer erneut
-    assert r2.status_code == 200
-    pdfs = sorted(p.name for p in appmod.OUTPUT_DIR.glob("*.pdf"))
-    assert len(pdfs) == 2  # nichts überschrieben
-    assert "Rechnung_2026-001.pdf" in pdfs
-    assert any("(2)" in n for n in pdfs)
-    body = r2.get_data(as_text=True)
-    assert "bereits" in body or "already" in body  # Duplikat-Hinweis
+    original = (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").read_bytes()
+    retry = client.post("/generate", data=dict(_FORM))
+    assert retry.status_code == 200
+    assert len(list(appmod.OUTPUT_DIR.glob("*.pdf"))) == 1
+    assert "bereits unverändert" in retry.get_data(as_text=True)
+    conflict = client.post("/generate", data=dict(_FORM, unit_price="200"), follow_redirects=True)
+    import re
+    flashes = json.loads(re.search(r"window.FLASHES = (.*);", conflict.get_data(as_text=True)).group(1))
+    assert any("bestehende Rechnung wurde nicht verändert" in message for _, message in flashes)
+    assert (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").read_bytes() == original
+    assert len(list(appmod.OUTPUT_DIR.glob("*.pdf"))) == 1
 
 
 # --- Desktop-Modus: „Im Finder zeigen" statt Download (WKWebView lädt nicht) ----
@@ -640,6 +644,8 @@ def test_generation_never_claims_unverified_success(client, monkeypatch, sch):
     response = client.post('/generate', data=_FORM)
     assert response.status_code == 200
     assert 'Validierung bestanden' not in response.get_data(as_text=True)
+    assert not list(appmod.OUTPUT_DIR.glob("*.pdf"))
+    assert "last_invoice_number" not in appmod.load_seller()
     if sch['error']:
         assert sch['error'] in response.get_data(as_text=True)
 
@@ -662,7 +668,7 @@ def test_parallel_generate_preserves_all_invoices(client, monkeypatch):
     _mock_generation(monkeypatch)
     def generate(i):
         with appmod.app.test_client() as c:
-            return c.post('/generate', data=dict(_FORM, buyer_name=f'Buyer {i}')).status_code
+            return c.post('/generate', data=dict(_FORM, number=f'2026-{i+1:03d}', buyer_name=f'Buyer {i}')).status_code
     with ThreadPoolExecutor(max_workers=4) as pool:
         assert list(pool.map(generate, range(8))) == [200] * 8
     assert len(list(appmod.OUTPUT_DIR.glob('*.pdf'))) == 8

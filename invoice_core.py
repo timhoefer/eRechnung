@@ -215,13 +215,14 @@ def format_seller_country(seller: dict, buyer: dict, lang: str) -> str:
     return loc(COUNTRY_NAME.get(seller_country, {"de": seller_country, "en": seller_country}), lang)
 
 
-def suggest_invoice_number(seller: dict) -> str:
-    last = seller.get("last_invoice_number", "")
+def suggest_invoice_number(seller: dict, used_numbers=()) -> str:
     year = date.today().year
-    m = re.match(r"^(\d{4})-(\d+)$", last or "")
-    if m and int(m.group(1)) == year:
-        return f"{year}-{int(m.group(2)) + 1:03d}"
-    return f"{year}-001"
+    highest = 0
+    for number in [seller.get("last_invoice_number", ""), *used_numbers]:
+        match = re.fullmatch(r"(\d{4})-(\d+)", number or "")
+        if match and int(match.group(1)) == year:
+            highest = max(highest, int(match.group(2)))
+    return f"{year}-{highest + 1:03d}"
 
 
 def safe_name(text: str) -> str:

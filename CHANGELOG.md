@@ -2,7 +2,11 @@
 
 ## Unveröffentlicht
 
-- Optionaler, separat entfernbarer eRechnung-Skill mit lokaler Schnittstelle für Kunden, Vorlagen, Entwürfe, PDF-Vorschauen und validierte Exporte. Der Prototyp liest vorhandene App-Daten nur und speichert Ergebnisse in einem getrennten Arbeitsordner.
+- Der optionale Skill kann geprüfte Rechnungen auf ausdrücklichen Auftrag ins App-Archiv übernehmen. App und Skill teilen Speicherweg und lokale Dateisperre; ein Nummernvorschlag berücksichtigt vorhandene Belege.
+- Identische Archivierungswiederholungen liefern das Original zurück. Andere Rechnungen mit derselben Nummer werden abgewiesen. Unvollständige Schreibvorgänge werden wiederaufgenommen, und die letzte Rechnungsnummer wird ohne Rücksprung im normalen Nummernkreis aktualisiert.
+- Die App archiviert nur noch erfolgreich validierte Rechnungen. Bestehende Archivdateien bleiben unverändert.
+
+- Optionaler, separat entfernbarer eRechnung-Skill mit lokaler Schnittstelle für Kunden, Vorlagen, Entwürfe, PDF-Vorschauen und validierte Exporte. Entwürfe und separate Exporte bleiben außerhalb des App-Datenordners.
 - App und Assistent verwenden denselben Rechnungskern. Die App bleibt ohne Skill und ohne LLM-Abhängigkeit nutzbar.
 
 ## 1.1.4

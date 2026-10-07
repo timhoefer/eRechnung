@@ -58,14 +58,30 @@ ZUGFeRD-/XRechnung-Dateien erzeugen. Er verwendet denselben Rechnungskern und
 dieselbe Vorlage wie die App. Die App selbst benötigt weder den Skill noch einen
 LLM-API-Schlüssel; es wird kein zusätzlicher Server gestartet.
 
-Der Prototyp unterstützt gewöhnliche Rechnungen (`380`) auf macOS/Linux. Er liest
-den gewählten Datenordner **nur**. Entwürfe und Exporte liegen in einem getrennten
-Arbeitsordner. Exporte werden nicht ins App-Archiv übernommen und reservieren
-keine Rechnungsnummer gegen gleichzeitig laufende App-Sitzungen. Innerhalb eines
-Exportordners liefert ein identischer erneuter Aufruf die bestehenden Dateien;
-abweichende Inhalte mit derselben Nummer werden abgelehnt. Bereits im Quellarchiv
-verwendete Nummern werden ebenfalls abgelehnt. Die XML-Prüfungen müssen vor dem
-Export erfolgreich sein.
+Der Prototyp unterstützt gewöhnliche Rechnungen (`380`) auf macOS/Linux. Kunden,
+Vorlagen und Nummernvorschläge werden gelesen; Entwürfe, Vorschauen und separate
+Exporte liegen außerhalb des Datenordners. Nur der ausdrückliche Befehl `archive`
+finalisiert eine geprüfte Rechnung im App-Archiv und aktualisiert die zuletzt
+verwendete Rechnungsnummer. Die Rechnung erscheint nach Aktualisieren des Archivs
+mit Vorschau, Vorlagenfunktion und CSV-Export. Beispielrechnungen bleiben Entwürfe.
+
+App und Skill verwenden dafür denselben Speicherweg und eine gemeinsame lokale
+Sperre. Identische Wiederholungen geben den bestehenden Beleg zurück; andere
+Inhalte mit derselben Nummer oder einem belegten Dateinamen werden abgelehnt.
+Die PDF wird erst sichtbar, wenn die zugehörigen Dateien vollständig bereitliegen.
+Bei einer Unterbrechung bleibt ein Wiederaufnahmeprotokoll erhalten; derselbe
+Auftrag oder der nächste schreibende App-Zugriff schließt die Speicherung ab.
+XML-Prüfungen müssen vor der Archivierung erfolgreich sein. Auch die App archiviert
+keine Rechnungen mit fehlgeschlagener oder nicht verfügbarer Validierung mehr.
+
+`next-number` berücksichtigt das Archiv, reserviert die vorgeschlagene Nummer aber
+noch nicht. Bei unklaren oder eigenen Nummernkreisen sowie einem Jahreswechsel
+fordert der Skill eine Klärung an, statt selbst eine Nummer festzulegen. Klare
+Vorgaben des Nutzers werden übernommen; Konflikte führen zu einer Rückfrage. Ein separates `export` registriert ebenfalls keine Nummer im Archiv.
+Vor gleichzeitiger Nutzung von App und Skill muss die App auf diesen gemeinsamen
+Speicherweg aktualisiert sein; ältere Builds kennen die Sperre nicht. Sie gilt nur
+auf demselben Rechner, nicht über Dropbox/iCloud zwischen verschiedenen Geräten.
+Die Dateien im Datenordner müssen lokal verfügbar sein.
 
 Zum Ausprobieren mit ausschließlich fiktiven Daten (vorher Python-Abhängigkeiten
 und Pango wie oben installieren):

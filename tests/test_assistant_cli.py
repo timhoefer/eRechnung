@@ -173,7 +173,7 @@ def test_export_failure_leaves_no_partial_bundle(capsys, source, tmp_path, draft
 def test_cli_does_not_import_app_or_create_source_directories(tmp_path):
     result = subprocess.run([sys.executable, "-c", "import assistant_cli, sys; assert 'app' not in sys.modules; assistant_cli.main(['schema'])"],
                             cwd=ROOT, text=True, capture_output=True, check=True)
-    assert json.loads(result.stdout)["source_access"] == "read-only"
+    assert json.loads(result.stdout)["source_access"] == "read-only except archive"
 
 
 def test_install_launch_remove_leaves_app_and_data_intact(source, tmp_path):

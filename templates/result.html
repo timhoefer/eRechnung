@@ -13,11 +13,8 @@
   <p class="sub">{{ inv.number }} &middot; {{ buyer.name }}</p>
 </header>
 
-{% if duplicate %}
-<div class="card status warn">
-  <strong>&#9888; {{ t.dup_number_title }}</strong>
-  <p style="margin:6px 0 0">{{ t.dup_number_text.replace("{number}", inv.number).replace("{filename}", filename) }}</p>
-</div>
+{% if reused %}
+<div class="card status ok"><p>{{ t.archive_reused }}</p></div>
 {% endif %}
 
 <div class="card status {{ 'ok' if valid else 'err' }}">
@@ -26,6 +23,7 @@
     <p>{{ t.valid_ok_text_xr if is_xrechnung else t.valid_ok_text }}</p>
   {% else %}
     <strong>&#10007; {{ t.valid_err }}</strong>
+    <p>{{ t.archive_not_saved }}</p>
     {% if messages %}
       <p style="margin:10px 0 2px"><strong>{{ t.val_xsd }}:</strong></p>
       <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
@@ -56,6 +54,7 @@
 <div class="actions">
   <a href="{{ url_for('index') }}" class="link">{{ t.new_invoice }}</a>
   <span class="spacer"></span>
+  {% if filename %}
   <a href="{{ url_for('view', filename=filename) }}" target="_blank"><button type="button" class="secondary">{{ t.pdf_view }}</button></a>
   {% if is_desktop %}
   {# Desktop-App: WKWebView lädt nichts herunter – die Belege liegen schon im
@@ -65,6 +64,7 @@
   <a href="{{ url_for('download_zip', filename=filename) }}"><button type="button">{{ t.pdf_xml_download }}</button></a>
   {% else %}
   <a href="{{ url_for('download', filename=filename) }}"><button type="button">{{ t.pdf_download }}</button></a>
+  {% endif %}
   {% endif %}
 </div>
 {% if is_desktop %}
