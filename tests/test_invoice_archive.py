@@ -267,3 +267,33 @@ def test_unclear_numbering_requires_a_question(setup, last, archived, unclear):
     assert (result["number"] is None) is unclear
     assert bool(result["reasons"]) is unclear
     assert not result["reserved"]
+
+
+@pytest.mark.parametrize("sidecars", [True, False])
+def test_legacy_duplicates_require_real_invoice_number_instead_of_maximum(setup, sidecars):
+    source, data = setup
+    year = date.today().year
+    number = f"{year}-099"
+    seller = cli.seller_from(source)
+    seller["last_invoice_number"] = number
+    (source / "seller.json").write_bytes(archive.canonical(seller))
+    for suffix in ("", " (2)"):
+        pdf = source / "output" / f"Rechnung_{number}{suffix}.pdf"
+        pdf.write_bytes(b"test invoice")
+        if sidecars:
+            pdf.with_suffix(".json").write_bytes(archive.canonical({"invoice": {"number": number}}))
+    before = {p: p.read_bytes() for p in source.rglob("*") if p.is_file()}
+    result = cli.number_proposal(source)
+    assert result["requires_clarification"]
+    assert result["number"] is None and result["suggestion"] is None
+    assert len(result["duplicate_numbers"][number]) == 2
+    assert number in archive.archived_numbers(source / "output")
+    assert {p: p.read_bytes() for p in source.rglob("*") if p.is_file()} == before
+
+
+def test_pdf_and_its_sidecar_count_as_one_invoice(setup):
+    source, data = setup
+    publish(source, data)
+    result = cli.number_proposal(source)
+    assert not result["requires_clarification"]
+    assert result["duplicate_numbers"] == {}

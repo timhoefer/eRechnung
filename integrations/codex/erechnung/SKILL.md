@@ -24,7 +24,12 @@ an app archive entry. Explain the distinction when delivering files.
   scheme to use before finalizing. Its `suggestion` is only a discussion aid.
   Also ask whenever the conversation leaves the number ambiguous, for example
   conflicting instructions, a number that does not fit the invoice year, or known
-  invoices outside this archive. Do not silently choose a scheme, restart a yearly
+  invoices outside this archive. Known test invoices or duplicate numbers mean the
+  archive maximum and saved counter are not a reliable baseline: ask which number
+  belongs to the last actually issued invoice and which number to use next. Never
+  assume a duplicate is a test or silently exclude, delete or renumber old entries.
+  Resolve an occupied desired number with the user even if it may belong to a test.
+  Do not silently choose a scheme, restart a yearly
   sequence, fill a gap, or renumber a reviewed invoice to resolve a conflict.
   Clear user-provided numbers or explicit numbering instructions need no repeated
   confirmation; still report conflicts instead of changing them.

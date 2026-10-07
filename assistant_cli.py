@@ -16,7 +16,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from invoice_archive import ArchiveError, archive_invoice, archived_numbers, seller_details
+from invoice_archive import ArchiveError, archive_invoice, archived_number_files, seller_details
 from invoice_core import (
     COUNTRY_NAME,
     UNITS,
@@ -365,11 +365,15 @@ def export(data: dict, root: Path) -> dict:
 
 def number_proposal(source: Path) -> dict:
     seller = seller_from(source)
-    numbers = archived_numbers(source / "output", strict=True)
+    inventory = archived_number_files(source / "output", strict=True)
+    numbers = set(inventory)
+    duplicates = {number: files for number, files in inventory.items() if len(files) > 1}
     last = seller.get("last_invoice_number") or ""
     year = date.today().year
     suggestion = suggest_invoice_number(seller, numbers)
     reasons = []
+    if duplicates:
+        reasons.append("Some invoice numbers occur more than once. Ask which invoices were actually issued and which number to use; do not infer it from the archive maximum or assume duplicates are tests.")
     match = re.fullmatch(r"(\d{4})-(\d+)", last)
     current_standard = any(re.fullmatch(rf"{year}-\d+", number) for number in numbers)
     if not last and not numbers:
@@ -382,7 +386,8 @@ def number_proposal(source: Path) -> dict:
         reasons.append("The archive includes other numbering schemes for this year; ask which one applies.")
     if numbers and not last and not current_standard:
         reasons.append("The archive does not establish a current standard sequence; ask for the invoice number.")
-    return {"ok": True, "number": None if reasons else suggestion, "suggestion": suggestion,
+    return {"ok": True, "number": None if reasons else suggestion, "suggestion": None if duplicates else suggestion,
+            "duplicate_numbers": duplicates,
             "last_invoice_number": last or None, "requires_clarification": bool(reasons),
             "reasons": reasons, "reserved": False}
 

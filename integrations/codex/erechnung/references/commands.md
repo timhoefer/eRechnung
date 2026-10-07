@@ -26,7 +26,10 @@ and JSON (plus XML for XRechnung) together, and updates only the issuer's last
 invoice number; it does not overwrite saved customers or bank details.
 
 `next-number` returns `number`, `suggestion`, `last_invoice_number`,
-`requires_clarification`, `reasons` and `reserved: false`. With an unclear scheme
+`requires_clarification`, `reasons`, `duplicate_numbers` (number to filenames) and
+`reserved: false`. Duplicate numbers make both `number` and `suggestion` null; ask
+for the last actually issued invoice instead of using the highest archived number.
+With an unclear scheme
 or year transition it leaves `number: null`. Ask the user instead of copying the
 suggestion into the invoice automatically. Explicit user choices take precedence.
 

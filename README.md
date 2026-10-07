@@ -77,7 +77,11 @@ keine Rechnungen mit fehlgeschlagener oder nicht verfügbarer Validierung mehr.
 `next-number` berücksichtigt das Archiv, reserviert die vorgeschlagene Nummer aber
 noch nicht. Bei unklaren oder eigenen Nummernkreisen sowie einem Jahreswechsel
 fordert der Skill eine Klärung an, statt selbst eine Nummer festzulegen. Klare
-Vorgaben des Nutzers werden übernommen; Konflikte führen zu einer Rückfrage. Ein separates `export` registriert ebenfalls keine Nummer im Archiv.
+Vorgaben des Nutzers werden übernommen; Konflikte führen zu einer Rückfrage.
+Doppelte Nummern im Altbestand werden als Unklarheit gemeldet. Bei bekannten
+Testrechnungen ist die höchste Archivnummer kein verlässlicher Ausgangspunkt;
+der Skill fragt nach der letzten tatsächlich ausgestellten Rechnung. Bestehende
+Belege werden nicht automatisch als Tests eingeordnet oder umnummeriert. Ein separates `export` registriert ebenfalls keine Nummer im Archiv.
 Vor gleichzeitiger Nutzung von App und Skill muss die App auf diesen gemeinsamen
 Speicherweg aktualisiert sein; ältere Builds kennen die Sperre nicht. Sie gilt nur
 auf demselben Rechner, nicht über Dropbox/iCloud zwischen verschiedenen Geräten.

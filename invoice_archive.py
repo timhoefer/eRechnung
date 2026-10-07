@@ -130,8 +130,8 @@ def _remember_number(seller_file: Path, number: str) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def archived_numbers(output: Path, *, strict: bool = False) -> set[str]:
-    numbers = set()
+def archived_number_files(output: Path, *, strict: bool = False) -> dict[str, list[str]]:
+    numbers: dict[str, list[str]] = {}
     for path in output.glob("*.json"):
         try:
             invoice = _read(path).get("invoice")
@@ -140,14 +140,20 @@ def archived_numbers(output: Path, *, strict: bool = False) -> set[str]:
             number = invoice.get("number")
             if not isinstance(number, str) or not number.strip():
                 raise ValueError("Missing invoice number")
-            numbers.add(number.strip())
+            numbers.setdefault(number.strip(), []).append(path.name)
         except (OSError, ValueError, ArchiveError) as exc:
             if strict:
                 raise ArchiveError("invalid_archive", f"Cannot check invoice numbers in {path.name}.") from exc
     for path in output.glob("Rechnung_*.pdf"):
         if not path.with_suffix(".json").exists():
-            numbers.add(path.stem[len("Rechnung_"):])
+            # Older app versions used " (2)", " (3)" for duplicate filenames.
+            number = re.sub(r" \(\d+\)$", "", path.stem[len("Rechnung_"):])
+            numbers.setdefault(number, []).append(path.name)
     return numbers
+
+
+def archived_numbers(output: Path, *, strict: bool = False) -> set[str]:
+    return set(archived_number_files(output, strict=strict))
 
 
 def _matches(path: Path, checksum: str) -> bool:
