@@ -172,3 +172,50 @@ test("adding a profile also asks before discarding a filled invoice", async () =
   await app.switchIssuer({id: "issuer-create-form", submit() { throw new Error("must not create a profile"); }});
   assert.equal(buyer.value, "Existing customer");
 });
+
+test("deleting an issuer drains pending saves and suppresses later autosaves", async () => {
+  const app = loadApp();
+  app.clearTimeout = () => {};
+  app.FormData = class {};
+  const button = {disabled: false};
+  app.document.getElementById = (id) => id === "issuer-delete-confirm" ? button : null;
+  let finishSave;
+  app.delayedSave = new Promise((resolve) => { finishSave = resolve; });
+  vm.runInContext("pendingSellerSave = delayedSave", app);
+  let requests = 0;
+  app.fetch = async () => {
+    requests++;
+    return {ok: true, json: async () => ({ok: true, next_url: "/?issuer=other"})};
+  };
+  let destination;
+  app.window.location = {assign(url) { destination = url; }};
+  const deletion = app.deleteIssuer({action: "/issuers/delete"});
+  assert.equal(requests, 0);
+  assert.equal(button.disabled, true);
+  assert.equal(await app.autosaveSeller(), false);
+  finishSave(true);
+  assert.equal(await deletion, true);
+  assert.equal(requests, 1);
+  assert.equal(destination, "/?issuer=other");
+  assert.equal(await app.autosaveSeller(), false);
+});
+
+test("refused deletion keeps the page and resumes autosaving", async () => {
+  const app = loadApp();
+  app.clearTimeout = () => {};
+  app.FormData = class {};
+  const button = {disabled: false};
+  let closed = false;
+  const dialog = {close() { closed = true; }};
+  app.document.getElementById = (id) => id === "issuer-delete-confirm" ? button : dialog;
+  app.fetch = async () => ({ok: false, json: async () => ({ok: false, message: "Archive is not empty"})});
+  app.window.location = {assign() { throw new Error("must not leave the current invoice"); }};
+  let message, resumed = false;
+  app.flashError = (text) => { message = text; };
+  app.scheduleSellerSave = () => { resumed = true; };
+  assert.equal(await app.deleteIssuer({action: "/issuers/delete"}), false);
+  assert.equal(message, "Archive is not empty");
+  assert.equal(button.disabled, false);
+  assert.equal(closed, true);
+  assert.equal(resumed, true);
+});

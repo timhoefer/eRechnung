@@ -400,7 +400,7 @@ def _lock_data_changes():
     if request.method == "POST" and request.endpoint in {
         "settings", "settings_autosave", "customers_autosave",
         "customers_items_save", "customers_save", "customers_delete",
-        "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create",
+        "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create", "issuer_delete",
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
@@ -433,6 +433,8 @@ def _write_json(path: Path, data) -> None:
 # global paths when selecting an issuer: concurrent tabs must remain independent.
 def issuer_directory(issuer: str) -> Path:
     if issuer == "default":
+        if _issuer_deleted(SELLER_FILE):
+            abort(410)
         return SELLER_FILE.parent
     if not re.fullmatch(r"[a-f0-9]{32}", issuer):
         abort(400)
@@ -444,7 +446,17 @@ def issuer_directory(issuer: str) -> Path:
         abort(404)
     if (directory / "output").is_symlink():
         abort(404)
+    if _issuer_deleted(directory / "seller.json"):
+        abort(410)
     return directory
+
+
+def _issuer_deleted(path: Path) -> bool:
+    try:
+        seller = json.loads(path.read_text(encoding="utf-8"))
+        return isinstance(seller, dict) and seller.get("_deleted") is True
+    except (OSError, ValueError):
+        return False
 
 
 @app.before_request
@@ -454,7 +466,13 @@ def _select_issuer():
     values = request.args.getlist("issuer") + request.form.getlist("issuer")
     if len(set(values)) > 1:
         abort(400)
-    issuer = values[0] if values else "default"
+    if values:
+        issuer = values[0]
+    else:
+        profiles = issuer_profiles()
+        if not profiles:
+            abort(410)
+        issuer = profiles[0]["id"]
     directory = issuer_directory(issuer)
     g.issuer_id = issuer
     g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
@@ -497,6 +515,8 @@ def issuer_profiles() -> list[dict]:
             continue
         try:
             seller = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            if isinstance(seller, dict) and seller.get("_deleted") is True:
+                continue
             profiles.append({"id": issuer, "label": issuer_label(seller)})
         except (OSError, ValueError, AttributeError):
             # Keep an unreadable profile visible; selecting it surfaces the error
@@ -510,11 +530,7 @@ def _issuer_context():
     return {"issuer_id": current_issuer(), "issuer_name": issuer_label(load_seller())}
 
 
-@app.route("/issuers/create", methods=["POST"])
-def issuer_create():
-    label = request.form.get("profile_label", "").strip()
-    if not label or len(label) > 100:
-        abort(400)
+def _create_issuer(seller: dict) -> str:
     issuer = secrets.token_hex(16)
     root = SELLER_FILE.parent / "issuers"
     if root.is_symlink():
@@ -522,8 +538,49 @@ def issuer_create():
     directory = root / issuer
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "output").mkdir()
-    _write_json(directory / "seller.json", {"country": "DE", "profile_label": label})
+    _write_json(directory / "seller.json", seller)
+    return issuer
+
+
+@app.route("/issuers/create", methods=["POST"])
+def issuer_create():
+    label = request.form.get("profile_label", "").strip()
+    if not label or len(label) > 100:
+        abort(400)
+    issuer = _create_issuer({"country": "DE", "profile_label": label})
     return redirect(url_for("index", issuer=issuer))
+
+
+@app.route("/issuers/delete", methods=["POST"])
+def issuer_delete():
+    if request.form.get("issuer") != current_issuer() or request.form.get("confirm") != "delete":
+        abort(400)
+    t = translate(get_ui_lang(request))
+    try:
+        if issuer_has_archive():
+            return {"ok": False, "message": t["issuer_delete_archive"]}, 409
+        remaining = [p for p in issuer_profiles() if p["id"] != current_issuer()]
+        # Use a fresh identity even when deleting the final profile. Old tabs
+        # must not be able to autosave into the new, empty issuer.
+        next_issuer = remaining[0]["id"] if remaining else _create_issuer({"country": "DE"})
+        # Keep only a tombstone, no personal details. It prevents late autosaves
+        # and generation requests from resurrecting a deleted issuer.
+        _write_json(seller_file(), {"_deleted": True})
+    except OSError:
+        logger.warning("Could not delete issuer", exc_info=True)
+        return {"ok": False, "message": t["action_failed"]}, 503
+    flash(t["issuer_deleted"], "ok")
+    return {"ok": True, "next_url": url_for("index", issuer=next_issuer, edit_issuer="1")}
+
+
+def issuer_has_archive() -> bool:
+    try:
+        return any(output_dir().iterdir())
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # An unreadable archive cannot be confirmed empty.
+        return True
 
 
 @app.template_filter("price")
@@ -1205,6 +1262,7 @@ def index():
         "form.html",
         seller=seller,
         issuers=issuer_profiles(),
+        issuer_can_delete=not issuer_has_archive(),
         issuer_scope=hashlib.sha256(str(SELLER_FILE.parent.resolve()).encode()).hexdigest()[:16],
         treatments=TAX_TREATMENTS,
         defaults=defaults,

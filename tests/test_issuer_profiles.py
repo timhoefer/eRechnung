@@ -106,6 +106,99 @@ def test_new_profile_is_blank_and_has_own_number_sequence(client):
     assert (directory / "output").is_dir()
 
 
+@pytest.mark.parametrize("delete_default", [False, True])
+def test_delete_empty_profile_preserves_other_issuer_and_rejects_stale_tabs(client, delete_default):
+    issuer, directory = add_issuer(client)
+    company = dict(SELLER, name="Company Example", last_invoice_number=f"{YEAR}-030")
+    (directory / "seller.json").write_text(json.dumps(company))
+    appmod.CUSTOMERS_FILE.write_text('[{"name":"Shared Client"}]')
+    target, survivor = ("default", issuer) if delete_default else (issuer, "default")
+    target_file = appmod.SELLER_FILE if delete_default else directory / "seller.json"
+    survivor_file = directory / "seller.json" if delete_default else appmod.SELLER_FILE
+    original = survivor_file.read_bytes()
+    customers = appmod.CUSTOMERS_FILE.read_bytes()
+    response = client.post("/issuers/delete", data={"issuer": target, "confirm": "delete"})
+    assert response.status_code == 200 and response.json["ok"]
+    assert json.loads(target_file.read_text()) == {"_deleted": True}
+    assert survivor_file.read_bytes() == original
+    assert appmod.CUSTOMERS_FILE.read_bytes() == customers
+    page = html.fromstring(client.get(response.json["next_url"]).data)
+    assert not page.xpath('//*[@id="issuer-select"]')
+    assert page.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == [survivor]
+    assert client.get("/").status_code == 200
+    assert client.get("/", query_string={"issuer": target}).status_code == 410
+    assert client.post("/settings/autosave", data={"issuer": target, "name": "Stale"}).status_code == 410
+    assert client.post("/generate", data=dict(FORM, issuer=target)).status_code == 410
+    assert survivor_file.read_bytes() == original
+    assert number_on_page(client, survivor) == f"{YEAR}-{'031' if delete_default else '011'}"
+
+
+@pytest.mark.parametrize("extra_profile", [False, True])
+def test_deleting_last_profile_opens_fresh_identity_with_blank_master_data(client, extra_profile):
+    target = "default"
+    if extra_profile:
+        target, _ = add_issuer(client)
+        assert client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).status_code == 200
+    response = client.post("/issuers/delete", data={"issuer": target, "confirm": "delete"})
+    assert response.status_code == 200
+    fresh = parse_qs(urlparse(response.json["next_url"]).query)["issuer"][0]
+    assert fresh not in {target, "default"}
+    saved = appmod.DATA_DIR / "issuers" / fresh / "seller.json"
+    assert json.loads(saved.read_text()) == {"country": "DE"}
+    page = html.fromstring(client.get("/").data)
+    assert not page.xpath('//*[@id="issuer-select"]')
+    assert "open" in page.get_element_by_id("master-data").attrib
+    assert page.get_element_by_id("invoice-number").get("value") == f"{YEAR}-001"
+    assert client.post("/settings/autosave", data={"issuer": target, "name": "Stale"}).status_code == 410
+    assert json.loads(saved.read_text()) == {"country": "DE"}
+
+
+@pytest.mark.parametrize("delete_default", [False, True])
+@pytest.mark.parametrize("filename", ["invoice.pdf", "invoice.xml", "invoice.json"])
+def test_profile_with_archive_cannot_be_deleted(client, delete_default, filename):
+    issuer, directory = add_issuer(client)
+    selected = "default" if delete_default else issuer
+    seller = appmod.SELLER_FILE if delete_default else directory / "seller.json"
+    archive = appmod.OUTPUT_DIR if delete_default else directory / "output"
+    (archive / filename).write_bytes(b"Original invoice data")
+    before = seller.read_bytes()
+    response = client.post("/issuers/delete", data={"issuer": selected, "confirm": "delete"})
+    assert response.status_code == 409 and not response.json["ok"]
+    assert seller.read_bytes() == before
+    assert (archive / filename).read_bytes() == b"Original invoice data"
+    page = html.fromstring(client.get("/", query_string={"issuer": selected}).data)
+    assert not page.xpath('//*[@id="issuer-delete-confirm"]')
+
+
+def test_delete_rechecks_archive_after_dialog_was_opened(client):
+    page = html.fromstring(client.get("/").data)
+    assert page.get_element_by_id("issuer-delete-confirm") is not None
+    (appmod.OUTPUT_DIR / "new.pdf").write_bytes(b"Created in another window")
+    response = client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"})
+    assert response.status_code == 409
+    assert appmod.load_seller() == SELLER
+
+
+def test_deletion_requires_explicit_confirmation_and_matching_issuer(client):
+    issuer, _ = add_issuer(client)
+    assert client.get("/issuers/delete").status_code == 405
+    for fields in ({}, {"issuer": "default"}, {"confirm": "delete"}):
+        assert client.post("/issuers/delete", data=fields).status_code == 400
+    assert client.post(f"/issuers/delete?issuer={issuer}", data={
+        "issuer": "default", "confirm": "delete",
+    }).status_code == 400
+    assert appmod.load_seller() == SELLER
+
+
+def test_deleted_profiles_stay_deleted_when_data_folder_is_moved(client, tmp_path):
+    issuer, _ = add_issuer(client)
+    assert client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).status_code == 200
+    assert appmod.set_data_dir(str(tmp_path / "moved"))[0]
+    assert client.get("/?issuer=default").status_code == 410
+    page = html.fromstring(client.get("/").data)
+    assert page.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == [issuer]
+
+
 def test_tabs_save_to_explicit_profiles_and_share_customers(client):
     issuer, directory = add_issuer(client)
     other = appmod.app.test_client()

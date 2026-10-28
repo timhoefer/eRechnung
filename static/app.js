@@ -1215,7 +1215,9 @@ function closePreviewDrawer() {
 
 let sellerSaveTimer;
 let pendingSellerSave = Promise.resolve(true);
+let issuerDeletionPending = false;
 function autosaveSeller() {
+  if (issuerDeletionPending) return Promise.resolve(false);
   const form = document.getElementById("settings-form");
   if (!form || !window.SELLER_AUTOSAVE_URL) return Promise.resolve(true);
   // Nach dem Speichern Vorschau auffrischen (Stammdaten fließen ins PDF ein, stehen
@@ -1237,6 +1239,7 @@ function autosaveSeller() {
   return pendingSellerSave;
 }
 function scheduleSellerSave() {
+  if (issuerDeletionPending) return;
   clearTimeout(sellerSaveTimer);
   sellerSaveTimer = setTimeout(autosaveSeller, 700);
 }
@@ -1703,6 +1706,55 @@ if (issuerCreateDialog) {
   document.getElementById("issuer-add-button").addEventListener("click", () => issuerCreateDialog.showModal());
   document.getElementById("issuer-create-cancel").addEventListener("click", () => issuerCreateDialog.close());
 }
+const issuerDeleteDialog = document.getElementById("issuer-delete-dialog");
+if (issuerDeleteDialog) {
+  document.getElementById("issuer-delete-button").addEventListener("click", () => {
+    const form = document.getElementById("settings-form");
+    const label = form.querySelector('[name="profile_label"]')?.value.trim()
+      || form.querySelector('[name="name"]')?.value.trim();
+    if (label) document.getElementById("issuer-delete-name").textContent = label;
+    issuerDeleteDialog.showModal();
+  });
+  document.getElementById("issuer-delete-cancel").addEventListener("click", () => issuerDeleteDialog.close());
+  document.getElementById("issuer-delete-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    deleteIssuer(event.currentTarget);
+  });
+}
+
+async function deleteIssuer(form) {
+  const button = document.getElementById("issuer-delete-confirm");
+  if (!button || issuerDeletionPending) return false;
+  issuerDeletionPending = true;
+  button.disabled = true;
+  clearTimeout(sellerSaveTimer);
+  let deleted = false;
+  try {
+    // Drain already queued writes before deletion and suppress any new autosave.
+    await pendingSellerSave;
+    const response = await fetch(form.action, {method: "POST", body: new FormData(form)});
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      document.getElementById("issuer-delete-dialog").close();
+      flashError(data.message);
+      return false;
+    }
+    window.location.assign(data.next_url);
+    deleted = true;
+    return true;
+  } catch (error) {
+    document.getElementById("issuer-delete-dialog").close();
+    flashError();
+    return false;
+  } finally {
+    if (!deleted) {
+      issuerDeletionPending = false;
+      button.disabled = false;
+      scheduleSellerSave();
+    }
+  }
+}
+
 function invoiceHasContent() {
   const form = document.getElementById("invoice-form");
   return !!form && [...form.querySelectorAll('[name="buyer_name"], [name="description"]')]
@@ -1718,7 +1770,7 @@ function confirmIssuerSwitch() {
 }
 let issuerSwitchPending = false;
 async function switchIssuer(form) {
-  if (issuerSwitchPending) return;
+  if (issuerSwitchPending || issuerDeletionPending) return;
   const select = document.getElementById("issuer-select");
   const target = select && select.value;
   if (form.id === "issuer-switch-form" && target === window.ISSUER_ID) return;

@@ -24,7 +24,7 @@ Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern 
 
 ## Mehrere Rechnungsaussteller
 
-Über **Weitere Stammdaten anlegen** unten neben **Stammdaten speichern** kannst du weitere Profile
+Über **Weitere Stammdaten anlegen** unten links in den Stammdaten kannst du weitere Profile
 anlegen, etwa für deine freiberufliche Tätigkeit und eine Gesellschaft. Jedes Profil
 hat eigene Stammdaten, Steuerangaben, Logo, Bankverbindungen, Rechnungsnummern und
 ein eigenes Archiv. Der Profilname dient nur zur Unterscheidung in der App; auf der
@@ -54,8 +54,14 @@ späteren Änderungen an den Stammdaten unverändert.
 Ein Profilwechsel öffnet ein neues Rechnungsformular. Bei bereits eingetragenem
 Kunden oder Positionen fragt die App vor dem Verwerfen nach. Jedes Fenster behält
 seinen eigenen Aussteller; beim Start über die normale App-Adresse wird das erste
-Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen; eine
-Löschfunktion für komplette Profile ist noch nicht vorgesehen.
+noch vorhandene Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen.
+
+**Löschen** steht unten rechts neben **Stammdaten speichern**. Nach einer Bestätigung
+werden die Stammdaten samt Nummernfolge gelöscht, sofern das zugehörige Archiv leer
+ist. Andere Profile und Kunden bleiben erhalten. Beim Löschen des letzten Profils
+öffnet sich ein neues, leeres Profil. Im Datenordner bleibt lediglich eine
+Löschmarkierung ohne Stammdaten zurück, damit alte Fenster das gelöschte Profil
+nicht durch automatisches Speichern wiederherstellen können.
 
 ## Steuerliche Behandlungen
 

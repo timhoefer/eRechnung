@@ -59,6 +59,20 @@
   </form>
 </dialog>
 
+<dialog id="issuer-delete-dialog" class="modal" aria-labelledby="issuer-delete-title">
+  <h3 id="issuer-delete-title">{{ t.issuer_delete_title }}</h3>
+  <p><strong id="issuer-delete-name">{{ issuer_name }}</strong></p>
+  <p>{{ t.issuer_delete_text if issuer_can_delete else t.issuer_delete_archive }}</p>
+  <form method="post" action="{{ url_for('issuer_delete') }}" id="issuer-delete-form">
+    <input type="hidden" name="issuer" value="{{ issuer_id }}">
+    <input type="hidden" name="confirm" value="delete">
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="issuer-delete-cancel" autofocus>{{ t.cancel }}</button>
+      {% if issuer_can_delete %}<button type="submit" class="danger" id="issuer-delete-confirm">{{ t.delete }}</button>{% endif %}
+    </div>
+  </form>
+</dialog>
+
 <div class="layout">
 <div class="form-pane">
 <div id="form-content">
@@ -194,8 +208,11 @@
     </div>
 
     <div class="wide master-actions">
-      <button type="submit" class="secondary">{{ t.save_master }}</button>
       <button type="button" class="link" id="issuer-add-button"><span aria-hidden="true">+ </span>{{ t.issuer_add }}</button>
+      <div class="master-buttons">
+        <button type="button" class="secondary danger" id="issuer-delete-button">{{ t.delete }}</button>
+        <button type="submit" class="secondary">{{ t.save_master }}</button>
+      </div>
     </div>
   </form>
 
