@@ -138,6 +138,10 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
 }
 details.card summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: var(--text-base); list-style: none; }
 .summary-text { flex: 1; min-width: 0; }
+.master-status {
+  flex: 0 0 20px; width: 20px; height: 20px;
+  display: inline-grid; place-items: center;
+}
 .ok-check {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
