@@ -59,6 +59,7 @@
 
 <div class="card">
   <h2>{{ t.archive }} ({{ archive|length }})</h2>
+  <p class="hint">{{ t.issuer }}: <strong>{{ issuer_name }}</strong></p>
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
   <table class="archive">
@@ -79,7 +80,7 @@
         <td class="arch-date">{{ a.modified }}</td>
         <td class="r arch-actions">
           {% if is_desktop %}
-          <button type="button" class="secondary small reveal-btn" data-file="{{ a.filename }}">{{ t.reveal_finder }}</button>
+          <button type="button" class="secondary small reveal-btn" data-url="{{ url_for('reveal', filename=a.filename) }}">{{ t.reveal_finder }}</button>
           {% else %}
           <a href="{{ url_for('download', filename=a.filename) }}" class="abtn">{{ t.act_download }}</a>
           {% endif %}

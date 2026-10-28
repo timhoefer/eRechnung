@@ -46,6 +46,15 @@
   color-scheme: light;
 }
 
+.issuer-row { display: flex; gap: 12px; align-items: end; }
+.issuer-row label { flex: 1; min-width: 0; }
+.issuer-row button { flex-shrink: 0; }
+.issuer-add { margin-top: 12px; }
+.issuer-add summary { color: var(--muted); cursor: pointer; font-size: var(--text-sm); }
+.issuer-add[open] summary { margin-bottom: 12px; }
+dialog.modal { color: var(--ink); border: 1px solid var(--line); }
+dialog.modal::backdrop { background: var(--scrim); }
+
 /* Dark-Mode: nur die Variablen werden überschrieben; das Layout bleibt gleich.
    Aktiv über data-theme="dark" am <html> (gesetzt per Toggle/System – siehe
    _theme_script.html). Die Rechnungs-Vorschau (eigenes Dokument im iframe)

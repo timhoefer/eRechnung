@@ -22,6 +22,36 @@ Zwei Wege:
 
 Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern — sie werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 
+## Mehrere Rechnungsaussteller
+
+Über **Rechnungsaussteller → Aussteller hinzufügen** kannst du weitere Profile
+anlegen, etwa für deine freiberufliche Tätigkeit und eine Gesellschaft. Jedes Profil
+hat eigene Stammdaten, Steuerangaben, Logo, Bankverbindungen, Rechnungsnummern und
+ein eigenes Archiv. Der Profilname dient nur zur Unterscheidung in der App; auf der
+Rechnung steht der in den Stammdaten hinterlegte Name. Die Kundenliste und deren
+gespeicherte Positionen werden gemeinsam genutzt.
+
+Die vorhandenen Stammdaten und Rechnungen bilden automatisch das erste Profil;
+bestehende Dateien werden dafür weder verschoben noch umgeschrieben. Weitere
+Profile liegen unter `issuers/<Profil-ID>/seller.json` und
+`issuers/<Profil-ID>/output/` im gemeinsamen Datenordner. Ein Datenordnerwechsel
+nimmt alle Profile mit; abweichende Kopien desselben Profils im Ziel stoppen den
+Umzug. Sichere immer den vollständigen Datenordner.
+
+Die automatische Nummernfolge `JJJJ-NNN` läuft pro Aussteller unabhängig. Bei einem
+neuen Profil beginnt der Vorschlag mit `JJJJ-001`; falls bereits Rechnungen
+existieren, trage beim ersten Erstellen die passende nächste Nummer ein. Die App
+setzt diese Folge anschließend fort. Abweichende Nummernformate bleiben manuell
+eingebbar. Archiv, CSV-Export, Vorlagen und Bezüge für Korrekturen beziehen sich
+jeweils auf das ausgewählte Profil. Gespeicherte Originalrechnungen bleiben bei
+späteren Änderungen an den Stammdaten unverändert.
+
+Ein Profilwechsel öffnet ein neues Rechnungsformular. Bei bereits eingetragenem
+Kunden oder Positionen fragt die App vor dem Verwerfen nach. Jedes Fenster behält
+seinen eigenen Aussteller; beim Start über die normale App-Adresse wird das erste
+Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen; eine
+Löschfunktion für komplette Profile ist noch nicht vorgesehen.
+
 ## Steuerliche Behandlungen
 
 | Auswahl | EN-16931-Code | Verwendung |

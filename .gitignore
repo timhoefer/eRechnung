@@ -12,6 +12,7 @@ venv/
 # Echte persönliche Daten – NICHT committen (siehe *.example.json)
 seller.json
 customers.json
+issuers/
 
 # Erzeugte Rechnungen (PDF + Sidecar-JSON)
 output/

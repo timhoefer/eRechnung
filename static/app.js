@@ -468,6 +468,7 @@ function snapshotForm(form) {
 }
 function restoreForm(form, data) {
   if (!form || !data) return;
+  if (data.issuer && data.issuer[0] !== window.ISSUER_ID) return;
   const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end", "item_discount", "item_discount_type", "item_discount_reason"];
   const itemCount = (data.description || []).length;
   let rows = form.querySelectorAll("#items .item").length;
@@ -482,7 +483,7 @@ function restoreForm(form, data) {
     });
   });
   Object.keys(data).forEach((name) => {
-    if (repeating.includes(name)) return;
+    if (name === "issuer" || repeating.includes(name)) return;
     const el = form.querySelector(`[name="${name}"]`);
     if (el) el.value = data[name][0];
   });
@@ -1213,14 +1214,27 @@ function closePreviewDrawer() {
 }
 
 let sellerSaveTimer;
+let pendingSellerSave = Promise.resolve(true);
 function autosaveSeller() {
   const form = document.getElementById("settings-form");
-  if (!form || !window.SELLER_AUTOSAVE_URL) return;
+  if (!form || !window.SELLER_AUTOSAVE_URL) return Promise.resolve(true);
   // Nach dem Speichern Vorschau auffrischen (Stammdaten fließen ins PDF ein, stehen
   // aber nicht im invoice-form -> force, sonst greift die Dedup-Sperre).
-  fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body: new FormData(form) })
-    .then(() => updatePreview(true))
-    .catch(() => {});
+  const body = new FormData(form);
+  pendingSellerSave = pendingSellerSave.then(() =>
+    fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body })
+      .then((r) => {
+        if (!r.ok) throw new Error("save failed");
+        updatePreview(true);
+        const select = document.getElementById("issuer-select");
+        const label = body.get("profile_label") || body.get("name");
+        const option = select && [...select.options].find((o) => o.value === window.ISSUER_ID);
+        if (option && label) option.textContent = label;
+        return true;
+      })
+      .catch(() => { flashError(); return false; })
+  );
+  return pendingSellerSave;
 }
 function scheduleSellerSave() {
   clearTimeout(sellerSaveTimer);
@@ -1457,7 +1471,7 @@ document.addEventListener("click", (e) => {
   const langLink = e.target.closest(".langswitch a");
   if (langLink) {
     const form = document.getElementById("invoice-form");
-    if (form) sessionStorage.setItem("erechnung:lang", JSON.stringify(snapshotForm(form)));
+    if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
     return; // Navigation zum Sprachwechsel zulassen
   }
   if (e.target.closest("#format-trigger")) {
@@ -1677,15 +1691,61 @@ const settingsFormEl = document.getElementById("settings-form");
 if (settingsFormEl) {
   settingsFormEl.addEventListener("submit", (e) => {
     e.preventDefault();
-    fetch(settingsFormEl.action, {
-      method: "POST",
-      body: new FormData(settingsFormEl),
-      headers: { "X-Requested-With": "fetch" },
-    })
-      .then((r) => r.json())
-      .then((d) => { flashOk(d.message); updatePreview(true); })
-      .catch(() => flashError());
+    clearTimeout(sellerSaveTimer);
+    autosaveSeller().then((ok) => { if (ok) flashOk(window.MSG_MASTER_SAVED); });
   });
+}
+
+// A profile change starts a fresh invoice. Wait for pending master-data saves,
+// and never quietly discard a filled invoice form.
+function invoiceHasContent() {
+  const form = document.getElementById("invoice-form");
+  return !!form && [...form.querySelectorAll('[name="buyer_name"], [name="description"]')]
+    .some((el) => el.value.trim());
+}
+function confirmIssuerSwitch() {
+  const dialog = document.getElementById("issuer-switch-dialog");
+  return new Promise((resolve) => {
+    dialog.returnValue = "";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "switch"), {once: true});
+    dialog.showModal();
+  });
+}
+let issuerSwitchPending = false;
+async function switchIssuer(form) {
+  if (issuerSwitchPending) return;
+  const select = document.getElementById("issuer-select");
+  const target = select.value;
+  if (form.id === "issuer-switch-form" && target === window.ISSUER_ID) return;
+  issuerSwitchPending = true;
+  // Keep the displayed issuer consistent with the current form until navigation.
+  select.value = window.ISSUER_ID;
+  try {
+    if (invoiceHasContent() && !(await confirmIssuerSwitch())) return;
+    clearTimeout(sellerSaveTimer);
+    if (await autosaveSeller()) {
+      if (form.id === "issuer-switch-form") select.value = target;
+      form.submit();
+    }
+  } finally {
+    issuerSwitchPending = false;
+  }
+}
+for (const id of ["issuer-switch-form", "issuer-create-form"]) {
+  const form = document.getElementById(id);
+  if (!form) continue;
+  if (id === "issuer-switch-form") {
+    document.getElementById("issuer-select").addEventListener("change", () => form.requestSubmit());
+    form.querySelector('button[type="submit"]').hidden = true;
+  }
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    switchIssuer(form);
+  });
+}
+
+function languageDraftKey() {
+  return "erechnung:lang:" + (window.ISSUER_SCOPE || "legacy") + ":" + (window.ISSUER_ID || "default");
 }
 
 // Konto-Auswähler VOR den Restore-Pfaden aufbauen, damit restoreForm (Sprachwechsel)
@@ -1694,9 +1754,9 @@ syncBankSelector();
 
 let restoredFromLang = false;
 (function restoreAfterLangSwitch() {
-  const raw = sessionStorage.getItem("erechnung:lang");
+  const raw = sessionStorage.getItem(languageDraftKey());
   if (!raw) return;
-  sessionStorage.removeItem("erechnung:lang");
+  sessionStorage.removeItem(languageDraftKey());
   try {
     const parsed = JSON.parse(raw);
     restoreForm(document.getElementById("invoice-form"), parsed);
@@ -2116,7 +2176,7 @@ function closeSettings() {
     const reveal = e.target.closest(".reveal-btn");
     if (reveal) {
       e.preventDefault();
-      fetch("/reveal/" + encodeURIComponent(reveal.dataset.file), { method: "POST" })
+      fetch(reveal.dataset.url, { method: "POST" })
         .catch(() => flashError());
       return;
     }
@@ -2162,7 +2222,7 @@ function closeSettings() {
       if (from) qs.set("from", from);
       if (to) qs.set("to", to);
       const q = qs.toString();
-      const url = window.EXPORT_CSV_URL + (q ? "?" + q : "");
+      const url = window.EXPORT_CSV_URL + (q ? (window.EXPORT_CSV_URL.includes("?") ? "&" : "?") + q : "");
       // Desktop: Server schreibt die CSV + zeigt sie im Finder (kein Download).
       if (window.IS_DESKTOP) fetch(url).catch(() => flashError());
       else window.location = url;

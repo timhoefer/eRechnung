@@ -2,6 +2,8 @@
 
 ## Unveröffentlicht
 
+- Mehrere auswählbare Rechnungsaussteller mit eigenen Stammdaten, Bankverbindungen, Nummernfolgen und Archiven. Kunden bleiben gemeinsam nutzbar. Bestehende Daten bilden unverändert das erste Profil; weitere Profile werden im gleichen Datenordner getrennt gespeichert.
+- Vorschau, PDF/XML, Archivaktionen, Vorlagen und CSV-Export verwenden das ausgewählte Profil auch bei mehreren geöffneten Fenstern. Ein ausgefülltes Rechnungsformular wird beim Profilwechsel erst nach Bestätigung verworfen.
 - Ein Dialog stellt ausgewählte größere Feature-Releases einmalig automatisch vor. Kleinere Neuerungen sind nur über „Neuigkeiten“ in den Einstellungen erreichbar. Bereits gelesene Hinweise werden lokal gemerkt. Der Dialog unterstützt Deutsch, Englisch sowie Hell- und Dunkelmodus.
 
 ## 1.1.4

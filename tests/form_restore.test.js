@@ -76,3 +76,75 @@ test("language restore preserves every line's discount reason, including blank r
   assert.deepEqual(fields.item_discount_reason.map((el) => el.value),
     ["Treuerabatt", "", "Aktionsrabatt"]);
 });
+
+test("language drafts are scoped to both the data directory and issuer", () => {
+  const app = loadApp();
+  app.window.ISSUER_SCOPE = "folder-a";
+  app.window.ISSUER_ID = "default";
+  const first = app.languageDraftKey();
+  app.window.ISSUER_ID = "company";
+  assert.notEqual(app.languageDraftKey(), first);
+  app.window.ISSUER_ID = "default";
+  app.window.ISSUER_SCOPE = "folder-b";
+  assert.notEqual(app.languageDraftKey(), first);
+});
+
+test("restoring an invoice from another issuer does not change any field", () => {
+  const app = loadApp();
+  app.window.ISSUER_ID = "company";
+  const form = {querySelectorAll() { throw new Error("must not restore another issuer's fields"); }};
+  app.restoreForm(form, {issuer: ["default"], buyer_name: ["Private client"]});
+});
+
+test("invoice restore never replaces the form's issuer identity", () => {
+  const app = loadApp();
+  app.window.ISSUER_ID = "company";
+  const buyer = {value: ""};
+  const form = {
+    querySelectorAll: () => [],
+    querySelector(selector) {
+      assert.notEqual(selector, '[name="issuer"]');
+      return selector === '[name="buyer_name"]' ? buyer : null;
+    },
+  };
+  app.restoreForm(form, {issuer: ["company"], buyer_name: ["Company client"]});
+  assert.equal(buyer.value, "Company client");
+});
+
+test("cancelling a profile switch keeps its issuer and invoice fields", async () => {
+  const app = loadApp();
+  app.window.ISSUER_ID = "default";
+  const select = {value: "company"};
+  const buyer = {value: "Existing customer"};
+  const invoice = {querySelectorAll: () => [buyer]};
+  app.document.getElementById = (id) => id === "issuer-select" ? select : id === "invoice-form" ? invoice : null;
+  app.confirmIssuerSwitch = async () => false;
+  app.autosaveSeller = () => { throw new Error("cancelled switch must not save or navigate"); };
+  await app.switchIssuer({id: "issuer-switch-form", submit() { throw new Error("must stay on current form"); }});
+  assert.equal(select.value, "default");
+  assert.equal(buyer.value, "Existing customer");
+});
+
+test("profile navigation waits for saved master data and stops on save failure", async () => {
+  const app = loadApp();
+  app.clearTimeout = () => {};
+  app.window.ISSUER_ID = "default";
+  const select = {value: "company"};
+  app.document.getElementById = (id) => id === "issuer-select" ? select : null;
+  let finishSave;
+  app.autosaveSeller = () => new Promise((resolve) => { finishSave = resolve; });
+  let navigated = false;
+  const form = {id: "issuer-switch-form", submit() { navigated = true; }};
+  const pending = app.switchIssuer(form);
+  assert.equal(navigated, false);
+  assert.equal(select.value, "default");
+  finishSave(false);
+  await pending;
+  assert.equal(navigated, false);
+  select.value = "company";
+  const retry = app.switchIssuer(form);
+  finishSave(true);
+  await retry;
+  assert.equal(navigated, true);
+  assert.equal(select.value, "company");
+});

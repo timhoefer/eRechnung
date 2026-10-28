@@ -1,6 +1,7 @@
 """Lokale Web-App zur Erstellung von ZUGFeRD-E-Rechnungen."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -21,6 +22,7 @@ from flask import (
     abort,
     flash,
     g,
+    has_request_context,
     redirect,
     render_template,
     request,
@@ -162,6 +164,17 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
 
     rm(src_dir / "seller.json", ref_dir / "seller.json")
     rm(src_dir / "customers.json", ref_dir / "customers.json")
+    profile_files = _issuer_data_files(src_dir)
+    for issuer in {p.parts[1] for p in profile_files}:
+        files = [p for p in profile_files if p.parts[1] == issuer]
+        try:
+            identical = all((ref_dir / p).is_file() and filecmp.cmp(src_dir / p, ref_dir / p, shallow=False)
+                            for p in files)
+        except OSError:
+            identical = False
+        if identical:
+            for relative in files:
+                rm(src_dir / relative, ref_dir / relative)
     src_out = src_dir / "output"
     if src_out.is_dir():
         for f in list(src_out.iterdir()):
@@ -172,6 +185,23 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
                 src_out.rmdir()
         except OSError:
             pass
+
+
+def _issuer_data_files(directory: Path) -> list[Path]:
+    """Only app-managed issuer files, never symlinked external directories."""
+    root = directory / "issuers"
+    if not root.is_dir() or root.is_symlink():
+        return []
+    files: list[Path] = []
+    for profile in root.iterdir():
+        if not re.fullmatch(r"[a-f0-9]{32}", profile.name) or not profile.is_dir() or profile.is_symlink():
+            continue
+        paths = [profile / "seller.json"]
+        out = profile / "output"
+        if out.is_dir() and not out.is_symlink():
+            paths.extend(out.iterdir())
+        files.extend(p.relative_to(directory) for p in paths if p.is_file() and not p.is_symlink())
+    return files
 
 
 DATA_DIR = _resolve_data_dir()
@@ -202,7 +232,28 @@ def set_data_dir(raw: str):
         return False, "data_dir_err_write"
 
     old = DATA_DIR
+    # A profile/output folder cannot become the shared data root (or vice versa).
+    # Otherwise moving data would reclassify one issuer's invoices as another's.
+    if target.resolve() != old.resolve() and any(
+        target.resolve().is_relative_to((old / name).resolve())
+        or old.resolve().is_relative_to((target / name).resolve())
+        for name in ("issuers", "output")
+    ):
+        return False, "data_dir_err_nested"
     if target.resolve() != old.resolve():
+        # Reject partial merges of the same profile before moving anything.
+        # A conflicting copy needs a deliberate choice, not an automatic overwrite.
+        import filecmp
+
+        try:
+            for relative in _issuer_data_files(old):
+                dst = target / relative
+                if any(p.is_symlink() for p in (target / "issuers", dst.parent, dst.parent.parent, dst)):
+                    return False, "data_dir_err_write"
+                if dst.exists() and (not dst.is_file() or not filecmp.cmp(old / relative, dst, shallow=False)):
+                    return False, "issuer_move_conflict"
+        except OSError:
+            return False, "data_dir_err_write"
         # Vorhandene Daten in den neuen Ordner übernehmen, aber nichts
         # überschreiben (Recovery-Fall: Zielordner enthält schon Daten).
         (target / "output").mkdir(exist_ok=True)
@@ -216,6 +267,18 @@ def set_data_dir(raw: str):
                 dst = target / "output" / f.name
                 if f.is_file() and not dst.exists():
                     shutil.copy2(f, dst)
+        for relative in _issuer_data_files(old):
+            src, dst = old / relative, target / relative
+            # An existing target must never redirect a copy outside its data folder.
+            if any(p.is_symlink() for p in (target / "issuers", dst.parent, dst.parent.parent, dst)):
+                return False, "data_dir_err_write"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if not dst.exists():
+                shutil.copy2(src, dst)
+            if relative.name == "seller.json":
+                if (dst.parent / "output").is_symlink():
+                    return False, "data_dir_err_write"
+                (dst.parent / "output").mkdir(exist_ok=True)
 
     cfg = _load_app_config()
     cfg["data_dir"] = "" if target.resolve() == BASE.resolve() else str(target)
@@ -232,6 +295,8 @@ def set_data_dir(raw: str):
     # Verschieben abschließen: identische Originale im alten Ordner entfernen.
     if target.resolve() != old.resolve():
         _drop_identical(old, target)
+    if has_request_context():
+        _select_issuer()
     return True, "data_dir_ok"
 
 def _file_info(p: Path) -> dict:
@@ -266,7 +331,8 @@ def data_conflicts() -> list:
                 out.append({"type": "orphan", "name": name, "a": _file_info(s)})
 
     markers = ("conflicted copy", "in konflikt stehende", "in-konflikt", "konfliktkopie")
-    for d in (DATA_DIR, DATA_DIR / "output"):
+    profile_dirs = {p.parent for p in _issuer_data_files(DATA_DIR)}
+    for d in (DATA_DIR, DATA_DIR / "output", *(DATA_DIR / p for p in profile_dirs)):
         if d.is_dir():
             for f in sorted(d.iterdir()):
                 if f.is_file() and any(m in f.name.lower() for m in markers):
@@ -334,7 +400,7 @@ def _lock_data_changes():
     if request.method == "POST" and request.endpoint in {
         "settings", "settings_autosave", "customers_autosave",
         "customers_items_save", "customers_save", "customers_delete",
-        "generate", "archive_delete", "data_dir_set", "whats_new_seen",
+        "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create",
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
@@ -360,6 +426,104 @@ def _write_json(path: Path, data) -> None:
     finally:
         if name and os.path.exists(name):
             os.unlink(name)
+
+
+# The original issuer stays at the original paths. Additional issuers have their
+# own seller.json and output directory; customers remain shared. Never switch
+# global paths when selecting an issuer: concurrent tabs must remain independent.
+def issuer_directory(issuer: str) -> Path:
+    if issuer == "default":
+        return SELLER_FILE.parent
+    if not re.fullmatch(r"[a-f0-9]{32}", issuer):
+        abort(400)
+    root = SELLER_FILE.parent / "issuers"
+    directory = root / issuer
+    if root.is_symlink() or directory.is_symlink() or not directory.is_dir():
+        abort(404)
+    if not (directory / "seller.json").is_file() or (directory / "seller.json").is_symlink():
+        abort(404)
+    if (directory / "output").is_symlink():
+        abort(404)
+    return directory
+
+
+@app.before_request
+def _select_issuer():
+    if request.endpoint == "static":
+        return
+    values = request.args.getlist("issuer") + request.form.getlist("issuer")
+    if len(set(values)) > 1:
+        abort(400)
+    issuer = values[0] if values else "default"
+    directory = issuer_directory(issuer)
+    g.issuer_id = issuer
+    g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
+    g.issuer_output_dir = OUTPUT_DIR if issuer == "default" else directory / "output"
+
+
+def current_issuer() -> str:
+    return g.get("issuer_id", "default") if has_request_context() else "default"
+
+
+def seller_file() -> Path:
+    return g.get("issuer_seller_file", SELLER_FILE) if has_request_context() else SELLER_FILE
+
+
+def output_dir() -> Path:
+    return g.get("issuer_output_dir", OUTPUT_DIR) if has_request_context() else OUTPUT_DIR
+
+
+@app.url_defaults
+def _issuer_urls(endpoint, values):
+    if endpoint != "static" and current_issuer() != "default":
+        values.setdefault("issuer", current_issuer())
+
+
+def issuer_label(seller: dict) -> str:
+    return seller.get("profile_label") or seller.get("name") or translate(get_ui_lang(request))["issuer_default"]
+
+
+def issuer_profiles() -> list[dict]:
+    ids = ["default"]
+    root = SELLER_FILE.parent / "issuers"
+    if root.is_dir() and not root.is_symlink():
+        ids += sorted(p.name for p in root.iterdir()
+                      if re.fullmatch(r"[a-f0-9]{32}", p.name) and p.is_dir() and not p.is_symlink()
+                      and (p / "seller.json").exists())
+    profiles = []
+    for issuer in ids:
+        path = SELLER_FILE if issuer == "default" else root / issuer / "seller.json"
+        if path.is_symlink():
+            continue
+        try:
+            seller = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            profiles.append({"id": issuer, "label": issuer_label(seller)})
+        except (OSError, ValueError, AttributeError):
+            # Keep an unreadable profile visible; selecting it surfaces the error
+            # instead of silently creating a replacement with a fresh counter.
+            profiles.append({"id": issuer, "label": translate(get_ui_lang(request))["issuer_unavailable"]})
+    return profiles
+
+
+@app.context_processor
+def _issuer_context():
+    return {"issuer_id": current_issuer(), "issuer_name": issuer_label(load_seller())}
+
+
+@app.route("/issuers/create", methods=["POST"])
+def issuer_create():
+    label = request.form.get("profile_label", "").strip()
+    if not label or len(label) > 100:
+        abort(400)
+    issuer = secrets.token_hex(16)
+    root = SELLER_FILE.parent / "issuers"
+    if root.is_symlink():
+        abort(400)
+    directory = root / issuer
+    directory.mkdir(parents=True, exist_ok=False)
+    (directory / "output").mkdir()
+    _write_json(directory / "seller.json", {"country": "DE", "profile_label": label})
+    return redirect(url_for("index", issuer=issuer))
 
 
 @app.template_filter("price")
@@ -475,17 +639,17 @@ def setlang(code):
 
 # --- Persistenz ------------------------------------------------------------
 def load_seller() -> dict:
-    if SELLER_FILE.exists():
-        return json.loads(SELLER_FILE.read_text(encoding="utf-8"))
+    if seller_file().exists():
+        return json.loads(seller_file().read_text(encoding="utf-8"))
     return {"country": "DE"}
 
 
 def save_seller(data: dict) -> None:
-    _write_json(SELLER_FILE, data)
+    _write_json(seller_file(), data)
 
 
 SELLER_FIELDS = [
-    "name", "subtitle", "address_line", "postcode", "city", "country", "vat_id",
+    "profile_label", "name", "subtitle", "address_line", "postcode", "city", "country", "vat_id",
     "tax_number", "email", "phone", "web", "iban", "bic", "bank_name",
     "account_name",
     # Hauptkonto-Kontotyp + Nicht-IBAN-Felder (International): Kontonummer,
@@ -781,7 +945,7 @@ def format_seller_country(seller: dict, buyer: dict, lang: str) -> str:
 def suggest_invoice_number(seller: dict) -> str:
     last = seller.get("last_invoice_number", "")
     year = date.today().year
-    m = re.match(r"^(\d{4})-(\d+)$", last or "")
+    m = re.fullmatch(r"(\d{4})-(\d+)", last or "")
     if m and int(m.group(1)) == year:
         return f"{year}-{int(m.group(2)) + 1:03d}"
     return f"{year}-001"
@@ -854,7 +1018,7 @@ def load_draft(src: str | None) -> dict | None:
     if not src:
         return None
     name = Path(src).stem + ".json"  # Verzeichnis-/Endungsanteile entfernen (kein Traversal)
-    path = OUTPUT_DIR / name
+    path = output_dir() / name
     if path.name != name or not path.exists():
         return None
     try:
@@ -981,8 +1145,8 @@ def used_invoice_numbers() -> list[str]:
     """Bereits vergebene Rechnungsnummern im Archiv (für den Live-Hinweis im Formular).
     Quelle ist primär die Sidecar-JSON (exakt), sonst der Dateiname."""
     nums = set()
-    for p in OUTPUT_DIR.glob("*.pdf"):
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+    for p in output_dir().glob("*.pdf"):
+        sidecar = output_dir() / f"{p.stem}.json"
         num = None
         if sidecar.exists():
             try:
@@ -1000,8 +1164,8 @@ def archived_invoices() -> list[dict]:
     """Im Tool erzeugte Rechnungen als {number, date} aus den Sidecars – für den
     Bezugs-Auswähler bei Storno/Korrektur. Neueste zuerst, je Nummer einmal."""
     rows = []
-    for p in OUTPUT_DIR.glob("*.pdf"):
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+    for p in output_dir().glob("*.pdf"):
+        sidecar = output_dir() / f"{p.stem}.json"
         if not sidecar.exists():
             continue
         try:
@@ -1040,6 +1204,8 @@ def index():
     return render_template(
         "form.html",
         seller=seller,
+        issuers=issuer_profiles(),
+        issuer_scope=hashlib.sha256(str(SELLER_FILE.parent.resolve()).encode()).hexdigest()[:16],
         treatments=TAX_TREATMENTS,
         defaults=defaults,
         customers=load_customers(),
@@ -1061,7 +1227,7 @@ def settings():
     msg = translate(get_ui_lang(request))["master_saved"]
     # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner.
     if request.headers.get("X-Requested-With") == "fetch":
-        return {"ok": True, "message": msg}
+        return {"ok": True, "message": msg, "issuer_label": issuer_label(seller)}
     flash(msg, "ok")
     return redirect(url_for("index"))
 
@@ -1252,7 +1418,7 @@ def generate():
         filename = f"{name}.pdf"
         try:
             # Exclusive creation also protects against a second app process.
-            with (OUTPUT_DIR / filename).open("xb") as f:
+            with (output_dir() / filename).open("xb") as f:
                 f.write(pdf)
             break
         except FileExistsError:
@@ -1264,16 +1430,17 @@ def generate():
     xml_filename = None
     if is_xr:
         xml_filename = f"{file_stem}.xml"
-        (OUTPUT_DIR / xml_filename).write_bytes(xml)
+        (output_dir() / xml_filename).write_bytes(xml)
 
     # Sidecar mit den Formulardaten – ermöglicht „als Vorlage öffnen" und die
     # Archiv-Vorschau. seller wird mitgespeichert, damit die Vorschau dem Stand
     # zum Erzeugungszeitpunkt entspricht (auch wenn die Stammdaten sich ändern).
     sidecar = {
+        "issuer_id": current_issuer(),
         "seller": seller, "buyer": data["buyer"],
         "invoice": data["invoice"], "items": data["items"],
     }
-    (OUTPUT_DIR / f"{file_stem}.json").write_text(
+    (output_dir() / f"{file_stem}.json").write_text(
         json.dumps(sidecar, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
@@ -1291,7 +1458,12 @@ def generate():
 
     # Letzte Rechnungsnummer merken
     current_seller = load_seller()
-    current_seller["last_invoice_number"] = inv_number
+    last = current_seller.get("last_invoice_number", "")
+    old_standard = re.fullmatch(r"(\d{4})-(\d+)", last or "")
+    new_standard = re.fullmatch(r"(\d{4})-(\d+)", inv_number)
+    if not (old_standard and new_standard
+            and tuple(map(int, old_standard.groups())) > tuple(map(int, new_standard.groups()))):
+        current_seller["last_invoice_number"] = inv_number
     save_seller(current_seller)
 
     return render_template(
@@ -1320,13 +1492,13 @@ def download_zip(filename):
     import io
     import zipfile
 
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     if path.name != filename or path.suffix.lower() != ".pdf" or not path.exists():
         abort(404)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(path, arcname=path.name)
-        xml = OUTPUT_DIR / f"{path.stem}.xml"
+        xml = output_dir() / f"{path.stem}.xml"
         if xml.exists():
             z.write(xml, arcname=xml.name)
     return Response(
@@ -1355,7 +1527,7 @@ def reveal_in_finder(path) -> bool:
 def reveal(filename):
     """Datei im Finder zeigen. In der Desktop-App ersetzt das den Download –
     die Belege liegen ohnehin schon im output/-Ordner."""
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     if path.name != filename or not path.exists():
         abort(404)
     if not reveal_in_finder(path):
@@ -1380,13 +1552,13 @@ def archive_preview(filename):
 def archive_delete():
     """Archivierte Rechnung (PDF + Sidecar-JSON) löschen – nur innerhalb OUTPUT_DIR."""
     filename = request.form.get("filename", "")
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     # Pfad-Traversal verhindern: nur einfache Dateinamen direkt im Ausgabeordner.
     if filename and path.name == filename and path.suffix == ".pdf" and path.exists():
         path.unlink()
         # Sidecar + XRechnung-XML + evtl. exportierte Einzel-CSV mitlöschen
         for sib in (f"{path.stem}.json", f"{path.stem}.xml", f"{path.stem}.csv"):
-            p = OUTPUT_DIR / sib
+            p = output_dir() / sib
             if p.exists():
                 p.unlink()
         flash(translate(get_ui_lang(request))["invoice_deleted"], "ok")
@@ -1394,7 +1566,7 @@ def archive_delete():
 
 
 def _serve(filename, inline):
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     if path.name != filename or not path.exists():
         abort(404)
     disp = "inline" if inline else "attachment"
@@ -1489,10 +1661,10 @@ def check_updates():
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
-    for p in sorted(OUTPUT_DIR.glob("*.pdf"), reverse=True):
+    for p in sorted(output_dir().glob("*.pdf"), reverse=True):
         # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
         number, buyer_name, amount, currency = None, None, None, "EUR"
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+        sidecar = output_dir() / f"{p.stem}.json"
         if sidecar.exists():
             try:
                 d = json.loads(sidecar.read_text(encoding="utf-8"))
@@ -1521,7 +1693,7 @@ def _settings_context() -> dict:
                 ),
                 "has_draft": sidecar.exists(),
                 "xml_filename": (
-                    f"{p.stem}.xml" if (OUTPUT_DIR / f"{p.stem}.xml").exists() else None
+                    f"{p.stem}.xml" if (output_dir() / f"{p.stem}.xml").exists() else None
                 ),
                 "number": number,
                 "buyer": buyer_name,
@@ -1597,8 +1769,8 @@ def export_csv():
         return s.replace(".", ",") if de else s
 
     rows = []
-    for p in OUTPUT_DIR.glob("*.pdf"):
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+    for p in output_dir().glob("*.pdf"):
+        sidecar = output_dir() / f"{p.stem}.json"
         if not sidecar.exists() or (only and p.name != only):
             continue
         try:
@@ -1664,7 +1836,7 @@ def export_csv():
     if app.config.get("DESKTOP") and sys.platform == "darwin":
         # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
         # schreiben und im Finder zeigen.
-        out = OUTPUT_DIR / name
+        out = output_dir() / name
         out.write_bytes(data)
         reveal_in_finder(out)
         return {"ok": True, "name": name}
@@ -1721,7 +1893,7 @@ def _validate_request():
         raw = upload.read()
         label = upload.filename
     elif filename:
-        path = OUTPUT_DIR / filename
+        path = output_dir() / filename
         if path.name != filename or not path.exists():
             return {"label": filename, "ok": False, "messages": ["Datei nicht gefunden."]}
         raw = path.read_bytes()
