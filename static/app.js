@@ -1741,10 +1741,12 @@ for (const id of ["issuer-switch-form", "issuer-create-form"]) {
   if (!form) continue;
   if (id === "issuer-switch-form") {
     document.getElementById("issuer-select").addEventListener("change", () => form.requestSubmit());
-    form.querySelector('button[type="submit"]').hidden = true;
+    document.getElementById("issuer-switch-submit").hidden = true;
   }
   form.addEventListener("submit", (e) => {
     e.preventDefault();
+    const editIssuer = form.querySelector('[name="edit_issuer"]');
+    if (editIssuer) editIssuer.value = document.getElementById("master-data").open ? "1" : "0";
     switchIssuer(form);
   });
 }

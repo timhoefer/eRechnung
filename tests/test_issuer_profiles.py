@@ -86,7 +86,14 @@ def test_multiple_profiles_show_switcher_and_current_issuer(client):
         ]
         assert select.xpath("./option[@selected]/@value") == [selected]
         assert page.get_element_by_id("settings-form").xpath('.//input[@name="profile_label"]')
-        assert select.xpath('ancestor::div[@class="issuer-toolbar"]')
+        assert select.xpath('ancestor::summary/parent::details[@id="master-data"]')
+        # The selector belongs to its own GET form, never to the settings POST.
+        assert select.get("form") == "issuer-switch-form"
+        assert not select.xpath("ancestor::form")
+        assert page.get_element_by_id("issuer-switch-form").get("method") == "get"
+    assert "open" not in html.fromstring(client.get("/").data).get_element_by_id("master-data").attrib
+    editing = html.fromstring(client.get("/?edit_issuer=1").data)
+    assert "open" in editing.get_element_by_id("master-data").attrib
 
 
 def test_new_profile_is_blank_and_has_own_number_sequence(client):

@@ -32,8 +32,9 @@ Rechnung steht der in den Stammdaten hinterlegte Name. Die Kundenliste und deren
 gespeicherte Positionen werden gemeinsam genutzt.
 
 Solange nur ein Profil vorhanden ist, bleibt die Oberfläche wie gewohnt. Ab dem
-zweiten Profil zeigt eine Auswahlleiste oben den aktiven Rechnungsaussteller.
-Sie bleibt beim Scrollen sichtbar; über die Auswahl kannst du direkt wechseln.
+zweiten Profil zeigt die Kopfzeile der Stammdaten den aktiven Rechnungsaussteller
+als Auswahl. Sie bleibt auch bei eingeklappten Stammdaten bedienbar. Beim Wechsel
+bleibt eine geöffnete Stammdatenansicht geöffnet.
 
 Die vorhandenen Stammdaten und Rechnungen bilden automatisch das erste Profil;
 bestehende Dateien werden dafür weder verschoben noch umgeschrieben. Weitere

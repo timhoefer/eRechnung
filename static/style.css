@@ -46,14 +46,9 @@
   color-scheme: light;
 }
 
-.issuer-toolbar {
-  position: sticky; top: 0; z-index: 20; height: 64px; padding: 12px 24px;
-  max-width: 1640px; margin: 0 auto; background: var(--bg); border-bottom: 1px solid var(--line);
-}
-#issuer-switch-form { display: flex; gap: 12px; align-items: center; max-width: 640px; }
-#issuer-switch-form label { flex: 1; min-width: 0; flex-direction: row; justify-content: flex-start; align-items: center; gap: 12px; white-space: nowrap; }
-#issuer-select { flex: 1; min-width: 0; max-width: 360px; height: 40px; padding-top: 0; padding-bottom: 0; }
-#issuer-switch-form button { height: 40px; padding-top: 0; padding-bottom: 0; }
+.issuer-choice { display: flex; align-items: center; gap: 8px; flex: 0 1 300px; min-width: 0; }
+#issuer-select { flex: 1; min-width: 0; height: 36px; padding-top: 0; padding-bottom: 0; }
+#issuer-switch-submit { height: 36px; padding-top: 0; padding-bottom: 0; }
 .master-actions { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
 #issuer-add-button { font-size: var(--text-sm); }
 #issuer-create-form .modal-actions { margin-top: 24px; }
@@ -700,7 +695,6 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
   flex: 0 0 420px; align-self: flex-start; position: sticky; top: 16px; margin-top: 16px;
   display: flex; flex-direction: column;
 }
-.issuer-toolbar ~ .layout .preview-col { top: 80px; }
 .preview-pane {
   flex: 0 1 auto; min-height: 0;
   display: flex; flex-direction: column;
@@ -748,7 +742,6 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
   .grid, .grid.grid-3 { grid-template-columns: 1fr; }
   .grid .span-2, .grid .span-3, .grid .new-row, #taxnr-hint { grid-column: 1 / -1; }
   .layout { padding: 0 14px; }
-  .issuer-toolbar { padding-left: 14px; padding-right: 14px; }
   /* .item-Umbruch übernimmt die Container-Query (@container .position) */
 }
 

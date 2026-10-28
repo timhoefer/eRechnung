@@ -33,18 +33,9 @@
 </header>
 
 {% if issuers|length > 1 %}
-<div class="issuer-toolbar">
-  <form method="get" action="{{ url_for('index', issuer=None) }}" id="issuer-switch-form">
-    <label for="issuer-select">{{ t.issuer }}
-      <select name="issuer" id="issuer-select">
-        {% for p in issuers %}
-        <option value="{{ p.id }}" {{ 'selected' if p.id == issuer_id else '' }}>{{ p.label }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <button type="submit" class="secondary">{{ t.issuer_switch }}</button>
-  </form>
-</div>
+<form method="get" action="{{ url_for('index', issuer=None) }}" id="issuer-switch-form">
+  <input type="hidden" name="edit_issuer" value="0">
+</form>
 {% endif %}
 
 <dialog id="issuer-create-dialog" class="modal" aria-labelledby="issuer-create-title">
@@ -94,9 +85,19 @@
 </div>
 {% endif %}
 
-<details class="card" id="master-data" {% if not seller.name %}open{% endif %}>
+<details class="card" id="master-data" {% if not seller.name or request.args.get('edit_issuer') == '1' %}open{% endif %}>
   <summary>
-    <span class="summary-text"><strong>{{ t.master }}</strong> &mdash; {{ t.master_hint }}</span>
+    <span class="summary-text"><strong>{{ t.master }}</strong>{% if issuers|length == 1 %} &mdash; {{ t.master_hint }}{% endif %}</span>
+    {% if issuers|length > 1 %}
+    <span class="issuer-choice">
+      <select name="issuer" id="issuer-select" form="issuer-switch-form" aria-label="{{ t.issuer }}">
+        {% for p in issuers %}
+        <option value="{{ p.id }}" {{ 'selected' if p.id == issuer_id else '' }}>{{ p.label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="secondary" id="issuer-switch-submit" form="issuer-switch-form">{{ t.issuer_switch }}</button>
+    </span>
+    {% endif %}
     <span class="ok-check" title="{{ t.master_saved }}" aria-label="{{ t.master_saved }}" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
     <span class="warn-badge" title="{{ t.master_incomplete }}" aria-label="{{ t.master_incomplete }}" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
     <span class="details-chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
