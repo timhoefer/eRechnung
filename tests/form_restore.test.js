@@ -148,3 +148,27 @@ test("profile navigation waits for saved master data and stops on save failure",
   assert.equal(navigated, true);
   assert.equal(select.value, "company");
 });
+
+test("adding the second issuer works while the profile selector is absent", async () => {
+  const app = loadApp();
+  app.clearTimeout = () => {};
+  app.window.ISSUER_ID = "default";
+  let finishSave;
+  app.autosaveSeller = () => new Promise((resolve) => { finishSave = resolve; });
+  let submitted = false;
+  const pending = app.switchIssuer({id: "issuer-create-form", submit() { submitted = true; }});
+  assert.equal(submitted, false);
+  finishSave(true);
+  await pending;
+  assert.equal(submitted, true);
+});
+
+test("adding a profile also asks before discarding a filled invoice", async () => {
+  const app = loadApp();
+  const buyer = {value: "Existing customer"};
+  app.document.getElementById = (id) => id === "invoice-form" ? {querySelectorAll: () => [buyer]} : null;
+  app.confirmIssuerSwitch = async () => false;
+  app.autosaveSeller = () => { throw new Error("cancelled creation must not save or navigate"); };
+  await app.switchIssuer({id: "issuer-create-form", submit() { throw new Error("must not create a profile"); }});
+  assert.equal(buyer.value, "Existing customer");
+});

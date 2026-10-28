@@ -68,10 +68,25 @@ def fast_generation(monkeypatch):
 def test_existing_data_is_first_profile_without_rewriting_files(client):
     original = appmod.SELLER_FILE.read_bytes()
     page = html.fromstring(client.get("/").data)
-    options = page.get_element_by_id("issuer-select").xpath("./option")
-    assert [(o.get("value"), o.text) for o in options] == [("default", SELLER["name"])]
+    assert not page.xpath('//*[@id="issuer-select"]')
+    form = page.get_element_by_id("settings-form")
+    assert not form.xpath('.//input[@name="profile_label"]')
+    assert form.xpath('./div[last()]/button[@id="issuer-add-button"]')
     assert appmod.SELLER_FILE.read_bytes() == original
     assert not (appmod.DATA_DIR / "issuers").exists()
+
+
+def test_multiple_profiles_show_switcher_and_current_issuer(client):
+    issuer, _ = add_issuer(client)
+    for selected in ("default", issuer):
+        page = html.fromstring(client.get("/", query_string={"issuer": selected}).data)
+        select = page.get_element_by_id("issuer-select")
+        assert [(o.get("value"), o.text) for o in select.xpath("./option")] == [
+            ("default", SELLER["name"]), (issuer, "Example Company"),
+        ]
+        assert select.xpath("./option[@selected]/@value") == [selected]
+        assert page.get_element_by_id("settings-form").xpath('.//input[@name="profile_label"]')
+        assert select.xpath('ancestor::div[@class="issuer-toolbar"]')
 
 
 def test_new_profile_is_blank_and_has_own_number_sequence(client):

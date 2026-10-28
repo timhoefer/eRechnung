@@ -24,12 +24,16 @@ Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern 
 
 ## Mehrere Rechnungsaussteller
 
-Über **Rechnungsaussteller → Aussteller hinzufügen** kannst du weitere Profile
+Über **Weitere Stammdaten anlegen** unten neben **Stammdaten speichern** kannst du weitere Profile
 anlegen, etwa für deine freiberufliche Tätigkeit und eine Gesellschaft. Jedes Profil
 hat eigene Stammdaten, Steuerangaben, Logo, Bankverbindungen, Rechnungsnummern und
 ein eigenes Archiv. Der Profilname dient nur zur Unterscheidung in der App; auf der
 Rechnung steht der in den Stammdaten hinterlegte Name. Die Kundenliste und deren
 gespeicherte Positionen werden gemeinsam genutzt.
+
+Solange nur ein Profil vorhanden ist, bleibt die Oberfläche wie gewohnt. Ab dem
+zweiten Profil zeigt eine Auswahlleiste oben den aktiven Rechnungsaussteller.
+Sie bleibt beim Scrollen sichtbar; über die Auswahl kannst du direkt wechseln.
 
 Die vorhandenen Stammdaten und Rechnungen bilden automatisch das erste Profil;
 bestehende Dateien werden dafür weder verschoben noch umgeschrieben. Weitere

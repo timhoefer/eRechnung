@@ -32,11 +32,9 @@
   </div>
 </header>
 
-<div class="layout">
-<div class="form-pane">
-
-<section class="card issuer-card" aria-label="{{ t.issuer }}">
-  <form method="get" action="{{ url_for('index', issuer=None) }}" id="issuer-switch-form" class="issuer-row">
+{% if issuers|length > 1 %}
+<div class="issuer-toolbar">
+  <form method="get" action="{{ url_for('index', issuer=None) }}" id="issuer-switch-form">
     <label for="issuer-select">{{ t.issuer }}
       <select name="issuer" id="issuer-select">
         {% for p in issuers %}
@@ -46,15 +44,20 @@
     </label>
     <button type="submit" class="secondary">{{ t.issuer_switch }}</button>
   </form>
-  <details class="issuer-add">
-    <summary>{{ t.issuer_add }}</summary>
-    <form method="post" action="{{ url_for('issuer_create') }}" id="issuer-create-form" class="issuer-row">
-      <label>{{ t.issuer_profile_label }}<input name="profile_label" maxlength="100" required placeholder="{{ t.issuer_label_ph }}"></label>
-      <button type="submit" class="secondary">{{ t.issuer_create }}</button>
-    </form>
+</div>
+{% endif %}
+
+<dialog id="issuer-create-dialog" class="modal" aria-labelledby="issuer-create-title">
+  <h3 id="issuer-create-title">{{ t.issuer_add }}</h3>
+  <form method="post" action="{{ url_for('issuer_create') }}" id="issuer-create-form">
     <p class="hint">{{ t.issuer_hint }}</p>
-  </details>
-</section>
+    <label>{{ t.issuer_profile_label }}<input name="profile_label" maxlength="100" required placeholder="{{ t.issuer_label_ph }}" autofocus></label>
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="issuer-create-cancel">{{ t.cancel }}</button>
+      <button type="submit">{{ t.issuer_create }}</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="issuer-switch-dialog" class="modal" aria-labelledby="issuer-switch-title">
   <h3 id="issuer-switch-title">{{ t.issuer_switch_title }}</h3>
@@ -65,6 +68,8 @@
   </form>
 </dialog>
 
+<div class="layout">
+<div class="form-pane">
 <div id="form-content">
 
 {% if not seller.name and not first_run %}<div class="onboarding">{{ t.onboarding if issuer_id == 'default' else t.issuer_setup }}</div>{% endif %}
@@ -89,7 +94,7 @@
 </div>
 {% endif %}
 
-<details class="card" {% if not seller.name %}open{% endif %}>
+<details class="card" id="master-data" {% if not seller.name %}open{% endif %}>
   <summary>
     <span class="summary-text"><strong>{{ t.master }}</strong> &mdash; {{ t.master_hint }}</span>
     <span class="ok-check" title="{{ t.master_saved }}" aria-label="{{ t.master_saved }}" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
@@ -98,7 +103,9 @@
   </summary>
   <form method="post" action="{{ url_for('settings') }}" id="settings-form" class="grid grid-3">
     <input type="hidden" name="issuer" value="{{ issuer_id }}">
+    {% if issuers|length > 1 %}
     <label class="wide">{{ t.issuer_profile_label }}<input name="profile_label" value="{{ seller.profile_label or '' }}" maxlength="100" placeholder="{{ seller.name or t.issuer_label_ph }}"></label>
+    {% endif %}
     <h3 class="form-section">{{ t.sec_address }}</h3>
     <label>{{ t.name }}<input name="name" value="{{ seller.name or '' }}" required></label>
     <label>{{ t.subtitle }}<input name="subtitle" value="{{ seller.subtitle or '' }}" placeholder="z. B. Design"></label>
@@ -183,7 +190,10 @@
       <button type="button" class="add-extras" id="add-account">{{ t.acct_add }}</button>
     </div>
 
-    <div class="wide"><button type="submit" class="secondary">{{ t.save_master }}</button></div>
+    <div class="wide master-actions">
+      <button type="submit" class="secondary">{{ t.save_master }}</button>
+      <button type="button" class="link" id="issuer-add-button"><span aria-hidden="true">+ </span>{{ t.issuer_add }}</button>
+    </div>
   </form>
 
   <template id="acct-template">{{ acct_row() }}</template>

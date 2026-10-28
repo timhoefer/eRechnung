@@ -1698,6 +1698,11 @@ if (settingsFormEl) {
 
 // A profile change starts a fresh invoice. Wait for pending master-data saves,
 // and never quietly discard a filled invoice form.
+const issuerCreateDialog = document.getElementById("issuer-create-dialog");
+if (issuerCreateDialog) {
+  document.getElementById("issuer-add-button").addEventListener("click", () => issuerCreateDialog.showModal());
+  document.getElementById("issuer-create-cancel").addEventListener("click", () => issuerCreateDialog.close());
+}
 function invoiceHasContent() {
   const form = document.getElementById("invoice-form");
   return !!form && [...form.querySelectorAll('[name="buyer_name"], [name="description"]')]
@@ -1715,11 +1720,11 @@ let issuerSwitchPending = false;
 async function switchIssuer(form) {
   if (issuerSwitchPending) return;
   const select = document.getElementById("issuer-select");
-  const target = select.value;
+  const target = select && select.value;
   if (form.id === "issuer-switch-form" && target === window.ISSUER_ID) return;
   issuerSwitchPending = true;
   // Keep the displayed issuer consistent with the current form until navigation.
-  select.value = window.ISSUER_ID;
+  if (select) select.value = window.ISSUER_ID;
   try {
     if (invoiceHasContent() && !(await confirmIssuerSwitch())) return;
     clearTimeout(sellerSaveTimer);
