@@ -567,6 +567,7 @@ function applyDraft() {
   lastSavedCustomerName = b.name || ""; // verhindert Kunden-Duplikat beim Autosave
 
   const inv = d.invoice || {};
+  const items = d.items || [];
   const set = (n, v) => {
     const el = form.querySelector(`[name="${n}"]`);
     if (el && v != null && v !== "") el.value = v;
@@ -577,8 +578,13 @@ function applyDraft() {
   set("tax_treatment", inv.tax_treatment);
   set("profile", inv.profile);
   if (window.ISSUER_RETIRED) {
-    set("service_start", inv.service_start);
-    set("service_end", inv.service_end);
+    // Mirror the XML supply-date fallback: a correction has a new issue date,
+    // so an originally implicit supply date must now be shown explicitly.
+    const fallbackDate = inv.service_date || (
+      !items.some((item) => item.item_end) && inv.doc_type !== "386" ? inv.issue_date : null
+    );
+    set("service_start", inv.service_start || (!inv.service_end ? fallbackDate : null));
+    set("service_end", inv.service_end || fallbackDate);
   }
   // Neue Sidecars speichern IBAN/Kontonummer als Option-value. Erst den Schlüssel
   // suchen, dann auf alte numerische Indizes zurückfallen: internationale
@@ -615,7 +621,6 @@ function applyDraft() {
     if (add && row) { row.hidden = false; add.hidden = true; }
   }
 
-  const items = d.items || [];
   if (items.length) {
     // Share the complete line-field mapping with language/conflict restoration.
     // Ordinary templates start with fresh service dates; adjustments retain them.
@@ -1850,21 +1855,30 @@ function confirmIssuerSwitch() {
 }
 let issuerSwitchPending = false;
 async function switchIssuer(form) {
-  if (issuerSwitchPending || issuerDeletionPending) return;
   const select = document.getElementById("issuer-select");
   const target = select && select.value;
+  // Also reset ignored changes so the selector always names the loaded form.
+  if (select) select.value = window.ISSUER_ID;
+  if (issuerSwitchPending || issuerDeletionPending) return;
   if (form.id === "issuer-switch-form" && target === window.ISSUER_ID) return;
   issuerSwitchPending = true;
-  // Keep the displayed issuer consistent with the current form until navigation.
-  if (select) select.value = window.ISSUER_ID;
+  if (select) select.disabled = true;
+  let submitted = false;
   try {
     if (invoiceHasContent() && !(await confirmIssuerSwitch())) return;
     clearTimeout(sellerSaveTimer);
     if (await autosaveSeller()) {
+      // Native form submission omits disabled controls, including this select.
+      if (select) select.disabled = false;
       if (form.id === "issuer-switch-form") select.value = target;
       form.submit();
+      submitted = true;
     }
   } finally {
+    if (select) {
+      select.disabled = false;
+      if (!submitted) select.value = window.ISSUER_ID;
+    }
     issuerSwitchPending = false;
   }
 }

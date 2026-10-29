@@ -153,6 +153,64 @@ test("profile navigation waits for saved master data and stops on save failure",
   assert.equal(select.value, "company");
 });
 
+for (const outcome of ["success", "failure", "error"]) {
+  test(`repeated profile switches keep the current issuer consistent on save ${outcome}`, async () => {
+    const app = loadApp();
+    app.clearTimeout = () => {};
+    app.window.ISSUER_ID = "default";
+    const select = {value: "company", disabled: false};
+    app.document.getElementById = (id) => id === "issuer-select" ? select : null;
+    let finishSave, failSave, saves = 0;
+    app.autosaveSeller = () => {
+      saves++;
+      return new Promise((resolve, reject) => { finishSave = resolve; failSave = reject; });
+    };
+    let submitted = null;
+    const form = {id: "issuer-switch-form", submit() {
+      // Disabled selects are omitted from the browser's native GET submission.
+      assert.equal(select.disabled, false);
+      submitted = select.value;
+    }};
+    const pending = app.switchIssuer(form);
+    select.value = "other-company";
+    await app.switchIssuer(form);
+    assert.equal(select.value, "default");
+    assert.equal(select.disabled, true);
+    assert.equal(saves, 1);
+    if (outcome === "error") {
+      failSave(new Error("unexpected save error"));
+      await assert.rejects(pending, /unexpected save error/);
+    } else {
+      finishSave(outcome === "success");
+      await pending;
+    }
+    assert.equal(select.disabled, false);
+    assert.equal(submitted, outcome === "success" ? "company" : null);
+    assert.equal(select.value, outcome === "success" ? "company" : "default");
+  });
+}
+
+test("cancelling a pending profile confirmation restores the enabled current selector", async () => {
+  const app = loadApp();
+  app.window.ISSUER_ID = "default";
+  const select = {value: "company", disabled: false};
+  const invoice = {querySelectorAll: () => [{value: "Existing customer"}]};
+  app.document.getElementById = (id) => id === "issuer-select" ? select : id === "invoice-form" ? invoice : null;
+  let confirm;
+  app.confirmIssuerSwitch = () => new Promise((resolve) => { confirm = resolve; });
+  app.autosaveSeller = () => { throw new Error("cancelled switch must not save"); };
+  const form = {id: "issuer-switch-form", submit() { throw new Error("must stay on current form"); }};
+  const pending = app.switchIssuer(form);
+  select.value = "other-company";
+  await app.switchIssuer(form);
+  assert.equal(select.value, "default");
+  assert.equal(select.disabled, true);
+  confirm(false);
+  await pending;
+  assert.equal(select.value, "default");
+  assert.equal(select.disabled, false);
+});
+
 test("adding the second issuer works while the profile selector is absent", async () => {
   const app = loadApp();
   app.clearTimeout = () => {};
@@ -468,46 +526,60 @@ test("retired issuer details are never autosaved and restored drafts cannot repl
 });
 
 for (const retired of [false, true]) {
-  test(`archived invoice restores discounts and ${retired ? "original" : "fresh"} service dates`, () => {
-    const app = loadApp();
-    app.window.ISSUER_RETIRED = retired;
-    app.syncUnitDisplay = () => {};
-    const items = [
-      {description: "Design", quantity: "2", unit: "DAY", unit_price: "100", item_discount: "10", item_discount_type: "pct", item_discount_reason: "Discount", item_start: "2026-09-01", item_end: "2026-09-02"},
-      {description: "Review", quantity: "0", unit: "HUR", unit_price: "25", item_discount: "0", item_discount_type: "abs", item_discount_reason: "", item_start: null, item_end: null},
-    ];
-    const fields = {};
-    Object.keys(items[0]).forEach((name) => { fields[name] = items.map(() => ({value: ""})); });
-    for (const [name, value] of Object.entries({number: "2026-020", issue_date: "2026-10-29", due_date: "2026-11-12", doc_type: retired ? "381" : "380", ref_number: "2026-019", service_start: "", service_end: "", discount: "0", prepaid: "0"})) {
-      fields[name] = [{value}];
-    }
-    const rows = items.map((_, i) => ({querySelector(selector) {
-      const name = {".qty": "quantity", ".price": "unit_price", ".unit": "unit"}[selector] || selector.match(/name="([^"]+)"/)[1];
-      return fields[name][i];
-    }}));
-    const form = {
-      querySelectorAll(selector) { return selector === "#items .item" ? rows : fields[selector.match(/name="([^"]+)"/)[1]] || []; },
-      querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
-    };
-    app.document.getElementById = (id) => id === "invoice-form" ? form : null;
-    app.document.querySelector = (selector) => selector === "#items" ? {querySelectorAll: () => rows} : null;
-    app.window.DRAFT = {items, invoice: {number: "2026-019", issue_date: "2026-09-03", due_date: "2026-09-17", doc_type: "380", service_start: "2026-09-01", service_end: "2026-09-02"}};
-    app.applyDraft();
-    for (const [name, value] of Object.entries(items[0])) {
-      assert.equal(fields[name][0].value, !retired && ["item_start", "item_end"].includes(name) ? "" : value, name);
-    }
-    assert.equal(fields.quantity[1].value, "0");
-    assert.equal(fields.item_discount_reason[1].value, "");
-    assert.equal(fields.service_start[0].value, retired ? "2026-09-01" : "");
-    assert.equal(fields.service_end[0].value, retired ? "2026-09-02" : "");
-    assert.equal(fields.number[0].value, "2026-020");
-    assert.equal(fields.issue_date[0].value, "2026-10-29");
-    assert.equal(fields.due_date[0].value, "2026-11-12");
-    assert.equal(fields.doc_type[0].value, retired ? "381" : "380");
-    assert.equal(fields.ref_number[0].value, "2026-019");
-    const totals = app.InvoiceCalc.totals({items: items.map((_, i) => ({qty: fields.quantity[i].value, price: fields.unit_price[i].value, discVal: fields.item_discount[i].value, discType: fields.item_discount_type[i].value})), rate: 19});
-    assert.equal(totals.grand, 214.2);
-  });
+  for (const dates of ["period", "line", "implicit", "legacy", "prepayment"]) {
+    test(`archived invoice restores discounts and ${retired ? "original" : "fresh"} service dates: ${dates}`, () => {
+      const app = loadApp();
+      app.window.ISSUER_RETIRED = retired;
+      app.syncUnitDisplay = () => {};
+      const items = [
+        {description: "Design", quantity: "2", unit: "DAY", unit_price: "100", item_discount: "10", item_discount_type: "pct", item_discount_reason: "Discount", item_start: "2026-09-01", item_end: "2026-09-02"},
+        {description: "Review", quantity: "0", unit: "HUR", unit_price: "25", item_discount: "0", item_discount_type: "abs", item_discount_reason: "", item_start: null, item_end: null},
+      ];
+      if (!["period", "line"].includes(dates)) {
+        items[0].item_start = null;
+        items[0].item_end = null;
+      }
+      const fields = {};
+      Object.keys(items[0]).forEach((name) => { fields[name] = items.map(() => ({value: ""})); });
+      for (const [name, value] of Object.entries({number: "2026-020", issue_date: "2026-10-29", due_date: "2026-11-12", doc_type: retired ? "381" : "380", ref_number: "2026-019", service_start: "", service_end: "", discount: "0", prepaid: "0"})) {
+        fields[name] = [{value}];
+      }
+      const rows = items.map((_, i) => ({querySelector(selector) {
+        const name = {".qty": "quantity", ".price": "unit_price", ".unit": "unit"}[selector] || selector.match(/name="([^"]+)"/)[1];
+        return fields[name][i];
+      }}));
+      const form = {
+        querySelectorAll(selector) { return selector === "#items .item" ? rows : fields[selector.match(/name="([^"]+)"/)[1]] || []; },
+        querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
+      };
+      app.document.getElementById = (id) => id === "invoice-form" ? form : null;
+      app.document.querySelector = (selector) => selector === "#items" ? {querySelectorAll: () => rows} : null;
+      const invoice = {number: "2026-019", issue_date: "2026-09-03", due_date: "2026-09-17", doc_type: dates === "prepayment" ? "386" : "380"};
+      if (dates === "period") Object.assign(invoice, {service_start: "2026-09-01", service_end: "2026-09-02"});
+      if (dates === "legacy") invoice.service_date = "2026-08-31";
+      app.window.DRAFT = {items, invoice};
+      app.applyDraft();
+      for (const [name, value] of Object.entries(items[0])) {
+        assert.equal(fields[name][0].value, !retired && ["item_start", "item_end"].includes(name) ? "" : value ?? "", name);
+      }
+      assert.equal(fields.quantity[1].value, "0");
+      assert.equal(fields.item_discount_reason[1].value, "");
+      const expected = !retired ? ["", ""] : {
+        period: ["2026-09-01", "2026-09-02"], line: ["", ""],
+        implicit: ["2026-09-03", "2026-09-03"], legacy: ["2026-08-31", "2026-08-31"],
+        prepayment: ["", ""],
+      }[dates];
+      assert.equal(fields.service_start[0].value, expected[0]);
+      assert.equal(fields.service_end[0].value, expected[1]);
+      assert.equal(fields.number[0].value, "2026-020");
+      assert.equal(fields.issue_date[0].value, "2026-10-29");
+      assert.equal(fields.due_date[0].value, "2026-11-12");
+      assert.equal(fields.doc_type[0].value, retired ? "381" : "380");
+      assert.equal(fields.ref_number[0].value, "2026-019");
+      const totals = app.InvoiceCalc.totals({items: items.map((_, i) => ({qty: fields.quantity[i].value, price: fields.unit_price[i].value, discVal: fields.item_discount[i].value, discType: fields.item_discount_type[i].value})), rate: 19});
+      assert.equal(totals.grand, 214.2);
+    });
+  }
 }
 
 test("invoice export waits for master data, blocks on failure and prevents double submission", async () => {
