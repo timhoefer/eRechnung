@@ -59,6 +59,8 @@
 .archive-issuer-choice label { flex: 1; min-width: 0; }
 #issuer-add-button { font-size: var(--text-sm); }
 #issuer-create-form .modal-actions { margin-top: 24px; }
+.issuer-restore-form { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+.issuer-restore-form .hint { flex: 1; min-width: 180px; }
 dialog.modal { color: var(--ink); border: 1px solid var(--line); max-width: min(420px, calc(100vw - 32px)); }
 dialog.modal::backdrop { background: var(--scrim); }
 

@@ -1887,6 +1887,14 @@ function languageDraftKey() {
   return "erechnung:lang:" + (window.ISSUER_SCOPE || "legacy") + ":" + (window.ISSUER_ID || "default");
 }
 
+// Restoration from either the creation dialog or archive keeps the same identity.
+// Like any issuer switch, it waits for saves and asks before discarding a draft.
+document.addEventListener("submit", (event) => {
+  if (!event.target.matches(".issuer-restore-form")) return;
+  event.preventDefault();
+  return switchIssuer(event.target);
+});
+
 // Konto-Auswähler VOR den Restore-Pfaden aufbauen, damit restoreForm (Sprachwechsel)
 // und applyDraft die gespeicherte Konto-Auswahl in existierende Optionen schreiben.
 syncBankSelector();
@@ -2424,6 +2432,7 @@ function closeSettings() {
   // Formulare im Panel ohne Seitenwechsel abschicken.
   pane.addEventListener("submit", (e) => {
     const form = e.target;
+    if (form.matches(".issuer-restore-form")) return; // handled by the document's switch guard
     e.preventDefault();
     if (form.id === "archive-issuer-form") {
       switchArchive(form);

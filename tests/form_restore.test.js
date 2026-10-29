@@ -515,7 +515,7 @@ test("invoice export waits for master data, blocks on failure and prevents doubl
   app.clearTimeout = () => {};
   let finishSave, saves = 0, exports = 0;
   app.autosaveSeller = () => { saves++; return new Promise((resolve) => { finishSave = resolve; }); };
-  const form = {id: "invoice-form", querySelector: () => null, reportValidity: () => true, submit() { exports++; }};
+  const form = {id: "invoice-form", matches: () => false, querySelector: () => null, reportValidity: () => true, submit() { exports++; }};
   const button = {disabled: false, hasAttribute: () => false};
   app.document.getElementById = (id) => id === "generate-btn" ? button : null;
   let prevented = 0;
@@ -544,4 +544,29 @@ test("invoice export waits for master data, blocks on failure and prevents doubl
   finishSave(true);
   await afterBack;
   assert.equal(exports, 2);
+});
+
+test("reactivation from the archive or dialog respects draft cancellation and pending master saves", async () => {
+  const app = loadApp();
+  app.clearTimeout = () => {};
+  let confirmed = false, submissions = 0;
+  app.invoiceHasContent = () => true;
+  app.confirmIssuerSwitch = async () => confirmed;
+  let finishSave;
+  let saveStarted;
+  const saving = new Promise((resolve) => { saveStarted = resolve; });
+  app.autosaveSeller = () => new Promise((resolve) => { finishSave = resolve; saveStarted(); });
+  const form = {id: "", matches: (selector) => selector === ".issuer-restore-form", submit() { submissions++; }};
+  const event = {target: form, preventDefault() {}};
+  const submit = () => Promise.all(app.document.listeners.submit.map((handler) => handler(event)));
+  await submit();
+  assert.equal(submissions, 0);
+  assert.equal(finishSave, undefined);
+  confirmed = true;
+  const pending = submit();
+  await saving;
+  assert.equal(submissions, 0);
+  finishSave(true);
+  await pending;
+  assert.equal(submissions, 1);
 });

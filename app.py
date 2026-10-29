@@ -392,7 +392,7 @@ def _lock_data_changes():
         "settings", "settings_autosave", "customers_autosave",
         "customers_items_save", "customers_save", "customers_delete",
         "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create", "issuer_delete",
-        "issuer_set_default",
+        "issuer_set_default", "issuer_restore",
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
@@ -472,7 +472,7 @@ def _select_issuer():
     archive_endpoints = {
         "validate", "settings_panel", "settings_depinfo", "view", "archive_preview",
         "download", "download_zip", "reveal", "export_csv", "setlang",
-        "data_dir_set", "data_dir_browse", "check_updates", "whats_new_seen",
+        "data_dir_set", "data_dir_browse", "check_updates", "whats_new_seen", "issuer_restore",
     }
     directory = issuer_directory(issuer)
     g.issuer_id = issuer
@@ -537,9 +537,7 @@ def issuer_profiles(*, include_deleted: bool = False) -> list[dict]:
         try:
             seller = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
             deleted = isinstance(seller, dict) and seller.get("_deleted") is True
-            if deleted and (not include_deleted or not _archive_has_files(
-                OUTPUT_DIR if issuer == "default" else path.parent / "output"
-            )):
+            if deleted and not include_deleted:
                 continue
             profiles.append({"id": issuer, "label": issuer_label(seller), "deleted": deleted})
         except (OSError, ValueError, AttributeError):
@@ -620,14 +618,33 @@ def issuer_delete():
     return {"ok": True, "next_url": url_for("index", issuer=next_issuer, edit_issuer="1")}
 
 
-def _archive_has_files(directory: Path) -> bool:
-    try:
-        return any(directory.iterdir())
-    except FileNotFoundError:
-        return False
-    except OSError:
-        # An unreadable archive cannot be confirmed empty.
-        return True
+@app.route("/issuers/restore", methods=["POST"])
+def issuer_restore():
+    if request.form.get("issuer") != current_issuer() or request.form.get("confirm") != "restore":
+        abort(400)
+    seller = load_seller()
+    if seller.get("_deleted") is True:
+        try:
+            if not seller.get("name"):
+                # Early prototypes retained only a label. Recover the latest
+                # available snapshot without touching the original invoices.
+                originals = sorted(output_dir().glob("*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+                for pdf in originals:
+                    original = correction_original(pdf.name)
+                    if original:
+                        seller = {**original["seller"], **seller}
+                        break
+            # Reinstating an old default must not change the current startup choice.
+            _write_json(SELLER_FILE.parent / "issuer_preferences.json", {"default_issuer": default_issuer()})
+            seller.pop("_deleted", None)
+            # Tabs opened before deletion must still reload before saving edits.
+            seller["_revision"] = secrets.token_hex(16)
+            save_seller(seller)
+        except OSError:
+            logger.warning("Could not restore issuer", exc_info=True)
+            abort(503, description=translate(get_ui_lang(request))["action_failed"])
+    flash(translate(get_ui_lang(request))["issuer_restored"], "ok")
+    return redirect(url_for("index", edit_issuer="1"))
 
 
 @app.template_filter("price")
@@ -1068,13 +1085,12 @@ def format_seller_country(seller: dict, buyer: dict, lang: str) -> str:
 
 
 # --- Helfer ----------------------------------------------------------------
-def suggest_invoice_number(seller: dict) -> str:
-    last = seller.get("last_invoice_number", "")
+def suggest_invoice_number(seller: dict, used_numbers: list[str] | None = None) -> str:
     year = date.today().year
-    m = re.fullmatch(r"(\d{4})-(\d+)", last or "")
-    if m and int(m.group(1)) == year:
-        return f"{year}-{int(m.group(2)) + 1:03d}"
-    return f"{year}-001"
+    numbers = [seller.get("last_invoice_number") or "", *(used_numbers or [])]
+    sequence = [int(m.group(1)) for number in numbers
+                if (m := re.fullmatch(fr"{year}-(\d+)", number))]
+    return f"{year}-{max(sequence, default=0) + 1:03d}"
 
 
 def _num_str(s) -> str:
@@ -1346,18 +1362,17 @@ DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änd
 @app.route("/")
 def index():
     seller = invoice_seller()
+    numbers = used_invoice_numbers()
+    profiles = issuer_profiles(include_deleted=True)
     today = date.today()
     defaults = {
-        "number": suggest_invoice_number(seller),
+        "number": suggest_invoice_number(seller, numbers),
         "issue_date": today.isoformat(),
         "due_date": (today + timedelta(days=DEFAULT_TERM_DAYS)).isoformat(),
     }
     draft = load_draft(request.args.get("from"))
     if g.get("correction_original"):
         draft = g.correction_original
-        numbers = [seller.get("last_invoice_number", ""), *used_invoice_numbers()]
-        sequence = [int(n.split("-")[1]) for n in numbers if re.fullmatch(fr"{today.year}-\d+", n)]
-        defaults["number"] = f"{today.year}-{max(sequence, default=0) + 1:03d}"
         defaults["doc_type"] = g.correction_kind
         defaults["ref_number"] = draft["invoice"]["number"]
         defaults["ref_date"] = draft["invoice"].get("issue_date") or ""
@@ -1369,7 +1384,8 @@ def index():
         "form.html",
         seller=seller,
         seller_revision=seller_revision(seller),
-        issuers=issuer_profiles(),
+        issuers=[p for p in profiles if not p["deleted"]],
+        retired_issuers=[p for p in profiles if p["deleted"]],
         default_issuer_id=default_issuer(),
         issuer_scope=issuer_scope(),
         treatments=TAX_TREATMENTS,
@@ -1377,7 +1393,7 @@ def index():
         customers=load_customers(),
         units=UNITS,
         draft=draft,
-        used_numbers=used_invoice_numbers(),
+        used_numbers=numbers,
         ref_invoices=archived_invoices(),
         first_run=first_run,
         show_whats_new=not first_run,

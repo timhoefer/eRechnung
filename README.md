@@ -43,13 +43,18 @@ Profile liegen unter `issuers/<Profil-ID>/seller.json` und
 nimmt alle Profile mit; abweichende Kopien desselben Profils im Ziel stoppen den
 Umzug. Sichere immer den vollständigen Datenordner.
 
-Die automatische Nummernfolge `JJJJ-NNN` läuft pro Aussteller unabhängig. Bei einem
-neuen Profil beginnt der Vorschlag mit `JJJJ-001`; falls bereits Rechnungen
-existieren, trage beim ersten Erstellen die passende nächste Nummer ein. Die App
-setzt diese Folge anschließend fort. Abweichende Nummernformate bleiben manuell
+Die automatische Nummernfolge `JJJJ-NNN` läuft pro Aussteller unabhängig. Der
+Vorschlag folgt der höchsten Nummer des laufenden Jahres aus gespeichertem Zähler
+und Archiv dieses Profils. Bei einem neuen Profil beginnt er mit `JJJJ-001`;
+existieren Rechnungen außerhalb dieses Archivs, trage beim ersten Erstellen die
+passende nächste Nummer ein. Abweichende Nummernformate bleiben manuell
 eingebbar. Archiv, CSV-Export, Vorlagen und Bezüge für Korrekturen beziehen sich
 jeweils auf das ausgewählte Profil. Gespeicherte Originalrechnungen bleiben bei
 späteren Änderungen an den Stammdaten unverändert.
+
+Bei einer **neuen Anschrift oder einem geänderten Namen** die vorhandenen
+Stammdaten bearbeiten. Die Identität des Profils und seine Nummernfolge ändern
+sich dabei nicht; neue Belege verwenden die aktualisierten Angaben.
 
 Ein Profilwechsel öffnet ein neues Rechnungsformular. Bei bereits eingetragenem
 Kunden oder Positionen fragt die App vor dem Verwerfen nach. Jedes Fenster behält
@@ -66,16 +71,24 @@ entfernt, etwa nach Stilllegung einer Firma. Seine Stammdaten und Nummernfolge
 bleiben für spätere Stornos und Korrekturen erhalten und sind nicht mehr bearbeitbar.
 Alte Fenster können das Profil nicht durch automatisches Speichern wiederherstellen.
 
+**Aussteller reaktivieren** macht dasselbe Profil wieder auswählbar, mit seinen
+bisherigen Stammdaten, Rechnungen und seiner Nummernfolge. Die Aktion steht im
+Archiv und im Dialog **Weitere Stammdaten anlegen** zur Verfügung, auch für
+entfernte Profile ohne Belege. Der bisherige Standardaussteller bleibt bestehen.
+Fenster aus der Zeit vor dem Löschen müssen ihre Stammdaten neu laden, bevor sie
+Änderungen speichern können. Ein bewusst neu angelegtes Profil bleibt unabhängig;
+gleiche Namen oder Adressen führen nicht zu einer automatischen Zusammenlegung.
+
 **Das Archiv bleibt erhalten.** In den Einstellungen hat das Archiv eine eigene
-Aussteller-Auswahl. Gelöschte Profile mit vorhandenen Archivdateien sind dort als
+Aussteller-Auswahl. Entfernte Profile sind dort als
 **Nur Archiv** gekennzeichnet. Ihre Rechnungen lassen sich ansehen, herunterladen,
 prüfen und als CSV exportieren. Im Menü einer Rechnung mit vollständig gespeicherten
 Formulardaten stehen **Storno erstellen** und **Korrektur erstellen** zur Verfügung.
 Der Aussteller und der Originalbezug sind fest hinterlegt; normale Rechnungen und
 Vorausrechnungen bleiben gesperrt. Positionsrabatte und die ursprünglichen
 Leistungszeiträume werden übernommen; Rechnungsnummer und Ausstellungsdatum sind neu.
-Bereits früher entfernte Profile können die
-Absenderdaten aus der ausgewählten Originalrechnung übernehmen. PDF, XML und
+Bereits früher entfernte Profile können die Absenderdaten aus der ausgewählten
+Originalrechnung übernehmen. PDF, XML und
 gespeicherte Rechnungsdaten einschließlich der damaligen Absenderangaben bleiben
 unverändert. Ein Wechsel des Archivs lässt den aktuellen Rechnungsentwurf und seinen
 Aussteller unangetastet.

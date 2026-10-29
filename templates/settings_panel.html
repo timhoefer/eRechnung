@@ -71,7 +71,15 @@
   {% else %}
   <p class="hint">{{ t.issuer }}: <strong>{{ issuer_name }}</strong></p>
   {% endif %}
-  {% if issuer_deleted %}<p class="hint">{{ t.issuer_archive_hint }}</p>{% endif %}
+  {% if issuer_deleted %}
+  <p class="hint">{{ t.issuer_archive_hint }}</p>
+  <form method="post" action="{{ url_for('issuer_restore') }}" class="issuer-restore-form">
+    <input type="hidden" name="issuer" value="{{ issuer_id }}">
+    <input type="hidden" name="confirm" value="restore">
+    <button type="submit" class="secondary small">{{ t.issuer_restore }}</button>
+    <span class="hint">{{ t.issuer_restore_hint }}</span>
+  </form>
+  {% endif %}
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
   <table class="archive">

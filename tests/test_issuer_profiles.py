@@ -730,3 +730,99 @@ def test_real_adjustment_for_retired_issuer_validates(client, kind, profile):
                            correction_source=original.name, number=f"{YEAR}-012"))
     assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
     assert original.read_bytes() == before
+
+
+@pytest.mark.parametrize("extra_profile", [False, True])
+def test_address_and_name_changes_keep_identity_numbering_and_originals(client, fast_generation, extra_profile):
+    issuer, folder = add_issuer(client) if extra_profile else ("default", appmod.DATA_DIR)
+    (folder / "seller.json").write_text(json.dumps(SELLER))
+    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
+    token = revision(client, issuer)
+    assert client.post("/settings/autosave", data={"issuer": issuer, "seller_revision": token,
+        "name": "Updated Studio", "address_line": "New address 42"}).status_code == 204
+    assert number_on_page(client, issuer) == f"{YEAR}-012"
+    assert client.post("/generate", data=dict(FORM, issuer=issuer, number=f"{YEAR}-012")).status_code == 200
+    new = json.loads((folder / "output" / f"Rechnung_{YEAR}-012.json").read_text())
+    assert new["issuer_id"] == issuer
+    assert new["seller"]["name"] == "Updated Studio"
+    assert new["seller"]["address_line"] == "New address 42"
+    assert all((folder / "output" / name).read_bytes() == data for name, data in originals.items())
+
+
+@pytest.mark.parametrize("restore_default", [False, True])
+def test_restore_keeps_identity_archive_numbering_and_startup_default(client, fast_generation, restore_default):
+    other, folder = add_issuer(client)
+    issuer, folder = ("default", appmod.DATA_DIR) if restore_default else (other, folder)
+    (folder / "seller.json").write_text(json.dumps(dict(SELLER, profile_label=SELLER["name"])))
+    assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
+    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    source = f"Rechnung_{FORM['number']}.pdf"
+    old_token = revision(client, issuer)
+    assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
+    assert client.post("/generate", data=dict(FORM, issuer=issuer, doc_type="381", correction_source=source,
+                       number=f"{YEAR}-012")).status_code == 200
+    originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
+    startup = other if restore_default else "default"
+    body = {"issuer": issuer, "confirm": "restore"}
+    response = client.post("/issuers/restore", data=body)
+    assert response.status_code == 302
+    assert parse_qs(urlparse(response.location).query)["issuer"] == [issuer]
+    seller = json.loads((folder / "seller.json").read_text())
+    assert "_deleted" not in seller
+    assert seller["address_line"] == SELLER["address_line"]
+    assert seller["last_invoice_number"] == f"{YEAR}-012"
+    assert number_on_page(client, issuer) == f"{YEAR}-013"
+    assert all((folder / "output" / name).read_bytes() == data for name, data in originals.items())
+    page = html.fromstring(client.get("/").data)
+    assert page.xpath('//*[@id="issuer-select"]/option[@selected]/@value') == [startup]
+    # A retry is idempotent; an old tab must not regain write access after restoring.
+    assert client.post("/issuers/restore", data=body).status_code == 302
+    assert json.loads((folder / "seller.json").read_text()) == seller
+    assert client.post("/settings/autosave", data={"issuer": issuer, "seller_revision": old_token,
+                       "address_line": "Stale overwrite"}).status_code == 409
+
+
+def test_restore_empty_profile_is_discoverable_and_does_not_create_another_identity(client):
+    issuer, folder = add_issuer(client, "Empty issuer")
+    client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"})
+    page = html.fromstring(client.get("/").data)
+    assert page.xpath(f'//*[@id="issuer-create-dialog"]//form[contains(@class,"issuer-restore-form")]/input[@name="issuer" and @value="{issuer}"]')
+    archive = html.fromstring(client.get("/settings/panel").data)
+    assert archive.xpath(f'//*[@id="archive-issuer-select"]/option[@value="{issuer}"]')
+    retired = html.fromstring(client.get("/settings/panel", query_string={"issuer": issuer}).data)
+    assert retired.xpath('//form[contains(@class,"issuer-restore-form")]')
+    assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 302
+    assert number_on_page(client, issuer) == f"{YEAR}-001"
+    assert list((appmod.DATA_DIR / "issuers").iterdir()) == [folder]
+
+
+@pytest.mark.parametrize("legacy_marker", [False, True])
+def test_restore_uses_archive_when_counter_is_missing_or_stale(client, fast_generation, legacy_marker):
+    add_issuer(client)
+    client.post("/generate", data=FORM)
+    client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"})
+    seller = {"_deleted": True, "profile_label": "Old studio"} if legacy_marker else dict(appmod.load_seller(), last_invoice_number=f"{YEAR}-003")
+    appmod.SELLER_FILE.write_text(json.dumps(seller))
+    assert client.post("/issuers/restore", data={"issuer": "default", "confirm": "restore"}).status_code == 302
+    assert number_on_page(client) == f"{YEAR}-012"
+    assert appmod.load_seller()["name"] == SELLER["name"]
+    assert appmod.load_seller()["iban"] == SELLER["iban"]
+
+
+def test_restore_requires_matching_explicit_identity_and_retains_data_on_failure(client, monkeypatch):
+    issuer, folder = add_issuer(client)
+    client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"})
+    original = (folder / "seller.json").read_bytes()
+    for body in ({"issuer": issuer}, {"confirm": "restore"}, {"issuer": "default", "confirm": "restore"}):
+        assert client.post("/issuers/restore", query_string={"issuer": issuer}, data=body).status_code == 400
+    write_json = appmod._write_json
+
+    def fail_seller(path, data):
+        if path == folder / "seller.json":
+            raise OSError("test disk error")
+        write_json(path, data)
+
+    monkeypatch.setattr(appmod, "_write_json", fail_seller)
+    assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 503
+    assert (folder / "seller.json").read_bytes() == original

@@ -40,6 +40,18 @@
 
 {% if not issuer_deleted %}<dialog id="issuer-create-dialog" class="modal" aria-labelledby="issuer-create-title">
   <h3 id="issuer-create-title">{{ t.issuer_add }}</h3>
+  <p class="hint">{{ t.issuer_edit_hint }}</p>
+  {% if retired_issuers %}
+  <p>{{ t.issuer_restore_hint }}</p>
+  {% for p in retired_issuers %}
+  <form method="post" action="{{ url_for('issuer_restore', issuer=p.id) }}" class="issuer-restore-form">
+    <input type="hidden" name="issuer" value="{{ p.id }}">
+    <input type="hidden" name="confirm" value="restore">
+    <span>{{ p.label }}</span>
+    <button type="submit" class="secondary small">{{ t.issuer_restore }}</button>
+  </form>
+  {% endfor %}
+  {% endif %}
   <form method="post" action="{{ url_for('issuer_create') }}" id="issuer-create-form">
     <p class="hint">{{ t.issuer_hint }}</p>
     <label>{{ t.issuer_profile_label }}<input name="profile_label" maxlength="100" required placeholder="{{ t.issuer_label_ph }}" autofocus></label>
