@@ -127,7 +127,10 @@
     <div class="wide issuer-default-choice">
       <button type="button" class="secondary small" id="issuer-default-button"
               data-url="{{ url_for('issuer_set_default') }}" data-saved-label="{{ t.issuer_is_default }}"
-              {% if issuer_id == default_issuer_id %}disabled{% endif %}>{{ t.issuer_is_default if issuer_id == default_issuer_id else t.issuer_make_default }}</button>
+              {% if issuer_id == default_issuer_id %}disabled{% endif %}>
+        <svg class="issuer-default-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" {% if issuer_id != default_issuer_id %}hidden{% endif %}><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span class="issuer-default-label">{{ t.issuer_is_default if issuer_id == default_issuer_id else t.issuer_make_default }}</span>
+      </button>
       <span class="hint">{{ t.issuer_default_hint }}</span>
     </div>
     {% endif %}

@@ -1715,7 +1715,8 @@ async function setDefaultIssuer(button) {
     const response = await fetch(button.dataset.url, {method: "POST", body});
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error("default issuer save failed");
-    button.textContent = button.dataset.savedLabel;
+    button.querySelector(".issuer-default-label").textContent = button.dataset.savedLabel;
+    button.querySelector(".issuer-default-check").removeAttribute("hidden");
     return true;
   } catch {
     button.disabled = false;

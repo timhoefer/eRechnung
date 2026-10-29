@@ -225,7 +225,10 @@ test("setting the default keeps the current invoice form and reports persistence
   app.window.ISSUER_ID = "company";
   const submitted = {};
   app.FormData = class { append(key, value) { submitted[key] = value; } };
-  const button = {disabled: false, textContent: "Set as default", dataset: {url: "/issuers/default?issuer=company", savedLabel: "Default issuer"}};
+  const label = {textContent: "Set as default"};
+  const check = {hidden: true, removeAttribute() { this.hidden = false; }};
+  const button = {disabled: false, querySelector: (selector) => selector === ".issuer-default-label" ? label : check,
+    dataset: {url: "/issuers/default?issuer=company", savedLabel: "Default issuer"}};
   let finish;
   app.fetch = (url) => {
     assert.equal(url, button.dataset.url);
@@ -237,7 +240,7 @@ test("setting the default keeps the current invoice form and reports persistence
   assert.deepEqual(submitted, {issuer: "company"});
   finish({ok: true, json: async () => ({ok: true})});
   assert.equal(await saving, true);
-  assert.equal(button.textContent, "Default issuer");
+  assert.equal(label.textContent, "Default issuer");
   assert.equal(button.disabled, true);
 });
 
