@@ -178,7 +178,7 @@ Texte gemeinsam aktualisieren. **Nur bei ausgewählten größeren Feature-Releas
 `auto_open: True` setzen. Bei kleineren Neuerungen und Fehlerkorrekturen bleibt es
 `False`; ohne dieses Feld öffnet sich der Dialog ebenfalls nur manuell. Eine neue
 ID oder Versionsnummer allein löst keine automatische Anzeige aus. Die Hinweise
-zu 1.1.4 sind zunächst nur manuell erreichbar. `ANNOUNCEMENT = None` deaktiviert
+zur Aussteller-Verwaltung in 1.2.0 erscheinen einmalig automatisch. `ANNOUNCEMENT = None` deaktiviert
 den Dialog und den Menüeintrag vollständig.
 
 Die App speichert gelesene IDs in ihrer lokalen `config.json`, unabhängig vom
