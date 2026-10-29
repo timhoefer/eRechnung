@@ -423,10 +423,8 @@ def _write_json(path: Path, data) -> None:
 # The original issuer stays at the original paths. Additional issuers have their
 # own seller.json and output directory; customers remain shared. Never switch
 # global paths when selecting an issuer: concurrent tabs must remain independent.
-def issuer_directory(issuer: str, *, allow_deleted: bool = False) -> Path:
+def issuer_directory(issuer: str) -> Path:
     if issuer == "default":
-        if not allow_deleted and _issuer_deleted(SELLER_FILE):
-            abort(410)
         return SELLER_FILE.parent
     if not re.fullmatch(r"[a-f0-9]{32}", issuer):
         abort(400)
@@ -438,8 +436,6 @@ def issuer_directory(issuer: str, *, allow_deleted: bool = False) -> Path:
         abort(404)
     if (directory / "output").is_symlink():
         abort(404)
-    if not allow_deleted and _issuer_deleted(directory / "seller.json"):
-        abort(410)
     return directory
 
 
@@ -449,6 +445,12 @@ def _issuer_deleted(path: Path) -> bool:
         return isinstance(seller, dict) and seller.get("_deleted") is True
     except (OSError, ValueError):
         return False
+
+
+CORRECTION_ENDPOINTS = {
+    "index", "generate", "preview", "preview_html", "preview_pdf",
+    "customers_autosave", "customers_items_save", "customers_save", "customers_delete",
+}
 
 
 @app.before_request
@@ -472,17 +474,15 @@ def _select_issuer():
         "download", "download_zip", "reveal", "export_csv", "setlang",
         "data_dir_set", "data_dir_browse", "check_updates", "whats_new_seen",
     }
-    directory = issuer_directory(issuer, allow_deleted=True)
+    directory = issuer_directory(issuer)
     g.issuer_id = issuer
     g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
     g.issuer_output_dir = OUTPUT_DIR if issuer == "default" else directory / "output"
     if _issuer_deleted(g.issuer_seller_file) and request.endpoint not in archive_endpoints:
-        correction_endpoints = {"index", "generate", "preview", "preview_html", "preview_pdf",
-                                "customers_autosave", "customers_items_save", "customers_save", "customers_delete"}
         kind = request.form.get("doc_type", request.args.get("doc_type"))
         source = request.form.get("correction_source", request.args.get("correction_source", ""))
         original = correction_original(source) if source else None
-        if request.endpoint not in correction_endpoints or kind not in {"381", "384"} or original is None:
+        if request.endpoint not in CORRECTION_ENDPOINTS or kind not in {"381", "384"} or original is None:
             abort(410)
         g.correction_source = source
         g.correction_kind = kind
@@ -512,7 +512,8 @@ def _issuer_urls(endpoint, values):
         # The legacy profile also needs an explicit ID once the startup default
         # can point elsewhere. Otherwise its archive links change issuer.
         values.setdefault("issuer", current_issuer())
-        if has_request_context() and g.get("correction_source") and values["issuer"] == current_issuer():
+        if (endpoint in CORRECTION_ENDPOINTS and has_request_context()
+                and g.get("correction_source") and values["issuer"] == current_issuer()):
             values.setdefault("correction_source", g.correction_source)
             values.setdefault("doc_type", g.correction_kind)
 
@@ -1243,7 +1244,7 @@ def _assemble(form):
     profile = form.get("profile", "en16931")
     if profile not in ("en16931", "xrechnung"):
         profile = "en16931"
-    doc_type = form.get("doc_type", "380") or "380"
+    doc_type = g.get("correction_kind") or form.get("doc_type") or "380"
     if doc_type not in ("380", "381", "384", "386"):
         doc_type = "380"
     inv = {
@@ -1543,8 +1544,8 @@ def preview_pdf():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    seller = invoice_seller()
     data, html, totals = _assemble(request.form)
+    seller = data["seller"]
     if not data["items"]:
         flash(translate(get_ui_lang(request))["need_item"], "err")
         return redirect(url_for("index"))

@@ -705,6 +705,20 @@ def test_retired_adjustments_reject_missing_foreign_or_invalid_originals(client,
     assert client.get("/", query_string={"issuer": issuer, "correction_source": source, "doc_type": "381"}).status_code == 410
 
 
+@pytest.mark.parametrize("kind", ["381", "384"])
+def test_retired_adjustment_uses_verified_kind_when_it_is_only_in_url(client, fast_generation, kind):
+    add_issuer(client)
+    client.post("/generate", data=FORM)
+    client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"})
+    query = {"issuer": "default", "correction_source": f"Rechnung_{FORM['number']}.pdf", "doc_type": kind}
+    # Like customer actions, a request may carry its correction context in the URL.
+    response = client.post("/generate", query_string=query, data=dict(FORM, number=f"{YEAR}-012"))
+    assert response.status_code == 200
+    adjustment = json.loads((appmod.OUTPUT_DIR / f"Rechnung_{YEAR}-012.json").read_text())
+    assert adjustment["invoice"]["doc_type"] == kind
+    assert adjustment["invoice"]["ref_number"] == FORM["number"]
+
+
 @pytest.mark.parametrize("kind,profile", [("381", "en16931"), ("384", "xrechnung")])
 def test_real_adjustment_for_retired_issuer_validates(client, kind, profile):
     add_issuer(client)

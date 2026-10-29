@@ -7,14 +7,18 @@ const vm = require("node:vm");
 
 function loadApp() {
   const document = {
+    listeners: {},
     querySelector: () => null,
     querySelectorAll: () => [],
     getElementById: () => null,
-    addEventListener: () => {},
+    addEventListener(type, handler) { (this.listeners[type] ||= []).push(handler); },
   };
   const context = vm.createContext({
     document,
-    window: { addEventListener: () => {} },
+    window: {
+      listeners: {},
+      addEventListener(type, handler) { (this.listeners[type] ||= []).push(handler); },
+    },
     sessionStorage: { getItem: () => null },
     InvoiceCalc: require("../static/calc.js"),
   });
@@ -461,4 +465,83 @@ test("retired issuer details are never autosaved and restored drafts cannot repl
   assert.equal(fields.ref_number.value, "2026-011");
   assert.equal(fields.ref_date.value, "2026-10-01");
   assert.equal(fields.correction_source.value, "original.pdf");
+});
+
+for (const retired of [false, true]) {
+  test(`archived invoice restores discounts and ${retired ? "original" : "fresh"} service dates`, () => {
+    const app = loadApp();
+    app.window.ISSUER_RETIRED = retired;
+    app.syncUnitDisplay = () => {};
+    const items = [
+      {description: "Design", quantity: "2", unit: "DAY", unit_price: "100", item_discount: "10", item_discount_type: "pct", item_discount_reason: "Discount", item_start: "2026-09-01", item_end: "2026-09-02"},
+      {description: "Review", quantity: "0", unit: "HUR", unit_price: "25", item_discount: "0", item_discount_type: "abs", item_discount_reason: "", item_start: null, item_end: null},
+    ];
+    const fields = {};
+    Object.keys(items[0]).forEach((name) => { fields[name] = items.map(() => ({value: ""})); });
+    for (const [name, value] of Object.entries({number: "2026-020", issue_date: "2026-10-29", due_date: "2026-11-12", doc_type: retired ? "381" : "380", ref_number: "2026-019", service_start: "", service_end: "", discount: "0", prepaid: "0"})) {
+      fields[name] = [{value}];
+    }
+    const rows = items.map((_, i) => ({querySelector(selector) {
+      const name = {".qty": "quantity", ".price": "unit_price", ".unit": "unit"}[selector] || selector.match(/name="([^"]+)"/)[1];
+      return fields[name][i];
+    }}));
+    const form = {
+      querySelectorAll(selector) { return selector === "#items .item" ? rows : fields[selector.match(/name="([^"]+)"/)[1]] || []; },
+      querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
+    };
+    app.document.getElementById = (id) => id === "invoice-form" ? form : null;
+    app.document.querySelector = (selector) => selector === "#items" ? {querySelectorAll: () => rows} : null;
+    app.window.DRAFT = {items, invoice: {number: "2026-019", issue_date: "2026-09-03", due_date: "2026-09-17", doc_type: "380", service_start: "2026-09-01", service_end: "2026-09-02"}};
+    app.applyDraft();
+    for (const [name, value] of Object.entries(items[0])) {
+      assert.equal(fields[name][0].value, !retired && ["item_start", "item_end"].includes(name) ? "" : value, name);
+    }
+    assert.equal(fields.quantity[1].value, "0");
+    assert.equal(fields.item_discount_reason[1].value, "");
+    assert.equal(fields.service_start[0].value, retired ? "2026-09-01" : "");
+    assert.equal(fields.service_end[0].value, retired ? "2026-09-02" : "");
+    assert.equal(fields.number[0].value, "2026-020");
+    assert.equal(fields.issue_date[0].value, "2026-10-29");
+    assert.equal(fields.due_date[0].value, "2026-11-12");
+    assert.equal(fields.doc_type[0].value, retired ? "381" : "380");
+    assert.equal(fields.ref_number[0].value, "2026-019");
+    const totals = app.InvoiceCalc.totals({items: items.map((_, i) => ({qty: fields.quantity[i].value, price: fields.unit_price[i].value, discVal: fields.item_discount[i].value, discType: fields.item_discount_type[i].value})), rate: 19});
+    assert.equal(totals.grand, 214.2);
+  });
+}
+
+test("invoice export waits for master data, blocks on failure and prevents double submission", async () => {
+  const app = loadApp();
+  app.clearTimeout = () => {};
+  let finishSave, saves = 0, exports = 0;
+  app.autosaveSeller = () => { saves++; return new Promise((resolve) => { finishSave = resolve; }); };
+  const form = {id: "invoice-form", querySelector: () => null, reportValidity: () => true, submit() { exports++; }};
+  const button = {disabled: false, hasAttribute: () => false};
+  app.document.getElementById = (id) => id === "generate-btn" ? button : null;
+  let prevented = 0;
+  const event = {target: form, submitter: button, preventDefault() { prevented++; }};
+  const submit = () => Promise.all(app.document.listeners.submit.map((handler) => handler(event)));
+  const first = submit();
+  assert.equal(prevented, 1);
+  assert.equal(exports, 0);
+  assert.equal(button.disabled, true);
+  await submit();
+  assert.equal(saves, 1);
+  finishSave(false);
+  await first;
+  assert.equal(exports, 0);
+  assert.equal(button.disabled, false);
+  const retry = submit();
+  finishSave(true);
+  await retry;
+  assert.equal(exports, 1);
+  await submit();
+  assert.equal(exports, 1);
+  // Browsers may restore this page without executing the script again.
+  app.window.listeners.pageshow.forEach((handler) => handler({persisted: true}));
+  assert.equal(button.disabled, false);
+  const afterBack = submit();
+  finishSave(true);
+  await afterBack;
+  assert.equal(exports, 2);
 });

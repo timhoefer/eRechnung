@@ -459,6 +459,10 @@ function updateDiscTypeLabels() {
 }
 
 // Formularzustand sichern/wiederherstellen (z. B. beim Sprachwechsel).
+const ITEM_FORM_DEFAULTS = {
+  description: "", quantity: "1", unit: "HUR", unit_price: "0",
+  item_start: "", item_end: "", item_discount: "0", item_discount_type: "pct", item_discount_reason: "",
+};
 function snapshotForm(form) {
   const data = {};
   new FormData(form).forEach((v, k) => {
@@ -469,7 +473,7 @@ function snapshotForm(form) {
 function restoreForm(form, data) {
   if (!form || !data) return;
   if (data.issuer && data.issuer[0] !== window.ISSUER_ID) return;
-  const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end", "item_discount", "item_discount_type", "item_discount_reason"];
+  const repeating = Object.keys(ITEM_FORM_DEFAULTS);
   const itemCount = (data.description || []).length;
   let rows = form.querySelectorAll("#items .item").length;
   while (rows < itemCount) {
@@ -572,6 +576,10 @@ function applyDraft() {
   set("language", inv.language);
   set("tax_treatment", inv.tax_treatment);
   set("profile", inv.profile);
+  if (window.ISSUER_RETIRED) {
+    set("service_start", inv.service_start);
+    set("service_end", inv.service_end);
+  }
   // Neue Sidecars speichern IBAN/Kontonummer als Option-value. Erst den Schlüssel
   // suchen, dann auf alte numerische Indizes zurückfallen: internationale
   // Kontonummern können ebenfalls nur aus Ziffern bestehen.
@@ -609,18 +617,12 @@ function applyDraft() {
 
   const items = d.items || [];
   if (items.length) {
-    const tbody = document.querySelector("#items");
-    while (tbody.querySelectorAll(".item").length < items.length) addRow();
-    const rows = tbody.querySelectorAll(".item");
-    items.forEach((it, i) => {
-      const row = rows[i];
-      row.querySelector('[name="description"]').value = it.description || "";
-      row.querySelector(".qty").value = it.quantity || "1";
-      const u = row.querySelector(".unit");
-      if (u && it.unit) u.value = it.unit;
-      syncUnitDisplay(u);
-      row.querySelector(".price").value = it.unit_price || "0";
-    });
+    // Share the complete line-field mapping with language/conflict restoration.
+    // Ordinary templates start with fresh service dates; adjustments retain them.
+    const fields = Object.entries(ITEM_FORM_DEFAULTS)
+      .filter(([name]) => window.ISSUER_RETIRED || !["item_start", "item_end"].includes(name));
+    restoreForm(form, Object.fromEntries(fields.map(([name, fallback]) =>
+      [name, items.map((item) => item[name] ?? fallback)])));
   }
 }
 
@@ -1688,19 +1690,45 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// Reverse-Charge-Absicherung: ohne Kunden-USt-IdNr. kein Erzeugen (kein Datenverlust).
-document.addEventListener("submit", (e) => {
+// Export only after the current master data was saved and checked for conflicts.
+let invoiceSubmitPending = false;
+window.addEventListener("pageshow", (event) => {
+  // Back navigation may restore the disabled button and JS state from bfcache.
+  if (!event.persisted || !invoiceSubmitPending) return;
+  invoiceSubmitPending = false;
+  const button = document.getElementById("generate-btn");
+  if (button) button.disabled = false;
+});
+document.addEventListener("submit", async (e) => {
   const form = e.target;
   if (form.id !== "invoice-form") return;
   if (e.submitter && e.submitter.hasAttribute("formaction")) return; // nur der Erzeugen-Button
-  if (sellerConflict) { e.preventDefault(); showSellerConflict(); return; }
+  e.preventDefault();
+  if (invoiceSubmitPending) return;
+  if (sellerConflict) { showSellerConflict(); return; }
   const treatment = document.querySelector("#tax_treatment");
   const vat = form.querySelector('[name="buyer_vat_id"]');
   if (treatment && (treatment.value === "eu_reverse" || treatment.value === "non_eu") && vat && !vat.value.trim()) {
-    e.preventDefault();
     vat.setCustomValidity(window.MSG_NEED_BUYER_VAT || "VAT ID required");
     vat.reportValidity();
     vat.focus();
+    return;
+  }
+  invoiceSubmitPending = true;
+  const button = e.submitter;
+  if (button) button.disabled = true;
+  clearTimeout(sellerSaveTimer);
+  let submitted = false;
+  try {
+    if (await autosaveSeller() && form.reportValidity()) {
+      form.submit();
+      submitted = true;
+    }
+  } finally {
+    if (!submitted) {
+      invoiceSubmitPending = false;
+      if (button) button.disabled = false;
+    }
   }
 });
 document.addEventListener("input", (e) => {

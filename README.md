@@ -72,7 +72,9 @@ Aussteller-Auswahl. Gelöschte Profile mit vorhandenen Archivdateien sind dort a
 prüfen und als CSV exportieren. Im Menü einer Rechnung mit vollständig gespeicherten
 Formulardaten stehen **Storno erstellen** und **Korrektur erstellen** zur Verfügung.
 Der Aussteller und der Originalbezug sind fest hinterlegt; normale Rechnungen und
-Vorausrechnungen bleiben gesperrt. Bereits früher entfernte Profile können die
+Vorausrechnungen bleiben gesperrt. Positionsrabatte und die ursprünglichen
+Leistungszeiträume werden übernommen; Rechnungsnummer und Ausstellungsdatum sind neu.
+Bereits früher entfernte Profile können die
 Absenderdaten aus der ausgewählten Originalrechnung übernehmen. PDF, XML und
 gespeicherte Rechnungsdaten einschließlich der damaligen Absenderangaben bleiben
 unverändert. Ein Wechsel des Archivs lässt den aktuellen Rechnungsentwurf und seinen
@@ -83,6 +85,7 @@ geladenen Stand. Hat ein anderes Fenster oder eine bereits eingetroffene
 Synchronisation die Stammdaten inzwischen geändert, wird das Speichern abgewiesen.
 Die App zeigt einen Hinweis und bietet **Aktuelle Stammdaten laden** an; der
 Rechnungsentwurf bleibt dabei erhalten. Die Prüfung reserviert keine Rechnungsnummern.
+Der Export wartet auf das Speichern und die Konfliktprüfung der Stammdaten.
 
 Paralleles Schreiben auf mehreren Macs mit getrennten synchronisierten Kopien ist
 weiterhin nicht abgesichert. Die lokalen Simulationen und der noch ausstehende Test
