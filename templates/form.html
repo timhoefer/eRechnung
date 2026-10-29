@@ -59,6 +59,7 @@
   </form>
 </dialog>
 
+{% if issuers|length > 1 %}
 <dialog id="issuer-delete-dialog" class="modal" aria-labelledby="issuer-delete-title">
   <h3 id="issuer-delete-title">{{ t.issuer_delete_title }}</h3>
   <p><strong id="issuer-delete-name">{{ issuer_name }}</strong></p>
@@ -72,6 +73,7 @@
     </div>
   </form>
 </dialog>
+{% endif %}
 
 <div class="layout">
 <div class="form-pane">
@@ -210,7 +212,7 @@
     <div class="wide master-actions">
       <button type="button" class="link" id="issuer-add-button"><span aria-hidden="true">+ </span>{{ t.issuer_add }}</button>
       <div class="master-buttons">
-        <button type="button" class="secondary danger" id="issuer-delete-button">{{ t.delete }}</button>
+        {% if issuers|length > 1 %}<button type="button" class="secondary danger" id="issuer-delete-button">{{ t.delete }}</button>{% endif %}
         <button type="submit" class="secondary">{{ t.save_master }}</button>
       </div>
     </div>

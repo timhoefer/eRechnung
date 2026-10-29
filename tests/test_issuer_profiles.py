@@ -69,6 +69,7 @@ def test_existing_data_is_first_profile_without_rewriting_files(client):
     original = appmod.SELLER_FILE.read_bytes()
     page = html.fromstring(client.get("/").data)
     assert not page.xpath('//*[@id="issuer-select"]')
+    assert not page.xpath('//*[@id="issuer-delete-button" or @id="issuer-delete-dialog"]')
     form = page.get_element_by_id("settings-form")
     assert not form.xpath('.//input[@name="profile_label"]')
     assert form.xpath('./div[last()]/button[@id="issuer-add-button"]')
@@ -86,6 +87,8 @@ def test_multiple_profiles_show_switcher_and_current_issuer(client):
         ]
         assert select.xpath("./option[@selected]/@value") == [selected]
         assert page.get_element_by_id("settings-form").xpath('.//input[@name="profile_label"]')
+        assert page.get_element_by_id("issuer-delete-button") is not None
+        assert page.get_element_by_id("issuer-delete-dialog") is not None
         assert select.xpath('ancestor::summary/parent::details[@id="master-data"]')
         # The selector belongs to its own GET form, never to the settings POST.
         assert select.get("form") == "issuer-switch-form"
@@ -124,6 +127,7 @@ def test_delete_empty_profile_preserves_other_issuer_and_rejects_stale_tabs(clie
     assert appmod.CUSTOMERS_FILE.read_bytes() == customers
     page = html.fromstring(client.get(response.json["next_url"]).data)
     assert not page.xpath('//*[@id="issuer-select"]')
+    assert not page.xpath('//*[@id="issuer-delete-button" or @id="issuer-delete-dialog"]')
     assert page.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == [survivor]
     assert client.get("/").status_code == 200
     assert client.get("/", query_string={"issuer": target}).status_code == 410
@@ -171,6 +175,7 @@ def test_profile_with_archive_cannot_be_deleted(client, delete_default, filename
 
 
 def test_delete_rechecks_archive_after_dialog_was_opened(client):
+    add_issuer(client)
     page = html.fromstring(client.get("/").data)
     assert page.get_element_by_id("issuer-delete-confirm") is not None
     (appmod.OUTPUT_DIR / "new.pdf").write_bytes(b"Created in another window")

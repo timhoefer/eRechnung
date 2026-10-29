@@ -4,7 +4,7 @@
 
 - Mehrere auswählbare Rechnungsaussteller mit eigenen Stammdaten, Bankverbindungen, Nummernfolgen und Archiven. Kunden bleiben gemeinsam nutzbar. Bestehende Daten bilden unverändert das erste Profil; weitere Profile werden im gleichen Datenordner getrennt gespeichert.
 - Weitere Stammdaten lassen sich unten links anlegen. Erst ab zwei Profilen erscheint die Aussteller-Auswahl in der Kopfzeile der Stammdaten; sie ist auch im eingeklappten Zustand bedienbar. Der Statuswechsel zwischen vollständig und unvollständig verschiebt die Auswahl nicht.
-- „Löschen“ und „Stammdaten speichern“ stehen unten rechts. Profile mit leerem Archiv können nach Bestätigung gelöscht werden; nach dem letzten Profil erscheint ein leeres Formular. Alte Fenster können gelöschte Profile nicht durch automatisches Speichern wiederherstellen.
+- „Löschen“ und „Stammdaten speichern“ stehen unten rechts. „Löschen“ erscheint nur bei mindestens zwei Profilen und verschwindet, sobald nur noch eines vorhanden ist. Profile mit leerem Archiv können nach Bestätigung gelöscht werden. Alte Fenster können gelöschte Profile nicht durch automatisches Speichern wiederherstellen.
 - Vorschau, PDF/XML, Archivaktionen, Vorlagen und CSV-Export verwenden das ausgewählte Profil auch bei mehreren geöffneten Fenstern. Ein ausgefülltes Rechnungsformular wird beim Profilwechsel erst nach Bestätigung verworfen.
 - Ein Dialog stellt ausgewählte größere Feature-Releases einmalig automatisch vor. Kleinere Neuerungen sind nur über „Neuigkeiten“ in den Einstellungen erreichbar. Bereits gelesene Hinweise werden lokal gemerkt. Der Dialog unterstützt Deutsch, Englisch sowie Hell- und Dunkelmodus.
 

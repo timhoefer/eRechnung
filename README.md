@@ -56,7 +56,8 @@ Kunden oder Positionen fragt die App vor dem Verwerfen nach. Jedes Fenster behä
 seinen eigenen Aussteller; beim Start über die normale App-Adresse wird das erste
 noch vorhandene Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen.
 
-**Löschen** steht unten rechts neben **Stammdaten speichern**. Nach einer Bestätigung
+**Löschen** erscheint erst ab zwei vorhandenen Profilen und steht unten rechts
+neben **Stammdaten speichern**. Nach einer Bestätigung
 werden die Stammdaten samt Nummernfolge gelöscht, sofern das zugehörige Archiv leer
 ist. Andere Profile und Kunden bleiben erhalten. Beim Löschen des letzten Profils
 öffnet sich ein neues, leeres Profil. Im Datenordner bleibt lediglich eine
