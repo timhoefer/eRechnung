@@ -61,18 +61,33 @@ mitgenommen. Ohne Auswahl oder nach dem Löschen des Standards wird das erste
 noch aktive Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen.
 
 **Löschen** erscheint erst ab zwei aktiven Profilen und steht unten rechts neben
-**Stammdaten speichern**. Nach Bestätigung wird das Profil aus der Rechnungserstellung
-entfernt, etwa nach Stilllegung einer Firma. Seine bearbeitbaren Stammdaten werden
-gelöscht; im Datenordner bleiben der Anzeigename und eine Löschmarkierung erhalten.
+**Stammdaten speichern**. Nach Bestätigung wird das Profil aus der normalen Auswahl
+entfernt, etwa nach Stilllegung einer Firma. Seine Stammdaten und Nummernfolge
+bleiben für spätere Stornos und Korrekturen erhalten und sind nicht mehr bearbeitbar.
 Alte Fenster können das Profil nicht durch automatisches Speichern wiederherstellen.
 
 **Das Archiv bleibt erhalten.** In den Einstellungen hat das Archiv eine eigene
 Aussteller-Auswahl. Gelöschte Profile mit vorhandenen Archivdateien sind dort als
 **Nur Archiv** gekennzeichnet. Ihre Rechnungen lassen sich ansehen, herunterladen,
-prüfen und als CSV exportieren; neue Rechnungen, Vorlagen und Löschaktionen stehen
-für diese Profile nicht mehr zur Verfügung. PDF, XML und gespeicherte Rechnungsdaten
-einschließlich der damaligen Absenderangaben bleiben unverändert. Ein Wechsel des
-Archivs lässt den aktuellen Rechnungsentwurf und seinen Aussteller unangetastet.
+prüfen und als CSV exportieren. Im Menü einer Rechnung mit vollständig gespeicherten
+Formulardaten stehen **Storno erstellen** und **Korrektur erstellen** zur Verfügung.
+Der Aussteller und der Originalbezug sind fest hinterlegt; normale Rechnungen und
+Vorausrechnungen bleiben gesperrt. Bereits früher entfernte Profile können die
+Absenderdaten aus der ausgewählten Originalrechnung übernehmen. PDF, XML und
+gespeicherte Rechnungsdaten einschließlich der damaligen Absenderangaben bleiben
+unverändert. Ein Wechsel des Archivs lässt den aktuellen Rechnungsentwurf und seinen
+Aussteller unangetastet.
+
+**Schutz vor veralteten Stammdaten:** Ein geöffnetes Formular merkt sich den
+geladenen Stand. Hat ein anderes Fenster oder eine bereits eingetroffene
+Synchronisation die Stammdaten inzwischen geändert, wird das Speichern abgewiesen.
+Die App zeigt einen Hinweis und bietet **Aktuelle Stammdaten laden** an; der
+Rechnungsentwurf bleibt dabei erhalten. Die Prüfung reserviert keine Rechnungsnummern.
+
+Paralleles Schreiben auf mehreren Macs mit getrennten synchronisierten Kopien ist
+weiterhin nicht abgesichert. Die lokalen Simulationen und der noch ausstehende Test
+mit zwei echten Macs sind in [Mehrgeräte-Prüfung](docs/multi-device-validation.md)
+beschrieben.
 
 ## Steuerliche Behandlungen
 

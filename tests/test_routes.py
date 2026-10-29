@@ -274,13 +274,13 @@ def test_export_csv_browser_downloads(client):
 
 def test_settings_save_fetch_returns_json(client):
     # Stammdaten speichern per fetch -> JSON + Toast statt Redirect/Banner.
-    r = client.post("/settings", data={"name": "Neu GmbH"},
+    r = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())},
                     headers={"X-Requested-With": "fetch"})
     d = r.get_json()
     assert d["ok"] and d["message"]
     assert json.loads(appmod.SELLER_FILE.read_text(encoding="utf-8"))["name"] == "Neu GmbH"
     # Ohne Header: klassischer Redirect (No-JS-Fallback)
-    r2 = client.post("/settings", data={"name": "Neu GmbH"})
+    r2 = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())})
     assert r2.status_code in (302, 303)
 
 

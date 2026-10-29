@@ -465,17 +465,28 @@ def _select_issuer():
         if not profiles:
             abort(410)
         issuer = default_issuer(profiles)
-    # Retired issuers remain available only for archive access, never for new
-    # invoices or late writes from an already-open master-data form.
+    # Retired issuers allow archive access and adjustments to an archived original,
+    # but no regular invoices or late writes from an old master-data form.
     archive_endpoints = {
         "validate", "settings_panel", "settings_depinfo", "view", "archive_preview",
         "download", "download_zip", "reveal", "export_csv", "setlang",
         "data_dir_set", "data_dir_browse", "check_updates", "whats_new_seen",
     }
-    directory = issuer_directory(issuer, allow_deleted=request.endpoint in archive_endpoints)
+    directory = issuer_directory(issuer, allow_deleted=True)
     g.issuer_id = issuer
     g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
     g.issuer_output_dir = OUTPUT_DIR if issuer == "default" else directory / "output"
+    if _issuer_deleted(g.issuer_seller_file) and request.endpoint not in archive_endpoints:
+        correction_endpoints = {"index", "generate", "preview", "preview_html", "preview_pdf",
+                                "customers_autosave", "customers_items_save", "customers_save", "customers_delete"}
+        kind = request.form.get("doc_type", request.args.get("doc_type"))
+        source = request.form.get("correction_source", request.args.get("correction_source", ""))
+        original = correction_original(source) if source else None
+        if request.endpoint not in correction_endpoints or kind not in {"381", "384"} or original is None:
+            abort(410)
+        g.correction_source = source
+        g.correction_kind = kind
+        g.correction_original = original
 
 
 def current_issuer() -> str:
@@ -501,6 +512,9 @@ def _issuer_urls(endpoint, values):
         # The legacy profile also needs an explicit ID once the startup default
         # can point elsewhere. Otherwise its archive links change issuer.
         values.setdefault("issuer", current_issuer())
+        if has_request_context() and g.get("correction_source") and values["issuer"] == current_issuer():
+            values.setdefault("correction_source", g.correction_source)
+            values.setdefault("doc_type", g.correction_kind)
 
 
 def issuer_label(seller: dict) -> str:
@@ -546,9 +560,10 @@ def default_issuer(profiles: list[dict] | None = None) -> str:
 
 @app.context_processor
 def _issuer_context():
-    seller = load_seller()
+    seller = invoice_seller()
     return {"issuer_id": current_issuer(), "issuer_name": issuer_label(seller),
-            "issuer_deleted": seller.get("_deleted") is True}
+            "issuer_deleted": seller.get("_deleted") is True,
+            "correction_source": g.get("correction_source", "")}
 
 
 def _create_issuer(seller: dict) -> str:
@@ -594,9 +609,9 @@ def issuer_delete():
         # Use a fresh identity even when deleting the final profile. Old tabs
         # must not be able to autosave into the new, empty issuer.
         next_issuer = default_issuer(remaining) if remaining else _create_issuer({"country": "DE"})
-        # Keep the archive and a display label; remove editable master data.
-        # The marker also prevents stale tabs from resurrecting this issuer.
-        _write_json(seller_file(), {"_deleted": True, "profile_label": issuer_label(load_seller())})
+        # Retire the identity without losing details needed for later corrections.
+        seller = load_seller()
+        _write_json(seller_file(), dict(seller, _deleted=True, profile_label=issuer_label(seller)))
     except OSError:
         logger.warning("Could not delete issuer", exc_info=True)
         return {"ok": False, "message": t["action_failed"]}, 503
@@ -734,6 +749,28 @@ def load_seller() -> dict:
 
 def save_seller(data: dict) -> None:
     _write_json(seller_file(), data)
+
+
+def seller_revision(seller: dict) -> str:
+    # Invoice generation advances the counter without changing the master-data form.
+    fields = {key: value for key, value in seller.items() if key != "last_invoice_number"}
+    return hashlib.sha256(json.dumps(fields, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def save_seller_form() -> tuple[dict, int]:
+    """Compare and write under DATA_LOCK; an old tab must never overwrite newer data."""
+    seller = load_seller()
+    expected = request.form.get("seller_revision")
+    current_revision = seller_revision(seller)
+    updated = apply_seller_form(dict(seller), request.form)
+    updated_revision = seller_revision(updated)
+    if not expected or (expected != current_revision and updated_revision != current_revision):
+        return {"ok": False, "message": translate(get_ui_lang(request))["master_conflict"]}, 409
+    # A repeated identical save is harmless, including normalization of old files.
+    if updated_revision != current_revision:
+        save_seller(updated)
+    return {"ok": True, "revision": updated_revision,
+            "message": translate(get_ui_lang(request))["master_saved"]}, 200
 
 
 SELLER_FIELDS = [
@@ -1115,6 +1152,32 @@ def load_draft(src: str | None) -> dict | None:
         return None
 
 
+def correction_original(source: str) -> dict | None:
+    """A retired issuer can issue adjustments only against its own archived PDF."""
+    if Path(source).name != source or Path(source).suffix.lower() != ".pdf":
+        return None
+    pdf = output_dir() / source
+    sidecar = pdf.with_suffix(".json")
+    if not pdf.is_file() or pdf.is_symlink() or sidecar.is_symlink():
+        return None
+    draft = load_draft(source)
+    if (not isinstance(draft, dict) or draft.get("issuer_id", current_issuer()) != current_issuer()
+            or not isinstance(draft.get("invoice"), dict) or not draft["invoice"].get("number")
+            or not isinstance(draft.get("seller"), dict) or not draft["seller"].get("name")
+            or not isinstance(draft.get("buyer"), dict) or not isinstance(draft.get("items"), list)):
+        return None
+    return draft
+
+
+def invoice_seller() -> dict:
+    seller = load_seller()
+    if has_request_context() and g.get("correction_original") and not seller.get("name"):
+        # Older retired profiles kept only a label. Recover their details from
+        # the selected original, while preserving the retired marker and counter.
+        return {**g.correction_original["seller"], **seller}
+    return seller
+
+
 def render_invoice_preview(seller, buyer, inv, items, mode=""):
     """Rechnungs-HTML für Live-Vorschau und neue Exporte rendern.
     Rückgabe: (html, (line_total, discount, tax_basis, tax_total, grand_total, treatment))."""
@@ -1168,7 +1231,7 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
 
 def _assemble(form):
     """Formulardaten -> (data-dict, gerendertes HTML, totals-bundle)."""
-    seller = load_seller()
+    seller = invoice_seller()
     items = parse_items(form)
     inv_lang = form.get("language", "") or get_ui_lang(request)
     _pay_days = payment_days(form)
@@ -1210,6 +1273,10 @@ def _assemble(form):
         "bank_account": form.get("bank_account", "0"),  # gewähltes Konto (0 = Hauptkonto)
     }
     buyer = buyer_from_form(form)
+    if g.get("correction_original"):
+        original = g.correction_original["invoice"]
+        inv["ref_number"] = original["number"]
+        inv["ref_date"] = original.get("issue_date")
     data = {
         "seller": seller, "buyer": buyer, "invoice": inv, "items": items,
         "bank": select_account(seller, inv["bank_account"]),  # gewähltes Zahlungskonto
@@ -1277,7 +1344,7 @@ DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änd
 
 @app.route("/")
 def index():
-    seller = load_seller()
+    seller = invoice_seller()
     today = date.today()
     defaults = {
         "number": suggest_invoice_number(seller),
@@ -1285,6 +1352,14 @@ def index():
         "due_date": (today + timedelta(days=DEFAULT_TERM_DAYS)).isoformat(),
     }
     draft = load_draft(request.args.get("from"))
+    if g.get("correction_original"):
+        draft = g.correction_original
+        numbers = [seller.get("last_invoice_number", ""), *used_invoice_numbers()]
+        sequence = [int(n.split("-")[1]) for n in numbers if re.fullmatch(fr"{today.year}-\d+", n)]
+        defaults["number"] = f"{today.year}-{max(sequence, default=0) + 1:03d}"
+        defaults["doc_type"] = g.correction_kind
+        defaults["ref_number"] = draft["invoice"]["number"]
+        defaults["ref_date"] = draft["invoice"].get("issue_date") or ""
     # Erststart: noch kein Datenordner gewählt UND keine Stammdaten -> beim ersten
     # Öffnen aktiv nach dem Speicherort fragen (Vorschlag: sichtbarer Dokumente-Ordner
     # statt des versteckten Application-Support-Standards).
@@ -1292,6 +1367,7 @@ def index():
     return render_template(
         "form.html",
         seller=seller,
+        seller_revision=seller_revision(seller),
         issuers=issuer_profiles(),
         default_issuer_id=default_issuer(),
         issuer_scope=issuer_scope(),
@@ -1311,22 +1387,21 @@ def index():
 
 @app.route("/settings", methods=["POST"])
 def settings():
-    seller = apply_seller_form(load_seller(), request.form)
-    save_seller(seller)
-    msg = translate(get_ui_lang(request))["master_saved"]
+    result, status = save_seller_form()
     # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner.
-    if request.headers.get("X-Requested-With") == "fetch":
-        return {"ok": True, "message": msg}
-    flash(msg, "ok")
+    if request.headers.get("X-Requested-With") == "fetch" or status != 200:
+        return result, status
+    flash(result["message"], "ok")
     return redirect(url_for("index"))
 
 
 @app.route("/settings/autosave", methods=["POST"])
 def settings_autosave():
     """Stammdaten beim Tippen sichern (ohne Redirect/Flash)."""
-    seller = apply_seller_form(load_seller(), request.form)
-    save_seller(seller)
-    return ("", 204)
+    result, status = save_seller_form()
+    if status != 200:
+        return result, status
+    return "", 204, {"X-Seller-Revision": result["revision"]}
 
 
 @app.route("/customers/autosave", methods=["POST"])
@@ -1468,7 +1543,7 @@ def preview_pdf():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    seller = load_seller()
+    seller = invoice_seller()
     data, html, totals = _assemble(request.form)
     if not data["items"]:
         flash(translate(get_ui_lang(request))["need_item"], "err")
@@ -1781,6 +1856,7 @@ def _settings_context() -> dict:
                     "%Y-%m-%d %H:%M"
                 ),
                 "has_draft": sidecar.exists(),
+                "can_correct": correction_original(p.name) is not None,
                 "xml_filename": (
                     f"{p.stem}.xml" if (output_dir() / f"{p.stem}.xml").exists() else None
                 ),

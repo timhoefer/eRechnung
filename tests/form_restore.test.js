@@ -382,3 +382,83 @@ test("moving data updates language draft storage without resetting the invoice",
   assert.equal(app.window.ISSUER_ID, "company");
   assert.equal(content.hidden, false);
 });
+
+function masterForm() {
+  const app = loadApp();
+  const revision = {value: "initial"};
+  const fields = {name: "First edit"};
+  const notice = {hidden: true, scrollIntoView() {}};
+  const details = {open: false};
+  const form = {querySelector: () => revision};
+  const elements = {"settings-form": form, "master-conflict": notice, "master-data": details};
+  app.document.getElementById = (id) => elements[id] || null;
+  app.window.SELLER_AUTOSAVE_URL = "/settings/autosave?issuer=default";
+  app.FormData = class extends Map { constructor() { super([["name", fields.name], ["seller_revision", revision.value]]); } };
+  app.updatePreview = app.flashError = () => {};
+  return {app, revision, fields, notice, details};
+}
+
+test("queued master edits use the previous save's revision without losing the newer edit", async () => {
+  const {app, revision, fields} = masterForm();
+  const requests = [];
+  app.fetch = (url, options) => new Promise((resolve) => requests.push({body: options.body, resolve}));
+  const first = app.autosaveSeller();
+  fields.name = "Second edit";
+  const second = app.autosaveSeller();
+  await Promise.resolve();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.get("seller_revision"), "initial");
+  requests[0].resolve({ok: true, headers: {get: () => "after-first"}});
+  assert.equal(await first, true);
+  await Promise.resolve();
+  assert.equal(requests[1].body.get("seller_revision"), "after-first");
+  assert.equal(requests[1].body.get("name"), "Second edit");
+  requests[1].resolve({ok: true, headers: {get: () => "after-second"}});
+  assert.equal(await second, true);
+  assert.equal(revision.value, "after-second");
+});
+
+test("a master-data conflict preserves local fields and stops queued saves and profile navigation", async () => {
+  const {app, revision, fields, notice, details} = masterForm();
+  app.clearTimeout = () => {};
+  let requests = 0;
+  app.fetch = async () => {
+    requests++;
+    return {status: 409, ok: false, json: async () => ({message: "Changed elsewhere"})};
+  };
+  const first = app.autosaveSeller();
+  const queued = app.autosaveSeller();
+  assert.equal(await first, false);
+  assert.equal(await queued, false);
+  assert.equal(requests, 1);
+  assert.equal(notice.hidden, false);
+  assert.equal(details.open, true);
+  assert.equal(fields.name, "First edit");
+  assert.equal(revision.value, "initial");
+  await app.switchIssuer({id: "issuer-create-form", submit() { throw new Error("must not navigate"); }});
+  assert.equal(requests, 1);
+});
+
+test("loading current master data preserves the invoice draft before reloading", () => {
+  const app = loadApp();
+  app.window.ISSUER_ID = "company";
+  app.FormData = class extends Map { constructor() { super([["buyer_name", "Client"], ["description", "Work"]]); } };
+  let saved;
+  app.sessionStorage.setItem = (key, value) => { saved = JSON.parse(value); };
+  app.window.location = {reload() { assert.deepEqual(saved, {buyer_name: ["Client"], description: ["Work"]}); }};
+  app.reloadMasterData();
+});
+
+test("retired issuer details are never autosaved and restored drafts cannot replace their original reference", async () => {
+  const {app} = masterForm();
+  app.window.ISSUER_RETIRED = true;
+  app.fetch = () => { throw new Error("retired master data must stay unchanged"); };
+  assert.equal(await app.autosaveSeller(), true);
+  const fields = {doc_type: {value: "381"}, ref_number: {value: "2026-011"}, ref_date: {value: "2026-10-01"}, correction_source: {value: "original.pdf"}};
+  const form = {querySelectorAll: () => [], querySelector: (selector) => fields[selector.match(/name="([^"]+)"/)[1]]};
+  app.restoreForm(form, {doc_type: ["380"], ref_number: ["Wrong"], ref_date: ["2000-01-01"], correction_source: ["other.pdf"]});
+  assert.equal(fields.doc_type.value, "381");
+  assert.equal(fields.ref_number.value, "2026-011");
+  assert.equal(fields.ref_date.value, "2026-10-01");
+  assert.equal(fields.correction_source.value, "original.pdf");
+});

@@ -107,6 +107,10 @@
             <div class="row-menu-list" role="menu">
               <a href="{{ url_for('view', filename=a.filename) }}" target="_blank" role="menuitem">{{ t.act_view }}</a>
               {% if a.has_draft and not issuer_deleted %}<a href="{{ url_for('index', **{'from': a.filename}) }}" role="menuitem">{{ t.act_edit }}</a>{% endif %}
+              {% if issuer_deleted and a.can_correct %}
+              <a href="{{ url_for('index', correction_source=a.filename, doc_type='381') }}" role="menuitem">{{ t.issuer_cancel_invoice }}</a>
+              <a href="{{ url_for('index', correction_source=a.filename, doc_type='384') }}" role="menuitem">{{ t.issuer_correct_invoice }}</a>
+              {% endif %}
               {% if a.has_draft %}
                 {% if is_desktop %}
                 <button type="button" class="csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename) }}" role="menuitem">CSV</button>

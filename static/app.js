@@ -483,7 +483,9 @@ function restoreForm(form, data) {
     });
   });
   Object.keys(data).forEach((name) => {
-    if (name === "issuer" || repeating.includes(name)) return;
+    if (["issuer", "seller_revision", "correction_source"].includes(name) || repeating.includes(name)) return;
+    if (window.ISSUER_RETIRED && (["ref_number", "ref_date"].includes(name)
+      || (name === "doc_type" && !["381", "384"].includes(data[name][0])))) return;
     const el = form.querySelector(`[name="${name}"]`);
     if (el) el.value = data[name][0];
   });
@@ -872,6 +874,7 @@ function positionRefMenu(input) {
   refMenu.style.width = Math.max(r.width, 240) + "px";
 }
 function openRefMenu(input) {
+  if (input.readOnly) return;
   const menu = ensureRefMenu();
   refInput = input;
   refIndex = -1;
@@ -1216,17 +1219,38 @@ function closePreviewDrawer() {
 let sellerSaveTimer;
 let pendingSellerSave = Promise.resolve(true);
 let issuerDeletionPending = false;
+let sellerConflict = false;
+function showSellerConflict(message) {
+  sellerConflict = true;
+  const notice = document.getElementById("master-conflict");
+  if (notice) notice.hidden = false;
+  const details = document.getElementById("master-data");
+  if (details) details.open = true;
+  if (notice) notice.scrollIntoView({block: "center"});
+  if (message) flashError(message);
+}
 function autosaveSeller() {
-  if (issuerDeletionPending) return Promise.resolve(false);
+  if (window.ISSUER_RETIRED) return Promise.resolve(true);
+  if (issuerDeletionPending || sellerConflict) return Promise.resolve(false);
   const form = document.getElementById("settings-form");
   if (!form || !window.SELLER_AUTOSAVE_URL) return Promise.resolve(true);
   // Nach dem Speichern Vorschau auffrischen (Stammdaten fließen ins PDF ein, stehen
   // aber nicht im invoice-form -> force, sonst greift die Dedup-Sperre).
   const body = new FormData(form);
-  pendingSellerSave = pendingSellerSave.then(() =>
-    fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body })
-      .then((r) => {
+  pendingSellerSave = pendingSellerSave.then(() => {
+    if (sellerConflict) return false;
+    const revision = form.querySelector('[name="seller_revision"]');
+    // Queued edits use the revision returned by the previous completed save.
+    body.set("seller_revision", revision.value);
+    return fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body })
+      .then(async (r) => {
+        if (r.status === 409) {
+          const data = await r.json();
+          showSellerConflict(data.message);
+          return false;
+        }
         if (!r.ok) throw new Error("save failed");
+        revision.value = r.headers.get("X-Seller-Revision");
         updatePreview(true);
         const select = document.getElementById("issuer-select");
         const label = body.get("profile_label") || body.get("name");
@@ -1234,12 +1258,12 @@ function autosaveSeller() {
         if (option && label) option.textContent = label;
         return true;
       })
-      .catch(() => { flashError(); return false; })
-  );
+      .catch(() => { flashError(); return false; });
+  });
   return pendingSellerSave;
 }
 function scheduleSellerSave() {
-  if (issuerDeletionPending) return;
+  if (issuerDeletionPending || sellerConflict) return;
   clearTimeout(sellerSaveTimer);
   sellerSaveTimer = setTimeout(autosaveSeller, 700);
 }
@@ -1669,6 +1693,7 @@ document.addEventListener("submit", (e) => {
   const form = e.target;
   if (form.id !== "invoice-form") return;
   if (e.submitter && e.submitter.hasAttribute("formaction")) return; // nur der Erzeugen-Button
+  if (sellerConflict) { e.preventDefault(); showSellerConflict(); return; }
   const treatment = document.querySelector("#tax_treatment");
   const vat = form.querySelector('[name="buyer_vat_id"]');
   if (treatment && (treatment.value === "eu_reverse" || treatment.value === "non_eu") && vat && !vat.value.trim()) {
@@ -1691,6 +1716,12 @@ document.addEventListener("input", (e) => {
 // "Stammdaten speichern" ohne Seiten-Reload: Scrollposition bleibt, Toast statt
 // Banner; danach Vorschau auffrischen (Stammdaten fließen ins PDF ein).
 const settingsFormEl = document.getElementById("settings-form");
+const masterReload = document.getElementById("master-reload");
+function reloadMasterData() {
+  sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(document.getElementById("invoice-form"))));
+  window.location.reload();
+}
+if (masterReload) masterReload.addEventListener("click", reloadMasterData);
 if (settingsFormEl) {
   settingsFormEl.addEventListener("submit", (e) => {
     e.preventDefault();
