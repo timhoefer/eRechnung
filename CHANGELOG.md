@@ -1,6 +1,6 @@
 # Änderungen
 
-## Unveröffentlicht
+## 1.2.0
 
 - Mehrere auswählbare Rechnungsaussteller mit eigenen Stammdaten, Bankverbindungen, Nummernfolgen und Archiven. Kunden bleiben gemeinsam nutzbar. Bestehende Daten bilden unverändert das erste Profil; weitere Profile werden im gleichen Datenordner getrennt gespeichert.
 - Weitere Stammdaten lassen sich unten links anlegen. Erst ab zwei Profilen erscheint die Aussteller-Auswahl in der Kopfzeile der Stammdaten; sie ist auch im eingeklappten Zustand bedienbar. Der Statuswechsel zwischen vollständig und unvollständig verschiebt die Auswahl nicht.
