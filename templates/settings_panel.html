@@ -59,7 +59,19 @@
 
 <div class="card">
   <h2>{{ t.archive }} ({{ archive|length }})</h2>
+  {% if archive_issuers|length > 1 %}
+  <form method="get" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=None) }}" id="archive-issuer-form" class="archive-issuer-choice">
+    <label>{{ t.issuer }}
+      <select name="issuer" id="archive-issuer-select">
+        {% for p in archive_issuers %}<option value="{{ p.id }}" {{ 'selected' if p.id == issuer_id else '' }}>{{ p.label }}{{ ' · ' ~ t.issuer_archived if p.deleted else '' }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="secondary small">{{ t.issuer_switch }}</button>
+  </form>
+  {% else %}
   <p class="hint">{{ t.issuer }}: <strong>{{ issuer_name }}</strong></p>
+  {% endif %}
+  {% if issuer_deleted %}<p class="hint">{{ t.issuer_archive_hint }}</p>{% endif %}
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
   <table class="archive">
@@ -94,7 +106,7 @@
             <summary role="button" aria-haspopup="menu" aria-label="{{ t.act_more }}" title="{{ t.act_more }}">⋯</summary>
             <div class="row-menu-list" role="menu">
               <a href="{{ url_for('view', filename=a.filename) }}" target="_blank" role="menuitem">{{ t.act_view }}</a>
-              {% if a.has_draft %}<a href="{{ url_for('index', **{'from': a.filename}) }}" role="menuitem">{{ t.act_edit }}</a>{% endif %}
+              {% if a.has_draft and not issuer_deleted %}<a href="{{ url_for('index', **{'from': a.filename}) }}" role="menuitem">{{ t.act_edit }}</a>{% endif %}
               {% if a.has_draft %}
                 {% if is_desktop %}
                 <button type="button" class="csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename) }}" role="menuitem">CSV</button>
@@ -103,7 +115,7 @@
                 {% endif %}
               {% endif %}
               {% if not is_desktop and a.xml_filename %}<a href="{{ url_for('download', filename=a.xml_filename) }}" role="menuitem">XML</a>{% endif %}
-              <button type="button" class="js-delete danger-item" data-filename="{{ a.filename }}" role="menuitem">{{ t.act_delete }}</button>
+              {% if not issuer_deleted %}<button type="button" class="js-delete danger-item" data-url="{{ url_for('archive_delete') }}" data-filename="{{ a.filename }}" role="menuitem">{{ t.act_delete }}</button>{% endif %}
             </div>
           </details>
         </td>
@@ -118,7 +130,7 @@
     <div class="export-bar">
       <label>{{ t.export_from }}<input type="date" id="export-from"></label>
       <label>{{ t.export_to }}<input type="date" id="export-to"></label>
-      <button type="button" class="secondary" id="export-csv">{{ t.export_csv }}</button>
+      <button type="button" class="secondary" id="export-csv" data-url="{{ url_for('export_csv') }}">{{ t.export_csv }}</button>
     </div>
     <div class="export-presets">
       <button type="button" class="link" data-preset="thisyear">{{ t.export_this_year }}</button>

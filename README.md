@@ -53,16 +53,26 @@ späteren Änderungen an den Stammdaten unverändert.
 
 Ein Profilwechsel öffnet ein neues Rechnungsformular. Bei bereits eingetragenem
 Kunden oder Positionen fragt die App vor dem Verwerfen nach. Jedes Fenster behält
-seinen eigenen Aussteller; beim Start über die normale App-Adresse wird das erste
-noch vorhandene Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen.
+seinen eigenen Aussteller. Bei mehreren aktiven Profilen kannst du unter dem
+Profilnamen **Als Standard verwenden** wählen. Dieses Profil wird beim nächsten
+App-Start ausgewählt; ein manueller Profilwechsel verändert den Standard nicht.
+Die Auswahl liegt in `issuer_preferences.json` im Datenordner und wird beim Umzug
+mitgenommen. Ohne Auswahl oder nach dem Löschen des Standards wird das erste
+noch aktive Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen.
 
-**Löschen** erscheint erst ab zwei vorhandenen Profilen und steht unten rechts
-neben **Stammdaten speichern**. Nach einer Bestätigung
-werden die Stammdaten samt Nummernfolge gelöscht, sofern das zugehörige Archiv leer
-ist. Andere Profile und Kunden bleiben erhalten. Beim Löschen des letzten Profils
-öffnet sich ein neues, leeres Profil. Im Datenordner bleibt lediglich eine
-Löschmarkierung ohne Stammdaten zurück, damit alte Fenster das gelöschte Profil
-nicht durch automatisches Speichern wiederherstellen können.
+**Löschen** erscheint erst ab zwei aktiven Profilen und steht unten rechts neben
+**Stammdaten speichern**. Nach Bestätigung wird das Profil aus der Rechnungserstellung
+entfernt, etwa nach Stilllegung einer Firma. Seine bearbeitbaren Stammdaten werden
+gelöscht; im Datenordner bleiben der Anzeigename und eine Löschmarkierung erhalten.
+Alte Fenster können das Profil nicht durch automatisches Speichern wiederherstellen.
+
+**Das Archiv bleibt erhalten.** In den Einstellungen hat das Archiv eine eigene
+Aussteller-Auswahl. Gelöschte Profile mit vorhandenen Archivdateien sind dort als
+**Nur Archiv** gekennzeichnet. Ihre Rechnungen lassen sich ansehen, herunterladen,
+prüfen und als CSV exportieren; neue Rechnungen, Vorlagen und Löschaktionen stehen
+für diese Profile nicht mehr zur Verfügung. PDF, XML und gespeicherte Rechnungsdaten
+einschließlich der damaligen Absenderangaben bleiben unverändert. Ein Wechsel des
+Archivs lässt den aktuellen Rechnungsentwurf und seinen Aussteller unangetastet.
 
 ## Steuerliche Behandlungen
 

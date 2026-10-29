@@ -1706,6 +1706,26 @@ if (issuerCreateDialog) {
   document.getElementById("issuer-add-button").addEventListener("click", () => issuerCreateDialog.showModal());
   document.getElementById("issuer-create-cancel").addEventListener("click", () => issuerCreateDialog.close());
 }
+async function setDefaultIssuer(button) {
+  if (button.disabled || issuerDeletionPending) return false;
+  button.disabled = true;
+  const body = new FormData();
+  body.append("issuer", window.ISSUER_ID);
+  try {
+    const response = await fetch(button.dataset.url, {method: "POST", body});
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error("default issuer save failed");
+    button.textContent = button.dataset.savedLabel;
+    return true;
+  } catch {
+    button.disabled = false;
+    flashError();
+    return false;
+  }
+}
+const issuerDefaultButton = document.getElementById("issuer-default-button");
+if (issuerDefaultButton) issuerDefaultButton.addEventListener("click", () => setDefaultIssuer(issuerDefaultButton));
+
 const issuerDeleteDialog = document.getElementById("issuer-delete-dialog");
 if (issuerDeleteDialog) {
   document.getElementById("issuer-delete-button").addEventListener("click", () => {
@@ -2109,13 +2129,21 @@ function loadDepsAsync() {
     .catch(() => {});
 }
 
-function loadSettingsPanel() {
+let settingsPanelUrl;
+let settingsPanelLoadId = 0;
+function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options) {
   const pane = document.getElementById("settings-pane");
-  if (!pane || !window.SETTINGS_PANEL_URL) return Promise.resolve();
-  return fetch(window.SETTINGS_PANEL_URL)
-    .then((r) => r.text())
-    .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
-    .catch(() => flashError());
+  if (!pane || !url) return Promise.resolve();
+  const loadId = ++settingsPanelLoadId;
+  return fetch(url, options)
+    .then((r) => { if (!r.ok) throw new Error("archive load failed"); return r.text(); })
+    .then((html) => {
+      if (loadId !== settingsPanelLoadId) return;
+      settingsPanelUrl = url;
+      pane.innerHTML = html;
+      loadDepsAsync();
+    })
+    .catch(() => { if (loadId === settingsPanelLoadId) flashError(); });
 }
 
 function openSettings() {
@@ -2163,6 +2191,9 @@ function closeSettings() {
   const toggle = document.getElementById("settings-toggle");
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
+  pane.addEventListener("change", (e) => {
+    if (e.target.id === "archive-issuer-select") e.target.form.requestSubmit();
+  });
 
   // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.
   pane.addEventListener("mouseover", (e) => {
@@ -2226,8 +2257,8 @@ function closeSettings() {
       if (!confirm(fn + "\n\n" + (window.MSG_CONFIRM_DELETE || ""))) return;
       const fd = new FormData();
       fd.append("filename", fn);
-      fetch(window.ARCHIVE_DELETE_URL, { method: "POST", body: fd })
-        .then(() => loadSettingsPanel())
+      fetch(del.dataset.url, { method: "POST", body: fd })
+        .then((r) => { if (!r.ok) throw new Error("delete failed"); return loadSettingsPanel(); })
         .catch(() => flashError());
       return;
     }
@@ -2281,7 +2312,8 @@ function closeSettings() {
       if (from) qs.set("from", from);
       if (to) qs.set("to", to);
       const q = qs.toString();
-      const url = window.EXPORT_CSV_URL + (q ? (window.EXPORT_CSV_URL.includes("?") ? "&" : "?") + q : "");
+      const baseUrl = e.target.closest("#export-csv").dataset.url;
+      const url = baseUrl + (q ? (baseUrl.includes("?") ? "&" : "?") + q : "");
       // Desktop: Server schreibt die CSV + zeigt sie im Finder (kein Download).
       if (window.IS_DESKTOP) fetch(url).catch(() => flashError());
       else window.location = url;
@@ -2297,15 +2329,18 @@ function closeSettings() {
   pane.addEventListener("submit", (e) => {
     const form = e.target;
     e.preventDefault();
-    if (form.classList.contains("datadir-form")) {
-      fetch(window.DATA_DIR_SET_URL, { method: "POST", body: new FormData(form) })
+    if (form.id === "archive-issuer-form") {
+      const url = new URL(form.action, window.location.href);
+      url.search = new URLSearchParams(new FormData(form)).toString();
+      lastPreviewUrl = null;
+      showNoPreview(window.MSG_LIVE_PREVIEW);
+      loadSettingsPanel(url.toString());
+    } else if (form.classList.contains("datadir-form")) {
+      fetch(form.action, { method: "POST", body: new FormData(form) })
         .then(() => loadSettingsPanel())
         .catch(() => flashError());
     } else { // Datei prüfen / Archiv-Rechnung prüfen -> Panel mit Ergebnis ersetzen
-      fetch(window.SETTINGS_PANEL_URL, { method: "POST", body: new FormData(form) })
-        .then((r) => r.text())
-        .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
-        .catch(() => flashError());
+      loadSettingsPanel(form.action, { method: "POST", body: new FormData(form) });
     }
   });
 })();

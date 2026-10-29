@@ -122,7 +122,9 @@ def test_delete_empty_profile_preserves_other_issuer_and_rejects_stale_tabs(clie
     customers = appmod.CUSTOMERS_FILE.read_bytes()
     response = client.post("/issuers/delete", data={"issuer": target, "confirm": "delete"})
     assert response.status_code == 200 and response.json["ok"]
-    assert json.loads(target_file.read_text()) == {"_deleted": True}
+    assert json.loads(target_file.read_text()) == {
+        "_deleted": True, "profile_label": SELLER["name"] if delete_default else company["name"],
+    }
     assert survivor_file.read_bytes() == original
     assert appmod.CUSTOMERS_FILE.read_bytes() == customers
     page = html.fromstring(client.get(response.json["next_url"]).data)
@@ -159,29 +161,29 @@ def test_deleting_last_profile_opens_fresh_identity_with_blank_master_data(clien
 
 @pytest.mark.parametrize("delete_default", [False, True])
 @pytest.mark.parametrize("filename", ["invoice.pdf", "invoice.xml", "invoice.json"])
-def test_profile_with_archive_cannot_be_deleted(client, delete_default, filename):
+def test_deleting_profile_preserves_every_archive_file(client, delete_default, filename):
     issuer, directory = add_issuer(client)
     selected = "default" if delete_default else issuer
     seller = appmod.SELLER_FILE if delete_default else directory / "seller.json"
     archive = appmod.OUTPUT_DIR if delete_default else directory / "output"
     (archive / filename).write_bytes(b"Original invoice data")
-    before = seller.read_bytes()
     response = client.post("/issuers/delete", data={"issuer": selected, "confirm": "delete"})
-    assert response.status_code == 409 and not response.json["ok"]
-    assert seller.read_bytes() == before
+    assert response.status_code == 200 and response.json["ok"]
+    assert json.loads(seller.read_text())["_deleted"] is True
     assert (archive / filename).read_bytes() == b"Original invoice data"
-    page = html.fromstring(client.get("/", query_string={"issuer": selected}).data)
-    assert not page.xpath('//*[@id="issuer-delete-confirm"]')
+    # Even a legacy archive with only XML/sidecar data stays discoverable.
+    page = html.fromstring(client.get("/settings/panel").data)
+    assert page.xpath(f'//select[@id="archive-issuer-select"]/option[@value="{selected}"]')
 
 
-def test_delete_rechecks_archive_after_dialog_was_opened(client):
+def test_delete_preserves_invoice_created_after_dialog_was_opened(client):
     add_issuer(client)
     page = html.fromstring(client.get("/").data)
     assert page.get_element_by_id("issuer-delete-confirm") is not None
     (appmod.OUTPUT_DIR / "new.pdf").write_bytes(b"Created in another window")
     response = client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"})
-    assert response.status_code == 409
-    assert appmod.load_seller() == SELLER
+    assert response.status_code == 200
+    assert client.get("/download/new.pdf?issuer=default").data == b"Created in another window"
 
 
 def test_deletion_requires_explicit_confirmation_and_matching_issuer(client):
@@ -202,6 +204,129 @@ def test_deleted_profiles_stay_deleted_when_data_folder_is_moved(client, tmp_pat
     assert client.get("/?issuer=default").status_code == 410
     page = html.fromstring(client.get("/").data)
     assert page.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == [issuer]
+
+
+@pytest.mark.parametrize("retire_default", [False, True])
+def test_retired_issuer_archive_is_accessible_but_cannot_issue_or_edit(client, fast_generation, monkeypatch, retire_default):
+    issuer, directory = add_issuer(client)
+    client.post("/settings", data=dict(SELLER, issuer=issuer, name="Company Example"))
+    target = "default" if retire_default else issuer
+    survivor = issuer if retire_default else "default"
+    archive = appmod.OUTPUT_DIR if retire_default else directory / "output"
+    assert client.post("/generate", data=dict(FORM, issuer=target, profile="xrechnung")).status_code == 200
+    before = {p.name: p.read_bytes() for p in archive.iterdir()}
+    filename = f"Rechnung_{YEAR}-011.pdf"
+    assert client.post("/issuers/delete", data={"issuer": target, "confirm": "delete"}).json["ok"]
+    assert {p.name: p.read_bytes() for p in archive.iterdir()} == before
+    for route in ("view", "download", "archive/preview"):
+        assert client.get(f"/{route}/{filename}?issuer={target}").data == before[filename]
+    assert client.get(f"/download/{filename[:-4]}.xml?issuer={target}").data == before[filename[:-4] + ".xml"]
+    assert client.get(f"/download-zip/{filename}?issuer={target}").status_code == 200
+    assert "Example Client" in client.get(f"/export/csv?issuer={target}").get_data(as_text=True)
+    monkeypatch.setattr(appmod, "reveal_in_finder", lambda path: path.parent == archive)
+    assert client.post(f"/reveal/{filename}?issuer={target}").json["ok"]
+    assert client.post(f"/settings/panel?issuer={target}", data={"filename": filename[:-4] + ".xml"}).status_code == 200
+    monkeypatch.setattr(appmod, "drafthorse_version_info", lambda: {})
+    page = html.fromstring(client.get(f"/validate?issuer={target}").data)
+    back = page.xpath('//p[@class="back-link"]/a/@href')[0]
+    assert parse_qs(urlparse(back).query)["issuer"] == [survivor]
+    assert client.get(back).status_code == 200
+    assert not page.xpath('//*[@class="js-delete danger-item"]')
+    assert not page.xpath('//a[contains(@href, "from=Rechnung")]')
+    active = html.fromstring(client.get("/").data)
+    assert active.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == [survivor]
+    for route in ("settings", "settings/autosave", "generate", "preview-html", "issuers/default", "archive/delete"):
+        assert client.post(f"/{route}", data=dict(FORM, issuer=target, filename=filename)).status_code == 410
+    assert client.get(f"/?issuer={target}&from={filename}").status_code == 410
+    assert {p.name: p.read_bytes() for p in archive.iterdir()} == before
+
+
+def test_default_issuer_persists_without_changing_open_forms_or_numbering(client):
+    issuer, directory = add_issuer(client)
+    saved = appmod.SELLER_FILE.read_bytes(), (directory / "seller.json").read_bytes()
+    assert client.post("/issuers/default", data={"issuer": issuer}).json == {"ok": True}
+    # A fresh session uses the preference, but an explicit URL keeps its issuer.
+    fresh = appmod.app.test_client()
+    page = html.fromstring(fresh.get("/").data)
+    assert page.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == [issuer]
+    assert "disabled" in page.get_element_by_id("issuer-default-button").attrib
+    legacy = html.fromstring(fresh.get("/?issuer=default").data)
+    assert legacy.get_element_by_id("issuer-select").xpath('./option[@selected]/@value') == ["default"]
+    assert "disabled" not in legacy.get_element_by_id("issuer-default-button").attrib
+    assert legacy.get_element_by_id("settings-form").get("action") == "/settings?issuer=default"
+    assert saved == (appmod.SELLER_FILE.read_bytes(), (directory / "seller.json").read_bytes())
+    assert client.post("/settings/autosave", data={"issuer": "default", "name": "Still freelance"}).status_code == 204
+    assert json.loads((directory / "seller.json").read_text())["profile_label"] == "Example Company"
+    assert number_on_page(client) == f"{YEAR}-011"
+    assert number_on_page(client, issuer) == f"{YEAR}-001"
+
+
+def test_default_change_cannot_retarget_existing_legacy_archive_links(client):
+    issuer, directory = add_issuer(client)
+    filename = "same.pdf"
+    (appmod.OUTPUT_DIR / filename).write_bytes(b"Legacy original")
+    (directory / "output" / filename).write_bytes(b"Company original")
+    page = html.fromstring(client.get("/settings/panel?issuer=default").data)
+    view = page.xpath('//tr[@class="arch-row"]/@data-preview-url')[0]
+    delete = page.xpath('//button[contains(@class, "js-delete")]/@data-url')[0]
+    export = page.get_element_by_id("export-csv").get("data-url")
+    assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
+    assert client.get(view).data == b"Legacy original"
+    assert parse_qs(urlparse(export).query)["issuer"] == ["default"]
+    assert client.post(delete, data={"filename": filename}).status_code == 302
+    assert not (appmod.OUTPUT_DIR / filename).exists()
+    assert (directory / "output" / filename).read_bytes() == b"Company original"
+
+
+def test_deleting_selected_default_falls_back_to_surviving_profile(client):
+    issuer, _ = add_issuer(client)
+    assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
+    response = client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"})
+    assert parse_qs(urlparse(response.json["next_url"]).query)["issuer"] == ["default"]
+    page = html.fromstring(client.get("/").data)
+    assert not page.xpath('//*[@id="issuer-default-button"]')
+    assert page.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == ["default"]
+
+
+def test_default_and_retired_archive_survive_data_folder_move(client, tmp_path):
+    issuer, _ = add_issuer(client)
+    assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
+    (appmod.OUTPUT_DIR / "original.pdf").write_bytes(b"Original")
+    assert client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).json["ok"]
+    old = appmod.DATA_DIR
+    assert appmod.set_data_dir(str(tmp_path / "moved"))[0]
+    assert not (old / "issuer_preferences.json").exists()
+    page = html.fromstring(client.get("/").data)
+    assert page.get_element_by_id("invoice-form").xpath('./input[@name="issuer"]/@value') == [issuer]
+    assert client.get("/download/original.pdf?issuer=default").data == b"Original"
+
+
+@pytest.mark.parametrize("conflict", ["seller.json", "issuer_preferences.json"])
+def test_move_rejects_conflicting_legacy_identity_or_default(client, tmp_path, conflict):
+    issuer, _ = add_issuer(client)
+    assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
+    old = appmod.DATA_DIR
+    original = (old / conflict).read_bytes()
+    target = tmp_path / "conflicting"
+    target.mkdir()
+    (target / conflict).write_text('{"different": true}')
+    assert appmod.set_data_dir(str(target)) == (False, "issuer_move_conflict")
+    assert appmod.DATA_DIR == old
+    assert (old / conflict).read_bytes() == original
+    assert (target / conflict).read_text() == '{"different": true}'
+
+
+def test_failed_default_save_preserves_previous_preference(client, monkeypatch):
+    issuer, _ = add_issuer(client)
+    assert client.post("/issuers/default", data={"issuer": "default"}).json["ok"]
+    before = (appmod.DATA_DIR / "issuer_preferences.json").read_bytes()
+    def fail(*args):
+        raise OSError("read only")
+    monkeypatch.setattr(appmod, "_write_json", fail)
+    assert client.post("/issuers/default", data={"issuer": issuer}).status_code == 503
+    assert (appmod.DATA_DIR / "issuer_preferences.json").read_bytes() == before
+    assert client.post("/issuers/default", data={}).status_code == 400
+    assert client.post(f"/issuers/default?issuer={issuer}", data={"issuer": "default"}).status_code == 400
 
 
 def test_tabs_save_to_explicit_profiles_and_share_customers(client):

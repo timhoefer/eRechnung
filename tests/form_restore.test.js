@@ -208,14 +208,68 @@ test("refused deletion keeps the page and resumes autosaving", async () => {
   let closed = false;
   const dialog = {close() { closed = true; }};
   app.document.getElementById = (id) => id === "issuer-delete-confirm" ? button : dialog;
-  app.fetch = async () => ({ok: false, json: async () => ({ok: false, message: "Archive is not empty"})});
+  app.fetch = async () => ({ok: false, json: async () => ({ok: false, message: "Could not save"})});
   app.window.location = {assign() { throw new Error("must not leave the current invoice"); }};
   let message, resumed = false;
   app.flashError = (text) => { message = text; };
   app.scheduleSellerSave = () => { resumed = true; };
   assert.equal(await app.deleteIssuer({action: "/issuers/delete"}), false);
-  assert.equal(message, "Archive is not empty");
+  assert.equal(message, "Could not save");
   assert.equal(button.disabled, false);
   assert.equal(closed, true);
   assert.equal(resumed, true);
+});
+
+test("setting the default keeps the current invoice form and reports persistence", async () => {
+  const app = loadApp();
+  app.window.ISSUER_ID = "company";
+  const submitted = {};
+  app.FormData = class { append(key, value) { submitted[key] = value; } };
+  const button = {disabled: false, textContent: "Set as default", dataset: {url: "/issuers/default?issuer=company", savedLabel: "Default issuer"}};
+  let finish;
+  app.fetch = (url) => {
+    assert.equal(url, button.dataset.url);
+    return new Promise((resolve) => { finish = resolve; });
+  };
+  app.window.location = {assign() { throw new Error("must not navigate or reset the invoice"); }};
+  const saving = app.setDefaultIssuer(button);
+  assert.equal(button.disabled, true);
+  assert.deepEqual(submitted, {issuer: "company"});
+  finish({ok: true, json: async () => ({ok: true})});
+  assert.equal(await saving, true);
+  assert.equal(button.textContent, "Default issuer");
+  assert.equal(button.disabled, true);
+});
+
+test("failed default save restores the action without showing success", async () => {
+  const app = loadApp();
+  app.FormData = class { append() {} };
+  app.fetch = async () => ({ok: false, json: async () => ({ok: false})});
+  let error = false;
+  app.flashError = () => { error = true; };
+  const button = {disabled: false, textContent: "Set as default", dataset: {url: "/issuers/default", savedLabel: "Default issuer"}};
+  assert.equal(await app.setDefaultIssuer(button), false);
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, "Set as default");
+  assert.equal(error, true);
+});
+
+test("rapid archive switches ignore an older response and retain the chosen archive on reload", async () => {
+  const app = loadApp();
+  const pane = {innerHTML: ""};
+  app.document.getElementById = (id) => id === "settings-pane" ? pane : null;
+  const requests = [];
+  app.fetch = (url) => new Promise((resolve) => { requests.push({url, resolve}); });
+  const first = app.loadSettingsPanel("/settings/panel?issuer=old");
+  const second = app.loadSettingsPanel("/settings/panel?issuer=chosen");
+  requests[1].resolve({ok: true, text: async () => "Chosen archive"});
+  await second;
+  requests[0].resolve({ok: true, text: async () => "Stale archive"});
+  await first;
+  assert.equal(pane.innerHTML, "Chosen archive");
+  const reload = app.loadSettingsPanel();
+  assert.equal(requests[2].url, "/settings/panel?issuer=chosen");
+  requests[2].resolve({ok: true, text: async () => "Chosen reloaded"});
+  await reload;
+  assert.equal(pane.innerHTML, "Chosen reloaded");
 });

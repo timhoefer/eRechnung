@@ -164,6 +164,7 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
 
     rm(src_dir / "seller.json", ref_dir / "seller.json")
     rm(src_dir / "customers.json", ref_dir / "customers.json")
+    rm(src_dir / "issuer_preferences.json", ref_dir / "issuer_preferences.json")
     profile_files = _issuer_data_files(src_dir)
     for issuer in {p.parts[1] for p in profile_files}:
         files = [p for p in profile_files if p.parts[1] == issuer]
@@ -246,6 +247,14 @@ def set_data_dir(raw: str):
         import filecmp
 
         try:
+            for name in ("seller.json", "issuer_preferences.json"):
+                src, dst = old / name, target / name
+                if dst.is_symlink():
+                    return False, "data_dir_err_write"
+                if src.exists() and dst.exists() and (
+                    not dst.is_file() or not filecmp.cmp(src, dst, shallow=False)
+                ):
+                    return False, "issuer_move_conflict"
             for relative in _issuer_data_files(old):
                 dst = target / relative
                 if any(p.is_symlink() for p in (target / "issuers", dst.parent, dst.parent.parent, dst)):
@@ -257,7 +266,7 @@ def set_data_dir(raw: str):
         # Vorhandene Daten in den neuen Ordner übernehmen, aber nichts
         # überschreiben (Recovery-Fall: Zielordner enthält schon Daten).
         (target / "output").mkdir(exist_ok=True)
-        for name in ("seller.json", "customers.json"):
+        for name in ("seller.json", "customers.json", "issuer_preferences.json"):
             src, dst = old / name, target / name
             if src.exists() and not dst.exists():
                 shutil.copy2(src, dst)
@@ -315,7 +324,7 @@ def data_conflicts() -> list:
 
     out = []
     if DATA_DIR.resolve() != BASE.resolve():
-        for name in ("seller.json", "customers.json"):
+        for name in ("seller.json", "customers.json", "issuer_preferences.json"):
             s, r = BASE / name, DATA_DIR / name
             if s.is_file() and r.is_file():
                 try:
@@ -401,6 +410,7 @@ def _lock_data_changes():
         "settings", "settings_autosave", "customers_autosave",
         "customers_items_save", "customers_save", "customers_delete",
         "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create", "issuer_delete",
+        "issuer_set_default",
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
@@ -431,9 +441,9 @@ def _write_json(path: Path, data) -> None:
 # The original issuer stays at the original paths. Additional issuers have their
 # own seller.json and output directory; customers remain shared. Never switch
 # global paths when selecting an issuer: concurrent tabs must remain independent.
-def issuer_directory(issuer: str) -> Path:
+def issuer_directory(issuer: str, *, allow_deleted: bool = False) -> Path:
     if issuer == "default":
-        if _issuer_deleted(SELLER_FILE):
+        if not allow_deleted and _issuer_deleted(SELLER_FILE):
             abort(410)
         return SELLER_FILE.parent
     if not re.fullmatch(r"[a-f0-9]{32}", issuer):
@@ -446,7 +456,7 @@ def issuer_directory(issuer: str) -> Path:
         abort(404)
     if (directory / "output").is_symlink():
         abort(404)
-    if _issuer_deleted(directory / "seller.json"):
+    if not allow_deleted and _issuer_deleted(directory / "seller.json"):
         abort(410)
     return directory
 
@@ -472,8 +482,15 @@ def _select_issuer():
         profiles = issuer_profiles()
         if not profiles:
             abort(410)
-        issuer = profiles[0]["id"]
-    directory = issuer_directory(issuer)
+        issuer = default_issuer(profiles)
+    # Retired issuers remain available only for archive access, never for new
+    # invoices or late writes from an already-open master-data form.
+    archive_endpoints = {
+        "validate", "settings_panel", "settings_depinfo", "view", "archive_preview",
+        "download", "download_zip", "reveal", "export_csv", "setlang",
+        "data_dir_set", "data_dir_browse", "check_updates", "whats_new_seen",
+    }
+    directory = issuer_directory(issuer, allow_deleted=request.endpoint in archive_endpoints)
     g.issuer_id = issuer
     g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
     g.issuer_output_dir = OUTPUT_DIR if issuer == "default" else directory / "output"
@@ -493,7 +510,9 @@ def output_dir() -> Path:
 
 @app.url_defaults
 def _issuer_urls(endpoint, values):
-    if endpoint != "static" and current_issuer() != "default":
+    if endpoint != "static":
+        # The legacy profile also needs an explicit ID once the startup default
+        # can point elsewhere. Otherwise its archive links change issuer.
         values.setdefault("issuer", current_issuer())
 
 
@@ -501,7 +520,7 @@ def issuer_label(seller: dict) -> str:
     return seller.get("profile_label") or seller.get("name") or translate(get_ui_lang(request))["issuer_default"]
 
 
-def issuer_profiles() -> list[dict]:
+def issuer_profiles(*, include_deleted: bool = False) -> list[dict]:
     ids = ["default"]
     root = SELLER_FILE.parent / "issuers"
     if root.is_dir() and not root.is_symlink():
@@ -515,19 +534,34 @@ def issuer_profiles() -> list[dict]:
             continue
         try:
             seller = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-            if isinstance(seller, dict) and seller.get("_deleted") is True:
+            deleted = isinstance(seller, dict) and seller.get("_deleted") is True
+            if deleted and (not include_deleted or not _archive_has_files(
+                OUTPUT_DIR if issuer == "default" else path.parent / "output"
+            )):
                 continue
-            profiles.append({"id": issuer, "label": issuer_label(seller)})
+            profiles.append({"id": issuer, "label": issuer_label(seller), "deleted": deleted})
         except (OSError, ValueError, AttributeError):
             # Keep an unreadable profile visible; selecting it surfaces the error
             # instead of silently creating a replacement with a fresh counter.
-            profiles.append({"id": issuer, "label": translate(get_ui_lang(request))["issuer_unavailable"]})
+            profiles.append({"id": issuer, "label": translate(get_ui_lang(request))["issuer_unavailable"], "deleted": False})
     return profiles
+
+
+def default_issuer(profiles: list[dict] | None = None) -> str:
+    profiles = issuer_profiles() if profiles is None else profiles
+    try:
+        preference = json.loads((SELLER_FILE.parent / "issuer_preferences.json").read_text(encoding="utf-8"))
+        preferred = preference.get("default_issuer") if isinstance(preference, dict) else None
+    except (OSError, ValueError):
+        preferred = None
+    return next((p["id"] for p in profiles if p["id"] == preferred), profiles[0]["id"] if profiles else "default")
 
 
 @app.context_processor
 def _issuer_context():
-    return {"issuer_id": current_issuer(), "issuer_name": issuer_label(load_seller())}
+    seller = load_seller()
+    return {"issuer_id": current_issuer(), "issuer_name": issuer_label(seller),
+            "issuer_deleted": seller.get("_deleted") is True}
 
 
 def _create_issuer(seller: dict) -> str:
@@ -551,21 +585,31 @@ def issuer_create():
     return redirect(url_for("index", issuer=issuer))
 
 
+@app.route("/issuers/default", methods=["POST"])
+def issuer_set_default():
+    if request.form.get("issuer") != current_issuer():
+        abort(400)
+    try:
+        _write_json(SELLER_FILE.parent / "issuer_preferences.json", {"default_issuer": current_issuer()})
+    except OSError:
+        logger.warning("Could not save default issuer", exc_info=True)
+        return {"ok": False}, 503
+    return {"ok": True}
+
+
 @app.route("/issuers/delete", methods=["POST"])
 def issuer_delete():
     if request.form.get("issuer") != current_issuer() or request.form.get("confirm") != "delete":
         abort(400)
     t = translate(get_ui_lang(request))
     try:
-        if issuer_has_archive():
-            return {"ok": False, "message": t["issuer_delete_archive"]}, 409
         remaining = [p for p in issuer_profiles() if p["id"] != current_issuer()]
         # Use a fresh identity even when deleting the final profile. Old tabs
         # must not be able to autosave into the new, empty issuer.
-        next_issuer = remaining[0]["id"] if remaining else _create_issuer({"country": "DE"})
-        # Keep only a tombstone, no personal details. It prevents late autosaves
-        # and generation requests from resurrecting a deleted issuer.
-        _write_json(seller_file(), {"_deleted": True})
+        next_issuer = default_issuer(remaining) if remaining else _create_issuer({"country": "DE"})
+        # Keep the archive and a display label; remove editable master data.
+        # The marker also prevents stale tabs from resurrecting this issuer.
+        _write_json(seller_file(), {"_deleted": True, "profile_label": issuer_label(load_seller())})
     except OSError:
         logger.warning("Could not delete issuer", exc_info=True)
         return {"ok": False, "message": t["action_failed"]}, 503
@@ -573,9 +617,9 @@ def issuer_delete():
     return {"ok": True, "next_url": url_for("index", issuer=next_issuer, edit_issuer="1")}
 
 
-def issuer_has_archive() -> bool:
+def _archive_has_files(directory: Path) -> bool:
     try:
-        return any(output_dir().iterdir())
+        return any(directory.iterdir())
     except FileNotFoundError:
         return False
     except OSError:
@@ -1262,7 +1306,7 @@ def index():
         "form.html",
         seller=seller,
         issuers=issuer_profiles(),
-        issuer_can_delete=not issuer_has_archive(),
+        default_issuer_id=default_issuer(),
         issuer_scope=hashlib.sha256(str(SELLER_FILE.parent.resolve()).encode()).hexdigest()[:16],
         treatments=TAX_TREATMENTS,
         defaults=defaults,
@@ -1761,6 +1805,8 @@ def _settings_context() -> dict:
         )
     return {
         "archive": archive,
+        "archive_issuers": issuer_profiles(include_deleted=True),
+        "default_issuer_id": default_issuer(),
         "data_dir": str(DATA_DIR),
         "data_dir_custom": DATA_DIR.resolve() != BASE.resolve(),
         "can_browse": (sys.platform == "darwin"),

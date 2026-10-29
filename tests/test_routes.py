@@ -230,7 +230,7 @@ def test_archive_rows_offer_original_pdf_preview(client, has_sidecar):
     doc = html.fromstring(client.get("/settings/panel").data)
     rows = doc.xpath('//tr[@class="arch-row"]')
     assert len(rows) == 1
-    assert rows[0].get("data-preview-url") == "/archive/preview/" + filename
+    assert rows[0].get("data-preview-url") == "/archive/preview/" + filename + "?issuer=default"
 
 
 def test_reveal_missing_file_404(client):

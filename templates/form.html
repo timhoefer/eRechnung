@@ -63,13 +63,13 @@
 <dialog id="issuer-delete-dialog" class="modal" aria-labelledby="issuer-delete-title">
   <h3 id="issuer-delete-title">{{ t.issuer_delete_title }}</h3>
   <p><strong id="issuer-delete-name">{{ issuer_name }}</strong></p>
-  <p>{{ t.issuer_delete_text if issuer_can_delete else t.issuer_delete_archive }}</p>
+  <p>{{ t.issuer_delete_text }}</p>
   <form method="post" action="{{ url_for('issuer_delete') }}" id="issuer-delete-form">
     <input type="hidden" name="issuer" value="{{ issuer_id }}">
     <input type="hidden" name="confirm" value="delete">
     <div class="modal-actions">
       <button type="button" class="secondary" id="issuer-delete-cancel" autofocus>{{ t.cancel }}</button>
-      {% if issuer_can_delete %}<button type="submit" class="danger" id="issuer-delete-confirm">{{ t.delete }}</button>{% endif %}
+      <button type="submit" class="danger" id="issuer-delete-confirm">{{ t.delete }}</button>
     </div>
   </form>
 </dialog>
@@ -124,6 +124,12 @@
     <input type="hidden" name="issuer" value="{{ issuer_id }}">
     {% if issuers|length > 1 %}
     <label class="wide">{{ t.issuer_profile_label }}<input name="profile_label" value="{{ seller.profile_label or '' }}" maxlength="100" placeholder="{{ seller.name or t.issuer_label_ph }}"></label>
+    <div class="wide issuer-default-choice">
+      <button type="button" class="secondary small" id="issuer-default-button"
+              data-url="{{ url_for('issuer_set_default') }}" data-saved-label="{{ t.issuer_is_default }}"
+              {% if issuer_id == default_issuer_id %}disabled{% endif %}>{{ t.issuer_is_default if issuer_id == default_issuer_id else t.issuer_make_default }}</button>
+      <span class="hint">{{ t.issuer_default_hint }}</span>
+    </div>
     {% endif %}
     <h3 class="form-section">{{ t.sec_address }}</h3>
     <label>{{ t.name }}<input name="name" value="{{ seller.name or '' }}" required></label>
