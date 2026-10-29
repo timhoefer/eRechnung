@@ -480,6 +480,53 @@ test("queued master edits use the previous save's revision without losing the ne
   assert.equal(revision.value, "after-second");
 });
 
+for (const action of ["switch", "export"]) {
+  for (const queued of [false, true]) {
+    test(`${action} waits for edits made during saving, including ${queued ? "queued" : "debounced"} saves`, async () => {
+      const {app, fields, revision} = masterForm();
+      app.clearTimeout = () => {};
+      app.window.ISSUER_ID = "default";
+      const invoiceRevision = {value: "initial"};
+      let submissions = 0;
+      const form = {
+        id: action === "switch" ? "issuer-create-form" : "invoice-form",
+        matches: () => false,
+        querySelector: (selector) => selector === '[name="seller_revision"]' ? invoiceRevision : null,
+        reportValidity: () => true,
+        submit() { submissions++; },
+      };
+      const requests = [];
+      app.fetch = (url, options) => new Promise((resolve) => requests.push({body: options.body, resolve}));
+      const pending = action === "switch" ? app.switchIssuer(form)
+        : Promise.all(app.document.listeners.submit.map((handler) => handler({target: form, preventDefault() {}})));
+      await Promise.resolve();
+      fields.name = "Changed while waiting";
+      if (queued) app.autosaveSeller();
+      requests[0].resolve({ok: true, headers: {get: () => "after-first"}});
+      // Drain microtasks, keeping every later network response pending.
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(submissions, 0);
+      assert.equal(requests[1].body.get("name"), "Changed while waiting");
+      // A failure in a later write must also prevent leaving the current page.
+      if (queued) {
+        requests[1].resolve({ok: false, status: 409, json: async () => ({message: "Changed elsewhere"})});
+        await pending;
+        assert.equal(submissions, 0);
+        assert.equal(fields.name, "Changed while waiting");
+        return;
+      }
+      for (let i = 1; i < requests.length; i++) {
+        requests[i].resolve({ok: true, headers: {get: () => "latest"}});
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      await pending;
+      assert.equal(submissions, 1);
+      assert.equal(revision.value, "latest");
+      if (action === "export") assert.equal(invoiceRevision.value, "latest");
+    });
+  }
+}
+
 test("a master-data conflict preserves local fields and stops queued saves and profile navigation", async () => {
   const {app, revision, fields, notice, details} = masterForm();
   app.clearTimeout = () => {};
@@ -507,7 +554,11 @@ test("loading current master data preserves the invoice draft before reloading",
   app.FormData = class extends Map { constructor() { super([["buyer_name", "Client"], ["description", "Work"]]); } };
   let saved;
   app.sessionStorage.setItem = (key, value) => { saved = JSON.parse(value); };
-  app.window.location = {reload() { assert.deepEqual(saved, {buyer_name: ["Client"], description: ["Work"]}); }};
+  app.window.FORM_URL = "/?issuer=company";
+  app.window.location = {assign(url) {
+    assert.equal(url, app.window.FORM_URL);
+    assert.deepEqual(saved, {buyer_name: ["Client"], description: ["Work"]});
+  }};
   app.reloadMasterData();
 });
 

@@ -752,7 +752,13 @@ def whats_new_seen():
 
 @app.route("/setlang/<code>")
 def setlang(code):
-    resp = redirect(request.referrer or url_for("index"))
+    target = request.args.get("next", "")
+    parsed = urlparse(target)
+    # A form returned after a rejected POST must go back to a GET-capable URL.
+    # Accept only this app's invoice form, never an external redirect target.
+    if parsed.scheme or parsed.netloc or parsed.path != "/":
+        target = request.referrer or url_for("index")
+    resp = redirect(target)
     if code in LANGUAGES:
         resp.set_cookie("lang", code, max_age=60 * 60 * 24 * 365)
     return resp
@@ -1360,7 +1366,7 @@ DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änd
 
 
 @app.route("/")
-def index():
+def index(submitted_form=None):
     seller = invoice_seller()
     numbers = used_invoice_numbers()
     profiles = issuer_profiles(include_deleted=True)
@@ -1393,6 +1399,7 @@ def index():
         customers=load_customers(),
         units=UNITS,
         draft=draft,
+        submitted_form=submitted_form.to_dict(flat=False) if submitted_form is not None else None,
         used_numbers=numbers,
         ref_invoices=archived_invoices(),
         first_run=first_run,
@@ -1562,6 +1569,10 @@ def preview_pdf():
 def generate():
     data, html, totals = _assemble(request.form)
     seller = data["seller"]
+    # DATA_LOCK covers this check through archiving: another window cannot change
+    # the reviewed issuer between the comparison and PDF/XML creation.
+    if request.form.get("seller_revision") != seller_revision(seller):
+        return index(submitted_form=request.form), 409
     if not data["items"]:
         flash(translate(get_ui_lang(request))["need_item"], "err")
         return redirect(url_for("index"))

@@ -1275,6 +1275,25 @@ function scheduleSellerSave() {
   sellerSaveTimer = setTimeout(autosaveSeller, 700);
 }
 
+async function flushSellerSaves() {
+  const form = document.getElementById("settings-form");
+  const state = () => {
+    const fields = form ? snapshotForm(form) : {};
+    delete fields.seller_revision;
+    return JSON.stringify(fields);
+  };
+  // Edits remain possible while saving. Drain queued writes and capture edits
+  // still waiting for their debounce before allowing navigation or export.
+  for (;;) {
+    clearTimeout(sellerSaveTimer);
+    const before = state();
+    const saving = autosaveSeller();
+    const queued = pendingSellerSave;
+    if (!(await saving)) return false;
+    if (queued === pendingSellerSave && before === state()) return true;
+  }
+}
+
 let customerSaveTimer;
 function autosaveCustomer() {
   const form = document.getElementById("invoice-form");
@@ -1725,7 +1744,10 @@ document.addEventListener("submit", async (e) => {
   clearTimeout(sellerSaveTimer);
   let submitted = false;
   try {
-    if (await autosaveSeller() && form.reportValidity()) {
+    if (await flushSellerSaves() && form.reportValidity()) {
+      const revision = document.getElementById("settings-form")?.querySelector('[name="seller_revision"]');
+      const expected = form.querySelector('[name="seller_revision"]');
+      if (revision && expected) expected.value = revision.value;
       form.submit();
       submitted = true;
     }
@@ -1752,7 +1774,7 @@ const settingsFormEl = document.getElementById("settings-form");
 const masterReload = document.getElementById("master-reload");
 function reloadMasterData() {
   sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(document.getElementById("invoice-form"))));
-  window.location.reload();
+  window.location.assign(window.FORM_URL);
 }
 if (masterReload) masterReload.addEventListener("click", reloadMasterData);
 if (settingsFormEl) {
@@ -1867,7 +1889,7 @@ async function switchIssuer(form) {
   try {
     if (invoiceHasContent() && !(await confirmIssuerSwitch())) return;
     clearTimeout(sellerSaveTimer);
-    if (await autosaveSeller()) {
+    if (await flushSellerSaves()) {
       // Native form submission omits disabled controls, including this select.
       if (select) select.disabled = false;
       if (form.id === "issuer-switch-form") select.value = target;
@@ -1916,10 +1938,10 @@ syncBankSelector();
 let restoredFromLang = false;
 (function restoreAfterLangSwitch() {
   const raw = sessionStorage.getItem(languageDraftKey());
-  if (!raw) return;
+  if (!window.SUBMITTED_FORM && !raw) return;
   sessionStorage.removeItem(languageDraftKey());
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = window.SUBMITTED_FORM || JSON.parse(raw);
     restoreForm(document.getElementById("invoice-form"), parsed);
     updateStateField((parsed.buyer_state || [])[0]); // Staat-Auswahl nach Sprachwechsel wiederherstellen
     restoredFromLang = true;

@@ -25,7 +25,7 @@
       </button>
       <nav class="langswitch">
         {% for code, name in languages.items() %}
-          <a href="{{ url_for('setlang', code=code) }}" class="{{ 'active' if code == lang else '' }}">{{ code|upper }}</a>
+          <a href="{{ url_for('setlang', code=code, next=url_for('index')) }}" class="{{ 'active' if code == lang else '' }}">{{ code|upper }}</a>
         {% endfor %}
       </nav>
     </div>
@@ -120,7 +120,8 @@
 </div>
 {% endif %}
 
-<details class="card" id="master-data" {% if not seller.name or request.args.get('edit_issuer') == '1' %}open{% endif %}>
+{% if submitted_form is not none %}<div class="callout" id="export-conflict" role="alert">{{ t.export_master_conflict }}</div>{% endif %}
+<details class="card" id="master-data" {% if not seller.name or submitted_form is not none or request.args.get('edit_issuer') == '1' %}open{% endif %}>
   <summary>
     <span class="summary-text"><strong>{{ t.master }}</strong>{% if issuers|length == 1 %} &mdash; {{ t.master_hint }}{% endif %}</span>
     {% if issuers|length > 1 and not issuer_deleted %}
@@ -260,6 +261,7 @@
 
 <form method="post" action="{{ url_for('generate') }}" id="invoice-form">
   <input type="hidden" name="issuer" value="{{ issuer_id }}">
+  <input type="hidden" name="seller_revision" value="{{ seller_revision }}">
   {% if correction_source %}<input type="hidden" name="correction_source" value="{{ correction_source }}">{% endif %}
   <input type="hidden" name="profile" id="profile" value="en16931">
 
@@ -558,10 +560,12 @@
 
 <script>
   window.ISSUER_ID = {{ issuer_id|tojson }};
+  window.FORM_URL = {{ url_for('index')|tojson }};
   window.ISSUER_SCOPE = {{ issuer_scope|tojson }};
   window.MSG_MASTER_SAVED = {{ t.master_saved|tojson }};
   window.CUSTOMERS = {{ customers|tojson }};
   window.DRAFT = {{ draft|tojson }};
+  window.SUBMITTED_FORM = {{ submitted_form|tojson }};
   window.ISSUER_RETIRED = {{ issuer_deleted|tojson }};
   window.UI_LANG = {{ lang|tojson }};
   window.VAT_LABEL = {{ t.vat|tojson }};

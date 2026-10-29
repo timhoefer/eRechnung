@@ -4,6 +4,7 @@ from datetime import date
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from helpers import export_invoice
 from lxml import html
 
 import app as appmod
@@ -138,7 +139,7 @@ def test_delete_empty_profile_preserves_other_issuer_and_rejects_stale_tabs(clie
     assert client.get("/").status_code == 200
     assert client.get("/", query_string={"issuer": target}).status_code == 410
     assert client.post("/settings/autosave", data={"issuer": target, "name": "Stale"}).status_code == 410
-    assert client.post("/generate", data=dict(FORM, issuer=target)).status_code == 410
+    assert export_invoice(client, data=dict(FORM, issuer=target)).status_code == 410
     assert survivor_file.read_bytes() == original
     assert number_on_page(client, survivor) == f"{YEAR}-{'031' if delete_default else '011'}"
 
@@ -217,7 +218,7 @@ def test_retired_issuer_archive_is_accessible_but_cannot_issue_or_edit(client, f
     target = "default" if retire_default else issuer
     survivor = issuer if retire_default else "default"
     archive = appmod.OUTPUT_DIR if retire_default else directory / "output"
-    assert client.post("/generate", data=dict(FORM, issuer=target, profile="xrechnung")).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=target, profile="xrechnung")).status_code == 200
     before = {p.name: p.read_bytes() for p in archive.iterdir()}
     filename = f"Rechnung_{YEAR}-011.pdf"
     assert client.post("/issuers/delete", data={"issuer": target, "confirm": "delete"}).json["ok"]
@@ -377,15 +378,15 @@ def test_same_number_in_two_profiles_has_independent_files_and_counters(client, 
     issuer, directory = add_issuer(client)
     client.post(f"/settings?issuer={issuer}", data=dict(SELLER, name="Company Example", seller_revision=revision(client, issuer)))
     for selected in ("default", issuer):
-        assert client.post("/generate", data=dict(FORM, issuer=selected)).status_code == 200
+        assert export_invoice(client, data=dict(FORM, issuer=selected)).status_code == 200
     filename = f"Rechnung_{YEAR}-011.pdf"
     assert (appmod.OUTPUT_DIR / filename).exists() and (directory / "output" / filename).exists()
     assert number_on_page(client) == number_on_page(client, issuer) == f"{YEAR}-012"
-    assert client.post("/generate", data=dict(FORM, issuer=issuer, number=f"{YEAR}-020")).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=issuer, number=f"{YEAR}-020")).status_code == 200
     assert number_on_page(client) == f"{YEAR}-012"
     assert number_on_page(client, issuer) == f"{YEAR}-021"
     # Issuing an older number must not roll this issuer's sequence backwards.
-    client.post("/generate", data=dict(FORM, issuer=issuer, number=f"{YEAR}-003"))
+    export_invoice(client, data=dict(FORM, issuer=issuer, number=f"{YEAR}-003"))
     assert json.loads((directory / "seller.json").read_text())["last_invoice_number"] == f"{YEAR}-020"
     assert number_on_page(client, issuer) == f"{YEAR}-021"
 
@@ -398,7 +399,7 @@ def test_parallel_requests_keep_issuer_and_counter_together(client, fast_generat
 
     def generate(selected, number):
         with appmod.app.test_client() as c:
-            return c.post("/generate", data=dict(FORM, issuer=selected, number=number)).status_code
+            return export_invoice(c, data=dict(FORM, issuer=selected, number=number)).status_code
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         futures = [pool.submit(generate, selected, f"{YEAR}-{n:03d}")
@@ -415,7 +416,7 @@ def test_archive_preview_download_csv_template_and_delete_are_scoped(client, fas
     issuer, directory = add_issuer(client)
     client.post(f"/settings?issuer={issuer}", data=dict(SELLER, name="Company Example", seller_revision=revision(client, issuer)))
     for selected, buyer in [("default", "Private Client"), (issuer, "Company Client")]:
-        client.post("/generate", data=dict(FORM, issuer=selected, buyer_name=buyer, profile="xrechnung"))
+        export_invoice(client, data=dict(FORM, issuer=selected, buyer_name=buyer, profile="xrechnung"))
     filename = f"Rechnung_{YEAR}-011.pdf"
     (directory / "output" / filename).write_bytes(b"%PDF-company-original")
     assert client.get(f"/archive/preview/{filename}?issuer={issuer}").data == b"%PDF-company-original"
@@ -569,7 +570,7 @@ def test_real_pdf_and_xml_use_selected_issuer_and_preserve_original(client, prof
 
     issuer, directory = add_issuer(client)
     client.post(f"/settings?issuer={issuer}", data=dict(SELLER, name="Company Example", account_name="Company Account", seller_revision=revision(client, issuer)))
-    response = client.post("/generate", data=dict(FORM, issuer=issuer, profile=profile))
+    response = export_invoice(client, data=dict(FORM, issuer=issuer, profile=profile))
     assert response.status_code == 200
     assert "Validierung bestanden" in response.get_data(as_text=True)
     file = directory / "output" / f"Rechnung_{YEAR}-011.pdf"
@@ -626,7 +627,7 @@ def test_simultaneous_master_writes_cannot_both_accept_the_same_revision(client)
 
 def test_invoice_counter_does_not_invalidate_master_data_revision(client, fast_generation):
     token = revision(client)
-    assert client.post("/generate", data=FORM).status_code == 200
+    assert export_invoice(client, data=FORM).status_code == 200
     response = client.post("/settings/autosave?issuer=default", data={
         "seller_revision": token, "address_line": "New address",
     })
@@ -646,12 +647,90 @@ def test_identical_save_from_an_old_tab_is_harmless(client):
     assert appmod.SELLER_FILE.read_bytes() == saved
 
 
+@pytest.mark.parametrize("profile", ["en16931", "xrechnung"])
+@pytest.mark.parametrize("expected", ["missing", "stale"])
+@pytest.mark.parametrize("extra_profile", [False, True])
+def test_export_rechecks_master_revision_without_writing_and_preserves_draft(client, profile, expected, extra_profile):
+    from werkzeug.datastructures import MultiDict
+
+    issuer, folder = add_issuer(client) if extra_profile else ("default", appmod.DATA_DIR)
+    (folder / "seller.json").write_text(json.dumps(SELLER))
+    guard = client.post("/settings/autosave", data=dict(SELLER, issuer=issuer, seller_revision=revision(client, issuer)))
+    token = guard.headers["X-Seller-Revision"]
+    assert client.post("/settings/autosave", data={
+        "issuer": issuer, "seller_revision": token, "address_line": "Changed in another window 42",
+    }).status_code == 204
+    fields = MultiDict(dict(FORM, issuer=issuer, profile=profile, note="Keep my draft", discount="10"))
+    fields.setlist("description", ["First line", "Second line"])
+    fields.setlist("quantity", ["2", "3"])
+    fields.setlist("unit", ["C62", "C62"])
+    fields.setlist("unit_price", ["100", "50"])
+    if expected == "stale":
+        fields["seller_revision"] = token
+    before = (folder / "seller.json").read_bytes()
+    response = client.post("/generate", data=fields)
+    assert response.status_code == 409
+    assert list((folder / "output").iterdir()) == []
+    assert (folder / "seller.json").read_bytes() == before
+    assert not appmod.CUSTOMERS_FILE.exists()
+    page = html.fromstring(response.data)
+    assert page.xpath('//*[@id="export-conflict"]')
+    assert "open" in page.get_element_by_id("master-data").attrib
+    assert page.xpath('//input[@name="address_line"]/@value') == ["Changed in another window 42"]
+    script = page.xpath('//script[contains(text(), "window.SUBMITTED_FORM")]/text()')[0]
+    draft = json.loads(script.split("window.SUBMITTED_FORM = ", 1)[1].split(";", 1)[0])
+    assert draft["description"] == ["First line", "Second line"]
+    assert draft["quantity"] == ["2", "3"]
+    assert draft["number"] == [FORM["number"]]
+    assert draft["note"] == ["Keep my draft"]
+    assert draft["profile"] == [profile]
+    language_url = page.xpath('//nav[@class="langswitch"]/a[text()="EN"]/@href')[0]
+    language = client.get(language_url, headers={"Referer": "http://localhost/generate"})
+    assert urlparse(language.location).path == "/"
+    assert parse_qs(urlparse(language.location).query)["issuer"] == [issuer]
+    fields["seller_revision"] = page.xpath('//*[@id="invoice-form"]/input[@name="seller_revision"]/@value')[0]
+    # Explicit retry with the now reviewed master data succeeds with the same draft.
+    result = client.post("/generate", data=fields)
+    assert result.status_code == 200 and "Validation passed" in result.get_data(as_text=True)
+    saved = json.loads((folder / "output" / f"Rechnung_{YEAR}-011.json").read_text())
+    assert saved["seller"]["address_line"] == "Changed in another window 42"
+    assert [item["description"] for item in saved["items"]] == ["First line", "Second line"]
+
+
+def test_retired_correction_rejects_revision_from_before_reactivation(client, fast_generation):
+    add_issuer(client)
+    assert export_invoice(client, data=FORM).status_code == 200
+    assert client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).json["ok"]
+    context = {"issuer": "default", "correction_source": f"Rechnung_{YEAR}-011.pdf", "doc_type": "384"}
+    page = html.fromstring(client.get("/", query_string=context).data)
+    token = page.xpath('//*[@id="invoice-form"]/input[@name="seller_revision"]/@value')[0]
+    before = {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()}
+    assert client.post("/issuers/restore", data={"issuer": "default", "confirm": "restore"}).status_code == 302
+    fields = dict(FORM, **context, number=f"{YEAR}-012", ref_number=FORM["number"],
+                  ref_date=FORM["issue_date"], seller_revision=token)
+    response = client.post("/generate", data=fields)
+    assert response.status_code == 409
+    assert {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()} == before
+    page = html.fromstring(response.data)
+    fields["seller_revision"] = page.xpath('//*[@id="invoice-form"]/input[@name="seller_revision"]/@value')[0]
+    assert client.post("/generate", data=fields).status_code == 200
+    saved = json.loads((appmod.OUTPUT_DIR / f"Rechnung_{YEAR}-012.json").read_text())
+    assert saved["invoice"]["doc_type"] == "384"
+    assert saved["invoice"]["ref_number"] == FORM["number"]
+
+
+@pytest.mark.parametrize("target", ["https://example.org/", "//example.org/", "/generate"])
+def test_language_form_return_rejects_external_or_post_only_destinations(client, target):
+    response = client.get("/setlang/en", query_string={"next": target, "issuer": "default"})
+    assert response.location == "/?issuer=default"
+
+
 @pytest.mark.parametrize("legacy_marker", [False, True])
 @pytest.mark.parametrize("kind", ["381", "384"])
 def test_retired_issuer_can_issue_linked_adjustment_only(client, fast_generation, kind, legacy_marker):
     issuer, directory = add_issuer(client)
     (directory / "seller.json").write_text(json.dumps(dict(SELLER, name="Retired Company")))
-    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=issuer)).status_code == 200
     source = f"Rechnung_{FORM['number']}.pdf"
     before = {p.name: p.read_bytes() for p in (directory / "output").iterdir()}
     assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
@@ -670,9 +749,9 @@ def test_retired_issuer_can_issue_linked_adjustment_only(client, fast_generation
     fields = dict(FORM, **query, number=f"{YEAR}-012", ref_number="FORGED", ref_date="2000-01-01")
     assert client.post("/preview-html", data=fields).status_code == 200
     for forbidden in ("380", "386", "other", ""):
-        assert client.post("/generate", data=dict(fields, doc_type=forbidden)).status_code == 410
+        assert export_invoice(client, data=dict(fields, doc_type=forbidden)).status_code == 410
     assert client.post("/settings/autosave", query_string=query, data={"name": "Changed"}).status_code == 410
-    assert client.post("/generate", data=fields).status_code == 200
+    assert export_invoice(client, data=fields).status_code == 200
     adjustment = json.loads((directory / "output" / f"Rechnung_{YEAR}-012.json").read_text())
     assert adjustment["issuer_id"] == issuer
     assert adjustment["seller"]["name"] == "Retired Company"
@@ -695,7 +774,7 @@ def test_retired_issuer_can_issue_linked_adjustment_only(client, fast_generation
 def test_retired_adjustments_reject_missing_foreign_or_invalid_originals(client, fast_generation):
     issuer, directory = add_issuer(client)
     source = f"Rechnung_{FORM['number']}.pdf"
-    assert client.post("/generate", data=FORM).status_code == 200
+    assert export_invoice(client, data=FORM).status_code == 200
     assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
     for name in (source, "../output/" + source, "missing.pdf", "example.xml"):
         assert client.get("/", query_string={"issuer": issuer, "correction_source": name, "doc_type": "381"}).status_code == 410
@@ -708,11 +787,11 @@ def test_retired_adjustments_reject_missing_foreign_or_invalid_originals(client,
 @pytest.mark.parametrize("kind", ["381", "384"])
 def test_retired_adjustment_uses_verified_kind_when_it_is_only_in_url(client, fast_generation, kind):
     add_issuer(client)
-    client.post("/generate", data=FORM)
+    export_invoice(client, data=FORM)
     client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"})
     query = {"issuer": "default", "correction_source": f"Rechnung_{FORM['number']}.pdf", "doc_type": kind}
     # Like customer actions, a request may carry its correction context in the URL.
-    response = client.post("/generate", query_string=query, data=dict(FORM, number=f"{YEAR}-012"))
+    response = export_invoice(client, query_string=query, data=dict(FORM, number=f"{YEAR}-012"))
     assert response.status_code == 200
     adjustment = json.loads((appmod.OUTPUT_DIR / f"Rechnung_{YEAR}-012.json").read_text())
     assert adjustment["invoice"]["doc_type"] == kind
@@ -722,11 +801,11 @@ def test_retired_adjustment_uses_verified_kind_when_it_is_only_in_url(client, fa
 @pytest.mark.parametrize("kind,profile", [("381", "en16931"), ("384", "xrechnung")])
 def test_real_adjustment_for_retired_issuer_validates(client, kind, profile):
     add_issuer(client)
-    assert client.post("/generate", data=FORM).status_code == 200
+    assert export_invoice(client, data=FORM).status_code == 200
     original = appmod.OUTPUT_DIR / f"Rechnung_{FORM['number']}.pdf"
     before = original.read_bytes()
     assert client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).json["ok"]
-    response = client.post("/generate", data=dict(FORM, issuer="default", doc_type=kind, profile=profile,
+    response = export_invoice(client, data=dict(FORM, issuer="default", doc_type=kind, profile=profile,
                            correction_source=original.name, number=f"{YEAR}-012"))
     assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
     assert original.read_bytes() == before
@@ -736,13 +815,13 @@ def test_real_adjustment_for_retired_issuer_validates(client, kind, profile):
 def test_address_and_name_changes_keep_identity_numbering_and_originals(client, fast_generation, extra_profile):
     issuer, folder = add_issuer(client) if extra_profile else ("default", appmod.DATA_DIR)
     (folder / "seller.json").write_text(json.dumps(SELLER))
-    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=issuer)).status_code == 200
     originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
     token = revision(client, issuer)
     assert client.post("/settings/autosave", data={"issuer": issuer, "seller_revision": token,
         "name": "Updated Studio", "address_line": "New address 42"}).status_code == 204
     assert number_on_page(client, issuer) == f"{YEAR}-012"
-    assert client.post("/generate", data=dict(FORM, issuer=issuer, number=f"{YEAR}-012")).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=issuer, number=f"{YEAR}-012")).status_code == 200
     new = json.loads((folder / "output" / f"Rechnung_{YEAR}-012.json").read_text())
     assert new["issuer_id"] == issuer
     assert new["seller"]["name"] == "Updated Studio"
@@ -756,11 +835,11 @@ def test_restore_keeps_identity_archive_numbering_and_startup_default(client, fa
     issuer, folder = ("default", appmod.DATA_DIR) if restore_default else (other, folder)
     (folder / "seller.json").write_text(json.dumps(dict(SELLER, profile_label=SELLER["name"])))
     assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
-    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=issuer)).status_code == 200
     source = f"Rechnung_{FORM['number']}.pdf"
     old_token = revision(client, issuer)
     assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
-    assert client.post("/generate", data=dict(FORM, issuer=issuer, doc_type="381", correction_source=source,
+    assert export_invoice(client, data=dict(FORM, issuer=issuer, doc_type="381", correction_source=source,
                        number=f"{YEAR}-012")).status_code == 200
     originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
     startup = other if restore_default else "default"
@@ -800,7 +879,7 @@ def test_restore_empty_profile_is_discoverable_and_does_not_create_another_ident
 @pytest.mark.parametrize("legacy_marker", [False, True])
 def test_restore_uses_archive_when_counter_is_missing_or_stale(client, fast_generation, legacy_marker):
     add_issuer(client)
-    client.post("/generate", data=FORM)
+    export_invoice(client, data=FORM)
     client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"})
     seller = {"_deleted": True, "profile_label": "Old studio"} if legacy_marker else dict(appmod.load_seller(), last_invoice_number=f"{YEAR}-003")
     appmod.SELLER_FILE.write_text(json.dumps(seller))
@@ -843,7 +922,7 @@ def test_real_lifecycle_with_address_change_adjustment_and_reactivation(client, 
     (other_folder / "seller.json").write_text(json.dumps(dict(SELLER, last_invoice_number=f"{YEAR}-050")))
     untouched = appmod.SELLER_FILE.read_bytes(), (other_folder / "seller.json").read_bytes()
     fields = dict(FORM, issuer=issuer, profile=profile)
-    response = client.post("/generate", data=fields)
+    response = export_invoice(client, data=fields)
     assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
     originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
     original_pdf = f"Rechnung_{YEAR}-011.pdf"
@@ -858,7 +937,7 @@ def test_real_lifecycle_with_address_change_adjustment_and_reactivation(client, 
     assert client.post("/settings/autosave", data=update).status_code == 204
     assert number_on_page(client, issuer) == f"{YEAR}-012"
     assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
-    response = client.post("/generate", data=dict(fields, number=f"{YEAR}-012", doc_type=kind,
+    response = export_invoice(client, data=dict(fields, number=f"{YEAR}-012", doc_type=kind,
                            correction_source=original_pdf, bank_account=account))
     assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
     file = folder / "output" / f"Rechnung_{YEAR}-012.pdf"
@@ -882,7 +961,7 @@ def test_real_lifecycle_with_address_change_adjustment_and_reactivation(client, 
     for _ in range(2):
         assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 302
         assert number_on_page(client, issuer) == f"{YEAR}-013"
-    response = client.post("/generate", data=dict(fields, number=f"{YEAR}-013", bank_account=account))
+    response = export_invoice(client, data=dict(fields, number=f"{YEAR}-013", bank_account=account))
     assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
     assert number_on_page(client, issuer) == f"{YEAR}-014"
     assert number_on_page(client, other) == f"{YEAR}-051"
@@ -920,7 +999,7 @@ def test_number_suggestion_after_retirement_handles_years_and_archive_maximum(cl
 def test_recreating_identical_details_does_not_take_over_retired_identity(client, fast_generation):
     issuer, folder = add_issuer(client, SELLER["name"])
     (folder / "seller.json").write_text(json.dumps(SELLER))
-    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=issuer)).status_code == 200
     assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
     duplicate, duplicate_folder = add_issuer(client, SELLER["name"])
     assert duplicate != issuer
@@ -940,7 +1019,7 @@ def test_retired_identity_can_be_restored_after_data_folder_move(client, fast_ge
     other, folder = add_issuer(client)
     issuer, folder = ("default", appmod.DATA_DIR) if target_default else (other, folder)
     (folder / "seller.json").write_text(json.dumps(SELLER))
-    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    assert export_invoice(client, data=dict(FORM, issuer=issuer)).status_code == 200
     originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
     assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
     assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
@@ -982,7 +1061,7 @@ def test_concurrent_retirement_and_export_never_revives_issuer_or_loses_original
     from threading import Barrier
 
     add_issuer(client)
-    assert client.post("/generate", data=FORM).status_code == 200
+    assert export_invoice(client, data=FORM).status_code == 200
     original = {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()}
     ready = Barrier(2)
 
@@ -991,7 +1070,7 @@ def test_concurrent_retirement_and_export_never_revives_issuer_or_loses_original
             ready.wait(timeout=5)
             if action == "delete":
                 return tab.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).status_code
-            return tab.post("/generate", data=dict(FORM, issuer="default", number=f"{YEAR}-012")).status_code
+            return export_invoice(tab, data=dict(FORM, issuer="default", number=f"{YEAR}-012")).status_code
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         deleted, generated = list(pool.map(act, ["delete", "generate"]))
