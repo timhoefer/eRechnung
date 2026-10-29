@@ -826,3 +826,177 @@ def test_restore_requires_matching_explicit_identity_and_retains_data_on_failure
     monkeypatch.setattr(appmod, "_write_json", fail_seller)
     assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 503
     assert (folder / "seller.json").read_bytes() == original
+
+
+@pytest.mark.parametrize("profile", ["en16931", "xrechnung"])
+@pytest.mark.parametrize("kind", ["381", "384"])
+def test_real_lifecycle_with_address_change_adjustment_and_reactivation(client, profile, kind):
+    """Exercise the whole lifecycle with actual PDFs/XML and three identities."""
+    import io
+
+    from lxml import etree
+    from pypdf import PdfReader
+
+    issuer, folder = add_issuer(client, "Company")
+    other, other_folder = add_issuer(client, "Other company")
+    (folder / "seller.json").write_text(json.dumps(SELLER))
+    (other_folder / "seller.json").write_text(json.dumps(dict(SELLER, last_invoice_number=f"{YEAR}-050")))
+    untouched = appmod.SELLER_FILE.read_bytes(), (other_folder / "seller.json").read_bytes()
+    fields = dict(FORM, issuer=issuer, profile=profile)
+    response = client.post("/generate", data=fields)
+    assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
+    originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
+    original_pdf = f"Rechnung_{YEAR}-011.pdf"
+    assert SELLER["address_line"] in PdfReader(io.BytesIO(originals[original_pdf])).pages[0].extract_text()
+
+    # A move and another bank account must not create a new issuer or counter.
+    account = "DE89370400440532013000"
+    update = dict(SELLER, issuer=issuer, seller_revision=revision(client, issuer),
+                  name="Company after move", address_line="New Street 42", has_accounts_section="1",
+                  acct_kind="iban", acct_iban=account, acct_bic="COBADEFFXXX",
+                  acct_account_name="Company secondary account", acct_bank_name="Example Bank")
+    assert client.post("/settings/autosave", data=update).status_code == 204
+    assert number_on_page(client, issuer) == f"{YEAR}-012"
+    assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
+    response = client.post("/generate", data=dict(fields, number=f"{YEAR}-012", doc_type=kind,
+                           correction_source=original_pdf, bank_account=account))
+    assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
+    file = folder / "output" / f"Rechnung_{YEAR}-012.pdf"
+    embedded = appmod.extract_xml_from_pdf(file.read_bytes())
+    xml = file.with_suffix(".xml").read_bytes() if profile == "xrechnung" else embedded
+    assert (embedded is None) == (profile == "xrechnung")
+    root = etree.fromstring(xml)
+    def value(name):
+        return root.xpath(f"//*[local-name()='{name}']/text()")
+
+    assert "Company after move" in value("Name")
+    assert "New Street 42" in value("LineOne")
+    assert SELLER["address_line"] not in value("LineOne")
+    assert account in value("IBANID")
+    assert kind in value("TypeCode")
+    assert root.xpath("//*[local-name()='InvoiceReferencedDocument']/*[local-name()='IssuerAssignedID']/text()") == [FORM["number"]]
+    text = "\n".join(p.extract_text() for p in PdfReader(file).pages)
+    assert "Company after move" in text and "New Street 42" in text and account in text
+
+    before_restore = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
+    for _ in range(2):
+        assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 302
+        assert number_on_page(client, issuer) == f"{YEAR}-013"
+    response = client.post("/generate", data=dict(fields, number=f"{YEAR}-013", bank_account=account))
+    assert response.status_code == 200 and "Validierung bestanden" in response.get_data(as_text=True)
+    assert number_on_page(client, issuer) == f"{YEAR}-014"
+    assert number_on_page(client, other) == f"{YEAR}-051"
+    assert untouched == (appmod.SELLER_FILE.read_bytes(), (other_folder / "seller.json").read_bytes())
+    assert all((folder / "output" / name).read_bytes() == data for name, data in originals.items())
+    assert all((folder / "output" / name).read_bytes() == data for name, data in before_restore.items())
+
+
+@pytest.mark.parametrize("counter,archived,expected", [
+    ("{year}-010", ["{year}-011"], "{year}-012"),
+    ("{year}-020", ["{year}-011"], "{year}-021"),
+    ("{last_year}-999", ["{last_year}-999"], "{year}-001"),
+    ("{last_year}-999", ["{year}-004"], "{year}-005"),
+    ("{year}-999", [], "{year}-1000"),
+    ("CUSTOM-4", ["{year}-011", "CUSTOM-5"], "{year}-012"),
+    ("", ["{year}-009", "{year}-1000", "{year}-020"], "{year}-1001"),
+])
+def test_number_suggestion_after_retirement_handles_years_and_archive_maximum(client, counter, archived, expected):
+    def number(value):
+        return value.format(year=YEAR, last_year=YEAR - 1)
+
+    add_issuer(client)
+    seller = dict(SELLER, last_invoice_number=number(counter))
+    appmod.SELLER_FILE.write_text(json.dumps(seller))
+    for value in archived:
+        # Legacy PDFs without sidecars must also contribute their standard number.
+        (appmod.OUTPUT_DIR / f"Rechnung_{number(value)}.pdf").write_bytes(b"%PDF-test")
+    for _ in range(2):
+        assert number_on_page(client) == number(expected)
+        assert client.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).json["ok"]
+        assert client.post("/issuers/restore", data={"issuer": "default", "confirm": "restore"}).status_code == 302
+    assert number_on_page(client) == number(expected)
+
+
+def test_recreating_identical_details_does_not_take_over_retired_identity(client, fast_generation):
+    issuer, folder = add_issuer(client, SELLER["name"])
+    (folder / "seller.json").write_text(json.dumps(SELLER))
+    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
+    duplicate, duplicate_folder = add_issuer(client, SELLER["name"])
+    assert duplicate != issuer
+    assert client.post("/settings/autosave", data=dict(SELLER, issuer=duplicate,
+                       seller_revision=revision(client, duplicate))).status_code == 204
+    assert number_on_page(client, duplicate) == f"{YEAR}-001"
+    assert not list((duplicate_folder / "output").iterdir())
+    assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 302
+    assert number_on_page(client, issuer) == f"{YEAR}-012"
+    assert number_on_page(client, duplicate) == f"{YEAR}-001"
+    assert client.get(f"/download/Rechnung_{YEAR}-011.pdf?issuer={duplicate}").status_code == 404
+    assert client.get(f"/download/Rechnung_{YEAR}-011.pdf?issuer={issuer}").status_code == 200
+
+
+@pytest.mark.parametrize("target_default", [False, True])
+def test_retired_identity_can_be_restored_after_data_folder_move(client, fast_generation, tmp_path, target_default):
+    other, folder = add_issuer(client)
+    issuer, folder = ("default", appmod.DATA_DIR) if target_default else (other, folder)
+    (folder / "seller.json").write_text(json.dumps(SELLER))
+    assert client.post("/generate", data=dict(FORM, issuer=issuer)).status_code == 200
+    originals = {p.name: p.read_bytes() for p in (folder / "output").iterdir()}
+    assert client.post("/issuers/default", data={"issuer": issuer}).json["ok"]
+    assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
+    assert appmod.set_data_dir(str(tmp_path / "moved"))[0]
+    assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 302
+    assert number_on_page(client, issuer) == f"{YEAR}-012"
+    for name, data in originals.items():
+        if name.endswith(".pdf"):
+            assert client.get(f"/download/{name}?issuer={issuer}").data == data
+    fresh = appmod.app.test_client()
+    page = html.fromstring(fresh.get("/").data)
+    assert page.xpath('//*[@id="issuer-select"]/option[@selected]/@value') == [other if target_default else "default"]
+
+
+def test_concurrent_restore_keeps_single_identity_and_revision(client):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    issuer, folder = add_issuer(client)
+    assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
+    ready = Barrier(2)
+
+    def restore(_):
+        with appmod.app.test_client() as tab:
+            ready.wait(timeout=5)
+            return tab.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert list(pool.map(restore, range(2))) == [302, 302]
+    assert list((appmod.DATA_DIR / "issuers").iterdir()) == [folder]
+    assert number_on_page(client, issuer) == f"{YEAR}-001"
+    token = revision(client, issuer)
+    assert client.post("/issuers/restore", data={"issuer": issuer, "confirm": "restore"}).status_code == 302
+    assert revision(client, issuer) == token
+
+
+def test_concurrent_retirement_and_export_never_revives_issuer_or_loses_original(client, fast_generation):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    add_issuer(client)
+    assert client.post("/generate", data=FORM).status_code == 200
+    original = {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()}
+    ready = Barrier(2)
+
+    def act(action):
+        with appmod.app.test_client() as tab:
+            ready.wait(timeout=5)
+            if action == "delete":
+                return tab.post("/issuers/delete", data={"issuer": "default", "confirm": "delete"}).status_code
+            return tab.post("/generate", data=dict(FORM, issuer="default", number=f"{YEAR}-012")).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        deleted, generated = list(pool.map(act, ["delete", "generate"]))
+    assert deleted == 200 and generated in (200, 410)
+    assert appmod.load_seller()["_deleted"] is True
+    assert all((appmod.OUTPUT_DIR / name).read_bytes() == data for name, data in original.items())
+    assert client.post("/issuers/restore", data={"issuer": "default", "confirm": "restore"}).status_code == 302
+    assert number_on_page(client) == f"{YEAR}-{'013' if generated == 200 else '012'}"
