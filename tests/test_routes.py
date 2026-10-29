@@ -6,6 +6,7 @@ Der volle /generate-Roundtrip ruft build_pdf (WeasyPrint/Pango) auf und wird
 import json
 
 import pytest
+from helpers import export_invoice
 
 import app as appmod
 
@@ -121,14 +122,14 @@ _FORM = {
 
 def test_storno_requires_reference(client):
     # 381 (Storno) ohne Bezug -> abgelehnt, kein PDF (Redirect vor dem Rendern).
-    r = client.post("/generate", data=dict(_FORM, doc_type="381"))
+    r = export_invoice(client, data=dict(_FORM, doc_type="381"))
     assert r.status_code in (302, 303)
     assert not list(appmod.OUTPUT_DIR.glob("*.pdf"))
 
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
 def test_generate_creates_pdf_and_sidecar(client):
-    r = client.post("/generate", data=dict(_FORM))
+    r = export_invoice(client, data=dict(_FORM))
     assert r.status_code == 200
     pdfs = list(appmod.OUTPUT_DIR.glob("*.pdf"))
     assert len(pdfs) == 1
@@ -138,7 +139,7 @@ def test_generate_creates_pdf_and_sidecar(client):
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
 def test_xrechnung_writes_standalone_xml(client):
     # XRechnung-Modus: einreichbare .xml + PDF-Sichtexemplar; .xml herunterladbar.
-    r = client.post("/generate", data=dict(
+    r = export_invoice(client, data=dict(
         _FORM, profile="xrechnung",
         buyer_city="Köln", buyer_postcode="50667", buyer_address_line="Domkloster 4",
         buyer_email="k@muster.de", buyer_reference="04011000-12345-67",
@@ -163,8 +164,8 @@ def test_xrechnung_writes_standalone_xml(client):
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
 def test_generate_duplicate_number_keeps_both(client):
-    client.post("/generate", data=dict(_FORM))
-    r2 = client.post("/generate", data=dict(_FORM))  # gleiche Nummer erneut
+    export_invoice(client, data=dict(_FORM))
+    r2 = export_invoice(client, data=dict(_FORM))  # gleiche Nummer erneut
     assert r2.status_code == 200
     pdfs = sorted(p.name for p in appmod.OUTPUT_DIR.glob("*.pdf"))
     assert len(pdfs) == 2  # nichts überschrieben
@@ -230,7 +231,7 @@ def test_archive_rows_offer_original_pdf_preview(client, has_sidecar):
     doc = html.fromstring(client.get("/settings/panel").data)
     rows = doc.xpath('//tr[@class="arch-row"]')
     assert len(rows) == 1
-    assert rows[0].get("data-preview-url") == "/archive/preview/" + filename
+    assert rows[0].get("data-preview-url") == "/archive/preview/" + filename + "?issuer=default"
 
 
 def test_reveal_missing_file_404(client):
@@ -274,13 +275,13 @@ def test_export_csv_browser_downloads(client):
 
 def test_settings_save_fetch_returns_json(client):
     # Stammdaten speichern per fetch -> JSON + Toast statt Redirect/Banner.
-    r = client.post("/settings", data={"name": "Neu GmbH"},
+    r = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())},
                     headers={"X-Requested-With": "fetch"})
     d = r.get_json()
     assert d["ok"] and d["message"]
     assert json.loads(appmod.SELLER_FILE.read_text(encoding="utf-8"))["name"] == "Neu GmbH"
     # Ohne Header: klassischer Redirect (No-JS-Fallback)
-    r2 = client.post("/settings", data={"name": "Neu GmbH"})
+    r2 = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())})
     assert r2.status_code in (302, 303)
 
 
@@ -637,7 +638,7 @@ def _mock_generation(monkeypatch):
 def test_generation_never_claims_unverified_success(client, monkeypatch, sch):
     _mock_generation(monkeypatch)
     monkeypatch.setattr(appmod, 'validate_schematron', lambda xml: sch)
-    response = client.post('/generate', data=_FORM)
+    response = export_invoice(client, data=_FORM)
     assert response.status_code == 200
     assert 'Validierung bestanden' not in response.get_data(as_text=True)
     if sch['error']:
@@ -652,7 +653,7 @@ def test_generate_preserves_updated_seller(client, monkeypatch):
         appmod.save_seller(seller)
         return b'%PDF-test'
     monkeypatch.setattr(appmod, 'build_pdf', render)
-    assert client.post('/generate', data=_FORM).status_code == 200
+    assert export_invoice(client, data=_FORM).status_code == 200
     assert appmod.load_seller()['name'] == 'Updated seller'
     assert appmod.load_seller()['last_invoice_number'] == _FORM['number']
 
@@ -662,7 +663,7 @@ def test_parallel_generate_preserves_all_invoices(client, monkeypatch):
     _mock_generation(monkeypatch)
     def generate(i):
         with appmod.app.test_client() as c:
-            return c.post('/generate', data=dict(_FORM, buyer_name=f'Buyer {i}')).status_code
+            return export_invoice(c, data=dict(_FORM, buyer_name=f'Buyer {i}')).status_code
     with ThreadPoolExecutor(max_workers=4) as pool:
         assert list(pool.map(generate, range(8))) == [200] * 8
     assert len(list(appmod.OUTPUT_DIR.glob('*.pdf'))) == 8

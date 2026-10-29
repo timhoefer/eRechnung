@@ -22,6 +22,89 @@ Zwei Wege:
 
 Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern — sie werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 
+## Mehrere Rechnungsaussteller
+
+Über **Weitere Stammdaten anlegen** unten links in den Stammdaten kannst du weitere Profile
+anlegen, etwa für deine freiberufliche Tätigkeit und eine Gesellschaft. Jedes Profil
+hat eigene Stammdaten, Steuerangaben, Logo, Bankverbindungen, Rechnungsnummern und
+ein eigenes Archiv. Der Profilname dient nur zur Unterscheidung in der App; auf der
+Rechnung steht der in den Stammdaten hinterlegte Name. Die Kundenliste und deren
+gespeicherte Positionen werden gemeinsam genutzt.
+
+Solange nur ein Profil vorhanden ist, bleibt die Oberfläche wie gewohnt. Ab dem
+zweiten Profil zeigt die Kopfzeile der Stammdaten den aktiven Rechnungsaussteller
+als Auswahl. Sie bleibt auch bei eingeklappten Stammdaten bedienbar. Beim Wechsel
+bleibt eine geöffnete Stammdatenansicht geöffnet.
+
+Die vorhandenen Stammdaten und Rechnungen bilden automatisch das erste Profil;
+bestehende Dateien werden dafür weder verschoben noch umgeschrieben. Weitere
+Profile liegen unter `issuers/<Profil-ID>/seller.json` und
+`issuers/<Profil-ID>/output/` im gemeinsamen Datenordner. Ein Datenordnerwechsel
+nimmt alle Profile mit; abweichende Kopien desselben Profils im Ziel stoppen den
+Umzug. Sichere immer den vollständigen Datenordner.
+
+Die automatische Nummernfolge `JJJJ-NNN` läuft pro Aussteller unabhängig. Der
+Vorschlag folgt der höchsten Nummer des laufenden Jahres aus gespeichertem Zähler
+und Archiv dieses Profils. Bei einem neuen Profil beginnt er mit `JJJJ-001`;
+existieren Rechnungen außerhalb dieses Archivs, trage beim ersten Erstellen die
+passende nächste Nummer ein. Abweichende Nummernformate bleiben manuell
+eingebbar. Archiv, CSV-Export, Vorlagen und Bezüge für Korrekturen beziehen sich
+jeweils auf das ausgewählte Profil. Gespeicherte Originalrechnungen bleiben bei
+späteren Änderungen an den Stammdaten unverändert.
+
+Bei einer **neuen Anschrift oder einem geänderten Namen** die vorhandenen
+Stammdaten bearbeiten. Die Identität des Profils und seine Nummernfolge ändern
+sich dabei nicht; neue Belege verwenden die aktualisierten Angaben.
+
+Ein Profilwechsel öffnet ein neues Rechnungsformular. Bei bereits eingetragenem
+Kunden oder Positionen fragt die App vor dem Verwerfen nach. Jedes Fenster behält
+seinen eigenen Aussteller. Bei mehreren aktiven Profilen kannst du unter dem
+Profilnamen **Als Standard verwenden** wählen. Dieses Profil wird beim nächsten
+App-Start ausgewählt; ein manueller Profilwechsel verändert den Standard nicht.
+Die Auswahl liegt in `issuer_preferences.json` im Datenordner und wird beim Umzug
+mitgenommen. Ohne Auswahl oder nach dem Löschen des Standards wird das erste
+noch aktive Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen.
+
+**Löschen** erscheint erst ab zwei aktiven Profilen und steht unten rechts neben
+**Stammdaten speichern**. Nach Bestätigung wird das Profil aus der normalen Auswahl
+entfernt, etwa nach Stilllegung einer Firma. Seine Stammdaten und Nummernfolge
+bleiben für spätere Stornos und Korrekturen erhalten und sind nicht mehr bearbeitbar.
+Alte Fenster können das Profil nicht durch automatisches Speichern wiederherstellen.
+
+**Aussteller reaktivieren** macht dasselbe Profil wieder auswählbar, mit seinen
+bisherigen Stammdaten, Rechnungen und seiner Nummernfolge. Die Aktion steht im
+Archiv und im Dialog **Weitere Stammdaten anlegen** zur Verfügung, auch für
+entfernte Profile ohne Belege. Der bisherige Standardaussteller bleibt bestehen.
+Fenster aus der Zeit vor dem Löschen müssen ihre Stammdaten neu laden, bevor sie
+Änderungen speichern können. Ein bewusst neu angelegtes Profil bleibt unabhängig;
+gleiche Namen oder Adressen führen nicht zu einer automatischen Zusammenlegung.
+
+**Das Archiv bleibt erhalten.** In den Einstellungen hat das Archiv eine eigene
+Aussteller-Auswahl. Entfernte Profile sind dort als
+**Nur Archiv** gekennzeichnet. Ihre Rechnungen lassen sich ansehen, herunterladen,
+prüfen und als CSV exportieren. Im Menü einer Rechnung mit vollständig gespeicherten
+Formulardaten stehen **Storno erstellen** und **Korrektur erstellen** zur Verfügung.
+Der Aussteller und der Originalbezug sind fest hinterlegt; normale Rechnungen und
+Vorausrechnungen bleiben gesperrt. Positionsrabatte und die ursprünglichen
+Leistungszeiträume werden übernommen; Rechnungsnummer und Ausstellungsdatum sind neu.
+Bereits früher entfernte Profile können die Absenderdaten aus der ausgewählten
+Originalrechnung übernehmen. PDF, XML und
+gespeicherte Rechnungsdaten einschließlich der damaligen Absenderangaben bleiben
+unverändert. Ein Wechsel des Archivs lässt den aktuellen Rechnungsentwurf und seinen
+Aussteller unangetastet.
+
+**Schutz vor veralteten Stammdaten:** Ein geöffnetes Formular merkt sich den
+geladenen Stand. Hat ein anderes Fenster oder eine bereits eingetroffene
+Synchronisation die Stammdaten inzwischen geändert, wird das Speichern abgewiesen.
+Die App zeigt einen Hinweis und bietet **Aktuelle Stammdaten laden** an; der
+Rechnungsentwurf bleibt dabei erhalten. Die Prüfung reserviert keine Rechnungsnummern.
+Der Export wartet auf das Speichern und die Konfliktprüfung der Stammdaten.
+
+Paralleles Schreiben auf mehreren Macs mit getrennten synchronisierten Kopien ist
+weiterhin nicht abgesichert. Die lokalen Simulationen und der noch ausstehende Test
+mit zwei echten Macs sind in [Mehrgeräte-Prüfung](docs/multi-device-validation.md)
+beschrieben.
+
 ## Steuerliche Behandlungen
 
 | Auswahl | EN-16931-Code | Verwendung |

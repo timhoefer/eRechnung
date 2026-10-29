@@ -11,6 +11,7 @@
 <header>
   <h1>{{ t.result_title }}</h1>
   <p class="sub">{{ inv.number }} &middot; {{ buyer.name }}</p>
+  <p class="sub">{{ t.issuer }}: {{ issuer_name }}</p>
 </header>
 
 {% if duplicate %}
@@ -60,7 +61,7 @@
   {% if is_desktop %}
   {# Desktop-App: WKWebView lädt nichts herunter – die Belege liegen schon im
      output/-Ordner, also im Finder zeigen (XRechnung: XML markiert, PDF daneben). #}
-  <button type="button" class="reveal-btn" data-file="{{ xml_filename if (is_xrechnung and xml_filename) else filename }}">{{ t.reveal_finder }}</button>
+  <button type="button" class="reveal-btn" data-url="{{ url_for('reveal', filename=(xml_filename if (is_xrechnung and xml_filename) else filename)) }}">{{ t.reveal_finder }}</button>
   {% elif is_xrechnung and xml_filename %}
   <a href="{{ url_for('download_zip', filename=filename) }}"><button type="button">{{ t.pdf_xml_download }}</button></a>
   {% else %}
@@ -71,7 +72,7 @@
 <script>
   document.querySelectorAll(".reveal-btn").forEach(function (b) {
     b.addEventListener("click", function () {
-      fetch("/reveal/" + encodeURIComponent(b.dataset.file), { method: "POST" });
+      fetch(b.dataset.url, { method: "POST" });
     });
   });
 </script>
