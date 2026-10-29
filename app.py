@@ -162,12 +162,14 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
         except OSError:
             pass
 
-    rm(src_dir / "seller.json", ref_dir / "seller.json")
     rm(src_dir / "customers.json", ref_dir / "customers.json")
     rm(src_dir / "issuer_preferences.json", ref_dir / "issuer_preferences.json")
-    profile_files = _issuer_data_files(src_dir)
-    for issuer in {p.parts[1] for p in profile_files}:
-        files = [p for p in profile_files if p.parts[1] == issuer]
+    profiles: dict[str, list[Path]] = {}
+    for relative in _issuer_data_files(src_dir):
+        issuer = relative.parts[1] if relative.parts[0] == "issuers" else "default"
+        profiles.setdefault(issuer, []).append(relative)
+    # Keep each identity and its entire archive together, including the legacy one.
+    for files in profiles.values():
         try:
             identical = all((ref_dir / p).is_file() and filecmp.cmp(src_dir / p, ref_dir / p, shallow=False)
                             for p in files)
@@ -178,9 +180,6 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
                 rm(src_dir / relative, ref_dir / relative)
     src_out = src_dir / "output"
     if src_out.is_dir():
-        for f in list(src_out.iterdir()):
-            if f.is_file():
-                rm(f, ref_dir / "output" / f.name)
         try:
             if not any(src_out.iterdir()):
                 src_out.rmdir()
@@ -189,14 +188,14 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
 
 
 def _issuer_data_files(directory: Path) -> list[Path]:
-    """Only app-managed issuer files, never symlinked external directories."""
+    """Files of all issuers, including the legacy root; never follow symlinks."""
+    profiles = [directory]
     root = directory / "issuers"
-    if not root.is_dir() or root.is_symlink():
-        return []
+    if root.is_dir() and not root.is_symlink():
+        profiles.extend(p for p in root.iterdir()
+                        if re.fullmatch(r"[a-f0-9]{32}", p.name) and p.is_dir() and not p.is_symlink())
     files: list[Path] = []
-    for profile in root.iterdir():
-        if not re.fullmatch(r"[a-f0-9]{32}", profile.name) or not profile.is_dir() or profile.is_symlink():
-            continue
+    for profile in profiles:
         paths = [profile / "seller.json"]
         out = profile / "output"
         if out.is_dir() and not out.is_symlink():
@@ -247,47 +246,30 @@ def set_data_dir(raw: str):
         import filecmp
 
         try:
-            for name in ("seller.json", "issuer_preferences.json"):
-                src, dst = old / name, target / name
-                if dst.is_symlink():
+            files = [*_issuer_data_files(old), Path("issuer_preferences.json")]
+            archive_dirs = {Path("output"), *(p.parent / "output" for p in files
+                                             if p.name == "seller.json" and p.parent.name != "output")}
+            # Check parents too: a target folder must not redirect a copy elsewhere.
+            for relative in [*files, Path("customers.json"), *archive_dirs]:
+                if any((target / p).is_symlink() for p in (relative, *relative.parents)):
                     return False, "data_dir_err_write"
+            for relative in files:
+                src, dst = old / relative, target / relative
                 if src.exists() and dst.exists() and (
                     not dst.is_file() or not filecmp.cmp(src, dst, shallow=False)
                 ):
                     return False, "issuer_move_conflict"
-            for relative in _issuer_data_files(old):
-                dst = target / relative
-                if any(p.is_symlink() for p in (target / "issuers", dst.parent, dst.parent.parent, dst)):
-                    return False, "data_dir_err_write"
-                if dst.exists() and (not dst.is_file() or not filecmp.cmp(old / relative, dst, shallow=False)):
-                    return False, "issuer_move_conflict"
+            # One copy path for every issuer, including empty archives. Existing
+            # shared customers keep the previous recovery behavior (no overwrite).
+            for relative in archive_dirs:
+                (target / relative).mkdir(parents=True, exist_ok=True)
+            for relative in [*files, Path("customers.json")]:
+                src, dst = old / relative, target / relative
+                if src.is_file() and not dst.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
         except OSError:
             return False, "data_dir_err_write"
-        # Vorhandene Daten in den neuen Ordner übernehmen, aber nichts
-        # überschreiben (Recovery-Fall: Zielordner enthält schon Daten).
-        (target / "output").mkdir(exist_ok=True)
-        for name in ("seller.json", "customers.json", "issuer_preferences.json"):
-            src, dst = old / name, target / name
-            if src.exists() and not dst.exists():
-                shutil.copy2(src, dst)
-        src_out = old / "output"
-        if src_out.is_dir():
-            for f in src_out.iterdir():
-                dst = target / "output" / f.name
-                if f.is_file() and not dst.exists():
-                    shutil.copy2(f, dst)
-        for relative in _issuer_data_files(old):
-            src, dst = old / relative, target / relative
-            # An existing target must never redirect a copy outside its data folder.
-            if any(p.is_symlink() for p in (target / "issuers", dst.parent, dst.parent.parent, dst)):
-                return False, "data_dir_err_write"
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            if not dst.exists():
-                shutil.copy2(src, dst)
-            if relative.name == "seller.json":
-                if (dst.parent / "output").is_symlink():
-                    return False, "data_dir_err_write"
-                (dst.parent / "output").mkdir(exist_ok=True)
 
     cfg = _load_app_config()
     cfg["data_dir"] = "" if target.resolve() == BASE.resolve() else str(target)
@@ -341,7 +323,7 @@ def data_conflicts() -> list:
 
     markers = ("conflicted copy", "in konflikt stehende", "in-konflikt", "konfliktkopie")
     profile_dirs = {p.parent for p in _issuer_data_files(DATA_DIR)}
-    for d in (DATA_DIR, DATA_DIR / "output", *(DATA_DIR / p for p in profile_dirs)):
+    for d in sorted({DATA_DIR, DATA_DIR / "output", *(DATA_DIR / p for p in profile_dirs)}):
         if d.is_dir():
             for f in sorted(d.iterdir()):
                 if f.is_file() and any(m in f.name.lower() for m in markers):
@@ -506,6 +488,11 @@ def seller_file() -> Path:
 
 def output_dir() -> Path:
     return g.get("issuer_output_dir", OUTPUT_DIR) if has_request_context() else OUTPUT_DIR
+
+
+def issuer_scope() -> str:
+    """Stable namespace for browser drafts belonging to this data directory."""
+    return hashlib.sha256(str(SELLER_FILE.parent.resolve()).encode()).hexdigest()[:16]
 
 
 @app.url_defaults
@@ -1307,7 +1294,7 @@ def index():
         seller=seller,
         issuers=issuer_profiles(),
         default_issuer_id=default_issuer(),
-        issuer_scope=hashlib.sha256(str(SELLER_FILE.parent.resolve()).encode()).hexdigest()[:16],
+        issuer_scope=issuer_scope(),
         treatments=TAX_TREATMENTS,
         defaults=defaults,
         customers=load_customers(),
@@ -1329,7 +1316,7 @@ def settings():
     msg = translate(get_ui_lang(request))["master_saved"]
     # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner.
     if request.headers.get("X-Requested-With") == "fetch":
-        return {"ok": True, "message": msg, "issuer_label": issuer_label(seller)}
+        return {"ok": True, "message": msg}
     flash(msg, "ok")
     return redirect(url_for("index"))
 
@@ -1954,7 +1941,10 @@ def export_csv():
 def data_dir_set():
     ok, key = set_data_dir(request.form.get("data_dir", ""))
     ui = translate(get_ui_lang(request))
-    flash(ui.get(key, key), "ok" if ok else "err")
+    message = ui.get(key, key)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"ok": ok, "message": message, "issuer_scope": issuer_scope()}
+    flash(message, "ok" if ok else "err")
     # Beim Erststart kommt die Auswahl aus dem Willkommens-Dialog -> zurück aufs
     # Formular (nicht in die Einstellungen).
     dest = "index" if request.form.get("origin") == "onboarding" else "validate"

@@ -276,3 +276,109 @@ test("rapid archive switches ignore an older response and retain the chosen arch
   await reload;
   assert.equal(pane.innerHTML, "Chosen reloaded");
 });
+
+function settingsView() {
+  const app = loadApp();
+  const pane = {innerHTML: "Current archive", hidden: true, focus() {}};
+  const content = {hidden: false};
+  const button = {dataset: {open: "Open", close: "Close"}, classList: {add() {}, remove() {}}, setAttribute() {}, focus() {}};
+  const elements = {"settings-pane": pane, "form-content": content, "settings-toggle": button};
+  app.document.getElementById = (id) => elements[id] || null;
+  app.window.SETTINGS_PANEL_URL = "/settings/panel?issuer=current";
+  app.window.scrollTo = () => {};
+  app.checkMiniPages = app.restoreLivePreview = app.flashError = () => {};
+  return {app, pane, content, button};
+}
+
+test("closing settings during loading keeps the invoice visible", async () => {
+  const {app, pane, content} = settingsView();
+  let finish;
+  app.fetch = () => new Promise((resolve) => { finish = resolve; });
+  const opening = app.openSettings();
+  app.closeSettings();
+  finish({ok: true, text: async () => "Late archive"});
+  await opening;
+  await new Promise(setImmediate);
+  assert.equal(content.hidden, false);
+  assert.equal(pane.hidden, true);
+  assert.equal(pane.innerHTML, "Current archive");
+});
+
+test("a failed settings load restores the invoice and open button", async () => {
+  const {app, pane, content, button} = settingsView();
+  app.fetch = async () => ({ok: false});
+  await app.openSettings();
+  assert.equal(content.hidden, false);
+  assert.equal(pane.hidden, true);
+  assert.equal(button.textContent, "Open");
+});
+
+test("an old load failure cannot close settings after reopening", async () => {
+  const {app, pane, content} = settingsView();
+  const requests = [];
+  app.fetch = () => new Promise((resolve) => { requests.push(resolve); });
+  const first = app.openSettings();
+  app.closeSettings();
+  const second = app.openSettings();
+  requests[0]({ok: false});
+  await first;
+  requests[1]({ok: true, text: async () => "Latest archive"});
+  await second;
+  assert.equal(content.hidden, true);
+  assert.equal(pane.hidden, false);
+  assert.equal(pane.innerHTML, "Latest archive");
+});
+
+test("archive selection stays with visible invoices while loading and after a failure", async () => {
+  const {app, pane} = settingsView();
+  app.URL = URL;
+  app.URLSearchParams = URLSearchParams;
+  app.window.location = {href: "http://localhost/"};
+  const select = {value: "other", options: [{value: "current", defaultSelected: true}, {value: "other"}]};
+  const form = {action: "/settings/panel", querySelector: () => select};
+  app.FormData = class { constructor() { return new URLSearchParams({issuer: select.value}); } };
+  let finish;
+  app.fetch = (url) => {
+    assert.equal(new URL(url).searchParams.get("issuer"), "other");
+    return new Promise((resolve) => { finish = resolve; });
+  };
+  const switching = app.switchArchive(form);
+  assert.equal(select.value, "current");
+  finish({ok: false});
+  await switching;
+  assert.equal(select.value, "current");
+  assert.equal(pane.innerHTML, "Current archive");
+});
+
+test("data folder conflicts are shown without reloading the archive or changing draft scope", async () => {
+  const {app, pane} = settingsView();
+  app.window.ISSUER_SCOPE = "old";
+  app.FormData = class {};
+  let message;
+  app.flashError = (text) => { message = text; };
+  app.fetch = async (url, options) => {
+    assert.equal(url, "/data-dir?issuer=current");
+    assert.equal(options.headers["X-Requested-With"], "fetch");
+    return {ok: true, json: async () => ({ok: false, message: "Conflicting archive"})};
+  };
+  await app.saveDataDirectory({action: "/data-dir?issuer=current"});
+  assert.equal(message, "Conflicting archive");
+  assert.equal(pane.innerHTML, "Current archive");
+  assert.equal(app.window.ISSUER_SCOPE, "old");
+});
+
+test("moving data updates language draft storage without resetting the invoice", async () => {
+  const {app, content} = settingsView();
+  app.window.ISSUER_SCOPE = "old";
+  app.window.ISSUER_ID = "company";
+  const oldKey = app.languageDraftKey();
+  app.FormData = class {};
+  app.flashOk = () => {};
+  app.fetch = async () => ({ok: true, json: async () => ({ok: true, issuer_scope: "new"})});
+  app.loadSettingsPanel = async () => true;
+  await app.saveDataDirectory({action: "/data-dir?issuer=company"});
+  assert.equal(app.window.ISSUER_SCOPE, "new");
+  assert.notEqual(app.languageDraftKey(), oldKey);
+  assert.equal(app.window.ISSUER_ID, "company");
+  assert.equal(content.hidden, false);
+});

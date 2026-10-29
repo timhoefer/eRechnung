@@ -2132,19 +2132,50 @@ function loadDepsAsync() {
 
 let settingsPanelUrl;
 let settingsPanelLoadId = 0;
-function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options) {
+async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options) {
   const pane = document.getElementById("settings-pane");
-  if (!pane || !url) return Promise.resolve();
+  if (!pane || !url) return false;
   const loadId = ++settingsPanelLoadId;
-  return fetch(url, options)
-    .then((r) => { if (!r.ok) throw new Error("archive load failed"); return r.text(); })
-    .then((html) => {
-      if (loadId !== settingsPanelLoadId) return;
-      settingsPanelUrl = url;
-      pane.innerHTML = html;
-      loadDepsAsync();
-    })
-    .catch(() => { if (loadId === settingsPanelLoadId) flashError(); });
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error("archive load failed");
+    const html = await response.text();
+    if (loadId !== settingsPanelLoadId) return false;
+    settingsPanelUrl = url;
+    pane.innerHTML = html;
+    loadDepsAsync();
+    return true;
+  } catch (error) {
+    if (loadId === settingsPanelLoadId) flashError();
+    return false;
+  }
+}
+
+async function switchArchive(form) {
+  const url = new URL(form.action, window.location.href);
+  url.search = new URLSearchParams(new FormData(form)).toString();
+  const select = form.querySelector("select");
+  // Until loading succeeds, the label must still describe the visible invoices.
+  select.value = [...select.options].find((option) => option.defaultSelected).value;
+  if (await loadSettingsPanel(url.toString())) {
+    lastPreviewUrl = null;
+    showNoPreview(window.MSG_LIVE_PREVIEW);
+  }
+}
+
+async function saveDataDirectory(form) {
+  try {
+    const response = await fetch(form.action, {
+      method: "POST", body: new FormData(form), headers: {"X-Requested-With": "fetch"},
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) { flashError(data.message); return; }
+    window.ISSUER_SCOPE = data.issuer_scope;
+    flashOk(data.message);
+    await loadSettingsPanel();
+  } catch (error) {
+    flashError();
+  }
 }
 
 function openSettings() {
@@ -2155,18 +2186,22 @@ function openSettings() {
   settingsOpen = true;
   if (_previewAbort) _previewAbort.abort();
   checkMiniPages();
-  loadSettingsPanel().then(() => {
+  const loading = loadSettingsPanel();
+  const loadId = settingsPanelLoadId;
+  if (btn) {
+    btn.textContent = btn.dataset.close;
+    btn.classList.add("active");
+    btn.setAttribute("aria-expanded", "true");
+  }
+  return loading.then((loaded) => {
+    if (!settingsOpen || loadId !== settingsPanelLoadId) return;
+    if (!loaded) { closeSettings(); return; }
     pane.hidden = false;
     content.hidden = true;
     pane.focus({ preventScroll: true }); // Fokus ins Panel, aber nicht hinscrollen
     window.scrollTo(0, 0); // oben starten – Scrollposition des Formulars nicht übernehmen
     announce(window.MSG_SETTINGS_OPENED);
   });
-  if (btn) {
-    btn.textContent = btn.dataset.close;
-    btn.classList.add("active");
-    btn.setAttribute("aria-expanded", "true");
-  }
 }
 
 function closeSettings() {
@@ -2174,6 +2209,7 @@ function closeSettings() {
   const content = document.getElementById("form-content");
   const btn = document.getElementById("settings-toggle");
   settingsOpen = false;
+  ++settingsPanelLoadId; // Ignore responses from requests made before closing.
   lastPreviewUrl = null;
   if (pane) pane.hidden = true;
   if (content) content.hidden = false;
@@ -2331,15 +2367,9 @@ function closeSettings() {
     const form = e.target;
     e.preventDefault();
     if (form.id === "archive-issuer-form") {
-      const url = new URL(form.action, window.location.href);
-      url.search = new URLSearchParams(new FormData(form)).toString();
-      lastPreviewUrl = null;
-      showNoPreview(window.MSG_LIVE_PREVIEW);
-      loadSettingsPanel(url.toString());
+      switchArchive(form);
     } else if (form.classList.contains("datadir-form")) {
-      fetch(form.action, { method: "POST", body: new FormData(form) })
-        .then(() => loadSettingsPanel())
-        .catch(() => flashError());
+      saveDataDirectory(form);
     } else { // Datei prüfen / Archiv-Rechnung prüfen -> Panel mit Ergebnis ersetzen
       loadSettingsPanel(form.action, { method: "POST", body: new FormData(form) });
     }

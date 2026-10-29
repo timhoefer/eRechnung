@@ -467,19 +467,93 @@ def test_profile_folder_cannot_become_data_root(client):
     assert appmod.DATA_DIR == before
 
 
-def test_move_conflict_preserves_complete_source_profile(client, tmp_path):
-    issuer, directory = add_issuer(client)
+@pytest.mark.parametrize("legacy", [False, True])
+def test_move_conflict_preserves_complete_source_profile(client, tmp_path, legacy):
+    _, directory = add_issuer(client)
+    if legacy:
+        directory = appmod.DATA_DIR
     (directory / "output" / "example.pdf").write_bytes(b"%PDF-source")
     target = tmp_path / "conflicting"
-    (target / "issuers" / issuer / "output").mkdir(parents=True)
-    (target / "issuers" / issuer / "seller.json").write_bytes((directory / "seller.json").read_bytes())
-    (target / "issuers" / issuer / "output" / "example.pdf").write_bytes(b"%PDF-different")
+    destination = target / directory.relative_to(appmod.DATA_DIR)
+    (destination / "output").mkdir(parents=True)
+    (destination / "seller.json").write_bytes((directory / "seller.json").read_bytes())
+    (destination / "output" / "example.pdf").write_bytes(b"%PDF-different")
     before = appmod.DATA_DIR
     assert appmod.set_data_dir(str(target)) == (False, "issuer_move_conflict")
     assert appmod.DATA_DIR == before
     appmod._drop_identical(before, target)
     assert (directory / "seller.json").exists()
     assert (directory / "output" / "example.pdf").read_bytes() == b"%PDF-source"
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_cleanup_keeps_profile_together_until_every_file_is_copied(client, tmp_path, legacy):
+    _, directory = add_issuer(client)
+    if legacy:
+        directory = appmod.DATA_DIR
+    (directory / "output" / "example.pdf").write_bytes(b"%PDF-source")
+    target = tmp_path / "partial-copy"
+    destination = target / directory.relative_to(appmod.DATA_DIR)
+    destination.mkdir(parents=True)
+    (destination / "seller.json").write_bytes((directory / "seller.json").read_bytes())
+    appmod._drop_identical(appmod.DATA_DIR, target)
+    assert (directory / "seller.json").exists()
+    assert (directory / "output" / "example.pdf").read_bytes() == b"%PDF-source"
+
+
+def test_failed_data_copy_leaves_source_and_config_unchanged(client, tmp_path, monkeypatch):
+    import shutil
+
+    add_issuer(client)
+    old = appmod.DATA_DIR
+    before = {p: p.read_bytes() for p in old.rglob("*") if p.is_file()}
+    copy = shutil.copy2
+    def fail(src, dst):
+        if "issuers" in src.parts:
+            raise OSError("disk full")
+        return copy(src, dst)
+    monkeypatch.setattr(shutil, "copy2", fail)
+    assert appmod.set_data_dir(str(tmp_path / "full")) == (False, "data_dir_err_write")
+    assert (tmp_path / "full" / "seller.json").exists()
+    assert appmod.DATA_DIR == old
+    assert not appmod.CONFIG_FILE.exists()
+    assert all(p.read_bytes() == contents for p, contents in before.items())
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_move_never_copies_into_linked_archive(client, tmp_path, legacy):
+    _, directory = add_issuer(client)
+    if legacy:
+        directory = appmod.DATA_DIR
+    (directory / "output" / "example.pdf").write_bytes(b"%PDF-source")
+    target = tmp_path / "linked"
+    destination = target / directory.relative_to(appmod.DATA_DIR)
+    destination.mkdir(parents=True)
+    external = tmp_path / "external"
+    external.mkdir()
+    (destination / "output").symlink_to(external, target_is_directory=True)
+    before = appmod.DATA_DIR
+    assert appmod.set_data_dir(str(target)) == (False, "data_dir_err_write")
+    assert appmod.DATA_DIR == before
+    assert list(external.iterdir()) == []
+    assert (directory / "output" / "example.pdf").read_bytes() == b"%PDF-source"
+
+
+def test_inplace_data_move_reports_conflicts_and_refreshes_draft_scope(client, tmp_path):
+    target = tmp_path / "destination"
+    target.mkdir()
+    (target / "seller.json").write_text('{"name": "Other issuer"}')
+    old_scope = appmod.issuer_scope()
+    response = client.post("/data-dir?issuer=default", data={"data_dir": str(target)},
+                           headers={"X-Requested-With": "fetch"})
+    assert response.status_code == 200
+    assert not response.json["ok"]
+    assert "abweichende Kopie" in response.json["message"]
+    assert response.json["issuer_scope"] == old_scope
+    response = client.post("/data-dir?issuer=default", data={"data_dir": str(tmp_path / "empty")},
+                           headers={"X-Requested-With": "fetch"})
+    assert response.json["ok"]
+    assert response.json["issuer_scope"] == appmod.issuer_scope() != old_scope
 
 
 @pytest.mark.parametrize("profile", ["en16931", "xrechnung"])
