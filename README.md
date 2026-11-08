@@ -175,7 +175,7 @@ rendert daraus einen Hintergrund für normale und Retina-Displays. Zum Anpassen
 der Symbolpositionen oder Fenstergröße dient die Konfiguration in diesem Skript.
 Der Build benötigt dafür keine Finder- oder AppleScript-Automation.
 
-![DMG-Fenster im Finder](docs/images/dmg-preview.jpg)
+![DMG-Hintergrund; App und Programme-Symbol ergänzt Finder](assets/dmg-background.svg)
 
 ## Lizenz & Haftungsausschluss
 
