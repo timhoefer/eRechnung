@@ -63,6 +63,7 @@ def revision(client, issuer="default"):
 
 @pytest.fixture
 def fast_generation(monkeypatch):
+    monkeypatch.setattr(appmod, "build_xml", lambda data: b"<xml/>")
     monkeypatch.setattr(appmod, "build_pdf", lambda markup, xml: b"%PDF-test")
     monkeypatch.setattr(appmod, "render_html_pdf", lambda markup: b"%PDF-test")
     monkeypatch.setattr(appmod, "extract_xml_from_pdf", lambda pdf: b"<xml/>")

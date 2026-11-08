@@ -33,3 +33,8 @@ docs/improvement-plan.md
 # Icon-Zwischenstufen (nur icon.icns wird getrackt)
 assets/eRechnung.iconset/
 assets/icon_master.png
+
+# Local check caches and process lock
+.mypy_cache/
+.pytest_cache/
+.erechnung.lock
