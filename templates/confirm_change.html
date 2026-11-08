@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.change_title }}</title>
+  {% include "_theme_script.html" %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_version('style.css') }}">
+</head>
+<body>
+<main class="card change-page">
+  <h1>{{ confirmation.title }}</h1>
+  <p>{{ confirmation.message }}</p>
+  <div class="change-details">
+    <table><thead><tr><th>{{ t.change_field }}</th><th>{{ t.change_before }}</th><th>{{ t.change_after }}</th></tr></thead>
+      <tbody>{% for row in confirmation.details %}<tr><th>{{ row.label }}</th><td>{{ row.before }}</td><td>{{ row.after }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <form id="change-cancel-form" method="post" action="{{ confirmation.cancel_url }}" data-draft-key="{{ draft_key }}">
+    <input type="hidden" name="token" value="{{ confirmation.token }}">
+    <input type="hidden" name="back" value="{{ back }}">
+  </form>
+  <p id="change-cancel-error" class="callout" role="alert" hidden>{{ t.action_failed }}</p>
+  <form id="change-submit-form" method="post" action="{{ action }}" class="modal-actions">
+    {% for name, values in fields %}{% if name != '_change_confirmation' %}{% for value in values %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}{% endif %}{% endfor %}
+    <input type="hidden" name="_change_confirmation" value="{{ confirmation.token }}">
+    <button type="submit" form="change-cancel-form" class="secondary" autofocus>{{ t.cancel }}</button>
+    <button type="submit" class="danger">{{ t.change_confirm }}</button>
+  </form>
+</main>
+<script src="{{ url_for('static', filename='change_confirmation.js') }}?v={{ asset_version('change_confirmation.js') }}"></script>
+</body>
+</html>

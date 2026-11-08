@@ -62,6 +62,16 @@
   </form>
 </dialog>{% endif %}
 
+
+<dialog id="customer-switch-dialog" class="modal" aria-labelledby="customer-switch-title">
+  <h3 id="customer-switch-title">{{ t.customer_switch_title }}</h3>
+  <p>{{ t.customer_switch_warning }}</p>
+  <form method="dialog" class="modal-actions">
+    <button value="cancel" class="secondary" autofocus>{{ t.cancel }}</button>
+    <button value="discard" class="danger">{{ t.customer_switch_discard }}</button>
+  </form>
+</dialog>
+
 <dialog id="issuer-switch-dialog" class="modal" aria-labelledby="issuer-switch-title">
   <h3 id="issuer-switch-title">{{ t.issuer_switch_title }}</h3>
   <p>{{ t.issuer_switch_confirm }}</p>
@@ -246,6 +256,7 @@
       <button type="button" class="add-extras" id="add-account">{{ t.acct_add }}</button>
     </div>
 
+    <p class="hint wide" id="master-change-pending" role="status" hidden>{{ t.change_pending }}</p>
     {% if not issuer_deleted %}<div class="wide master-actions">
       <button type="button" class="link" id="issuer-add-button"><span aria-hidden="true">+ </span>{{ t.issuer_add }}</button>
       <div class="master-buttons">
@@ -342,6 +353,7 @@
       <label><span class="label-row"><span class="lbl" data-zug="{{ t.buyer_reference }}" data-xr="{{ t.buyer_reference_xr }}">{{ t.buyer_reference }}</span><span class="req-mark" hidden> *</span></span><input name="buyer_reference" data-xr-required></label>
       <label title="{{ t.buyer_term_days_hint }}">{{ t.buyer_term_days }}<input name="buyer_payment_term_days" type="number" min="0" step="1" value="14"></label>
     </div>
+    <p class="hint" id="customer-change-pending" role="status" hidden>{{ t.change_pending }}</p>
     <div class="customer-bar">
       <span class="spacer"></span>
       <button type="button" class="secondary danger" id="cust-delete-btn">{{ t.delete }}</button>
@@ -608,6 +620,7 @@
   window.MSG_NEED_NAME_ITEMS = {{ t['need_name_items']|tojson }};
   window.MSG_TAX_MISMATCH = {{ t['tax_mismatch']|tojson }};
 </script>
+{% include "_change_confirmation.html" %}
 <script src="{{ url_for('static', filename='calc.js') }}?v={{ asset_version('calc.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_version('app.js') }}"></script>
 {% include "_whats_new.html" %}

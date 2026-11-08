@@ -46,3 +46,12 @@ Protect this folder like any financial document folder:
 
 The software is provided without warranty of any kind (see `LICENSE`). It generates
 tax-relevant documents — always verify generated invoices yourself.
+
+## Confirmation of destructive changes
+
+The app requires an operation-bound confirmation before deleting or changing
+existing saved records. Confirmations are single-use, expire, and are invalidated
+by cancellation or a changed request/state. This is an accidental-change safeguard,
+not human authentication: software controlling the app can confirm the dialog.
+It does not cover direct file access or separate command-line tools. No agent
+connection, additional network listener, or per-agent authorization is enabled.

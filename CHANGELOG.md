@@ -1,5 +1,11 @@
 # Änderungen
 
+## Unreleased
+
+- Änderungen an bestehenden Stammdaten, Kunden und gespeicherten Positionen sowie Löschungen erhalten eine zusätzliche Bestätigung mit den betroffenen Daten. Unbestätigte Änderungen bleiben im Formular; beim Kundenwechsel wird vor ihrem Verlust gewarnt.
+- Bestätigungen sind einmalig, zeitlich begrenzt und an Sitzung, konkrete Anfrage und bisherigen Datenstand gebunden. Abbrechen widerruft die Bestätigung.
+- CSV-Exporte, Rechnungsbegleitdateien und Schreibproben ersetzen keine vorhandenen Dateien. Ein interner Testmodus verwendet ausschließlich temporäre Daten und einen eigenen Nummernlauf.
+
 ## 1.2.1
 
 - Das Archiv zeigt standardmäßig die neuesten Dateien zuerst. Alternativ lässt es sich nach Rechnungsnummer oder Kunde sortieren. Unterschiedlich lange Nummern wie „2026-07“ und „2026-008“ werden numerisch korrekt eingeordnet.

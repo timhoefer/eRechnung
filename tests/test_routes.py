@@ -6,7 +6,7 @@ Der volle /generate-Roundtrip ruft build_pdf (WeasyPrint/Pango) auf und wird
 import json
 
 import pytest
-from helpers import export_invoice
+from helpers import confirmed_post, export_invoice
 
 import app as appmod
 
@@ -40,7 +40,7 @@ def test_index_ok(client):
 
 
 def test_preview_html_renders(client):
-    r = client.post("/preview-html", data={
+    r = confirmed_post(client, "/preview-html", data={
         "description": "Test", "quantity": "1", "unit_price": "100",
         "tax_treatment": "de_19",
     })
@@ -65,7 +65,7 @@ def test_preview_sender_country(client, monkeypatch, mode, seller_country,
     seller = appmod.load_seller()
     seller["country"] = seller_country
     monkeypatch.setattr(appmod, "load_seller", lambda: seller)
-    response = client.post("/preview-html", data={
+    response = confirmed_post(client, "/preview-html", data={
         "description": "Test", "quantity": "1", "unit_price": "100",
         "buyer_country": buyer_country, "language": language, "_full": mode,
     })
@@ -236,7 +236,7 @@ def test_archive_rows_offer_original_pdf_preview(client, has_sidecar):
 
 def test_reveal_missing_file_404(client):
     # Pfad-Prüfung greift vor dem Plattform-Check -> 404 auch auf der CI (Linux).
-    assert client.post("/reveal/gibtsnicht.pdf").status_code == 404
+    assert confirmed_post(client, "/reveal/gibtsnicht.pdf").status_code == 404
 
 
 def test_reveal_existing_file_opens_finder(client, monkeypatch):
@@ -244,7 +244,7 @@ def test_reveal_existing_file_opens_finder(client, monkeypatch):
     calls = []
     monkeypatch.setattr("subprocess.run", lambda *a, **k: calls.append(a[0]))
     monkeypatch.setattr(appmod.sys, "platform", "darwin")
-    r = client.post("/reveal/" + pdf)
+    r = confirmed_post(client, "/reveal/" + pdf)
     assert r.status_code == 200 and r.get_json()["ok"]
     assert calls and calls[0][:2] == ["open", "-R"]
 
@@ -275,13 +275,13 @@ def test_export_csv_browser_downloads(client):
 
 def test_settings_save_fetch_returns_json(client):
     # Stammdaten speichern per fetch -> JSON + Toast statt Redirect/Banner.
-    r = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())},
+    r = confirmed_post(client, "/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())},
                     headers={"X-Requested-With": "fetch"})
     d = r.get_json()
     assert d["ok"] and d["message"]
     assert json.loads(appmod.SELLER_FILE.read_text(encoding="utf-8"))["name"] == "Neu GmbH"
     # Ohne Header: klassischer Redirect (No-JS-Fallback)
-    r2 = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())})
+    r2 = confirmed_post(client, "/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())})
     assert r2.status_code in (302, 303)
 
 
@@ -302,11 +302,11 @@ def test_csv_export_escapes_formula_injection(client):
 def test_customers_delete_fetch_json(client):
     appmod.save_customers([{"name": "Muster GmbH", "country": "DE"}])
     hdr = {"X-Requested-With": "fetch"}
-    r = client.post("/customers/delete", headers=hdr, data={"buyer_name": "Muster GmbH"})
+    r = confirmed_post(client, "/customers/delete", headers=hdr, data={"buyer_name": "Muster GmbH"})
     d = r.get_json()
     assert d["ok"] and "Muster GmbH" in d["message"] and d["customers"] == []
     # Unbekannter Name -> ok:False
-    assert client.post("/customers/delete", headers=hdr,
+    assert confirmed_post(client, "/customers/delete", headers=hdr,
                        data={"buyer_name": "Gibtsnicht"}).get_json()["ok"] is False
 
 
@@ -342,7 +342,7 @@ def test_logo_appears_in_preview(client):
     base = json.loads(out.read_text(encoding="utf-8"))
     base["logo"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
     out.write_text(json.dumps(base), encoding="utf-8")
-    body = client.post("/preview-html", data={
+    body = confirmed_post(client, "/preview-html", data={
         "description": "L", "quantity": "1", "unit_price": "100", "tax_treatment": "de_19",
     }).get_data(as_text=True)
     assert "brand-mark" in body and base["logo"] in body
@@ -351,15 +351,15 @@ def test_logo_appears_in_preview(client):
 def test_customers_save_fetch_returns_json(client):
     # Per fetch (JS): JSON statt Redirect -> kein Reload, Toast im Client.
     hdr = {"X-Requested-With": "fetch"}
-    r = client.post("/customers/save", headers=hdr,
+    r = confirmed_post(client, "/customers/save", headers=hdr,
                     data={"buyer_name": "Muster GmbH", "buyer_country": "DE"})
     d = r.get_json()
     assert d["ok"] and "Muster GmbH" in d["message"]
     assert any(c["name"] == "Muster GmbH" for c in d["customers"])
     # Fehlender Name -> ok: False mit Meldung
-    assert client.post("/customers/save", headers=hdr, data={}).get_json()["ok"] is False
+    assert confirmed_post(client, "/customers/save", headers=hdr, data={}).get_json()["ok"] is False
     # Ohne fetch-Header bleibt der klassische Redirect (No-JS-Fallback)
-    r2 = client.post("/customers/save", data={"buyer_name": "X", "buyer_country": "DE"})
+    r2 = confirmed_post(client, "/customers/save", data={"buyer_name": "X", "buyer_country": "DE"})
     assert r2.status_code in (302, 303)
 
 
@@ -491,22 +491,22 @@ def test_preview_uses_selected_account(client):
     form = {"description": "L", "quantity": "1", "unit_price": "100",
             "tax_treatment": "de_19"}
     # Konto per IBAN gewählt -> erscheint im Vorschau-HTML ...
-    body1 = client.post("/preview-html", data=dict(form, bank_account="DE99USD0")).get_data(as_text=True)
+    body1 = confirmed_post(client, "/preview-html", data=dict(form, bank_account="DE99USD0")).get_data(as_text=True)
     assert "DE99USD0" in body1
     # ... Hauptkonto (per IBAN) zeigt die flache IBAN, nicht das Zweitkonto.
-    body0 = client.post("/preview-html", data=dict(form, bank_account=base["iban"])).get_data(as_text=True)
+    body0 = confirmed_post(client, "/preview-html", data=dict(form, bank_account=base["iban"])).get_data(as_text=True)
     assert base["iban"] in body0 and "DE99USD0" not in body0
     # Alt-Sidecar-Kompatibilität: numerischer Index funktioniert weiter.
-    bodyl = client.post("/preview-html", data=dict(form, bank_account="1")).get_data(as_text=True)
+    bodyl = confirmed_post(client, "/preview-html", data=dict(form, bank_account="1")).get_data(as_text=True)
     assert "DE99USD0" in bodyl
 
 
 def test_data_dir_set_onboarding_redirects_to_form(client, monkeypatch):
     # set_data_dir stubben -> keine echten Dateioperationen; nur Redirect-Ziel prüfen.
     monkeypatch.setattr(appmod, "set_data_dir", lambda raw: (True, "data_dir_saved"))
-    r = client.post("/data-dir", data={"data_dir": "/x", "origin": "onboarding"})
+    r = confirmed_post(client, "/data-dir", data={"data_dir": "/x", "origin": "onboarding"})
     assert r.status_code in (302, 303) and "validate" not in r.headers["Location"]
-    r2 = client.post("/data-dir", data={"data_dir": "/x"})  # ohne origin -> Einstellungen
+    r2 = confirmed_post(client, "/data-dir", data={"data_dir": "/x"})  # ohne origin -> Einstellungen
     assert r2.status_code in (302, 303) and "validate" in r2.headers["Location"]
 
 
@@ -542,7 +542,7 @@ def test_archive_check_targets_xml_for_xrechnung(client):
     assert 'value="Rechnung_2026-001.xml"' in html
     assert 'value="Rechnung_2026-002.pdf"' in html
     # Die Prüfung der XML läuft direkt über den XML-Pfad (kein PDF-Extrakt).
-    r = client.post("/settings/panel", data={"filename": "Rechnung_2026-001.xml"})
+    r = confirmed_post(client, "/settings/panel", data={"filename": "Rechnung_2026-001.xml"})
     assert r.status_code == 200
     assert "Rechnung_2026-001.xml" in r.get_data(as_text=True)
 
@@ -586,7 +586,7 @@ def test_check_updates_compares_version(client, monkeypatch):
     # Neuere Version verfügbar -> update_available True, Tag-"v" wird gestrippt.
     monkeypatch.setattr("urllib.request.urlopen",
                         lambda *a, **k: _Resp({"tag_name": "v9.9.9", "html_url": "https://x/rel"}))
-    r = client.post("/check-updates")
+    r = confirmed_post(client, "/check-updates")
     d = r.get_json()
     assert d["update_available"] is True and d["latest"] == "9.9.9"
     assert d["current"] == appmod.APP_VERSION and d["url"] == "https://x/rel"
@@ -594,13 +594,13 @@ def test_check_updates_compares_version(client, monkeypatch):
     # Gleiche Version -> kein Update.
     monkeypatch.setattr("urllib.request.urlopen",
                         lambda *a, **k: _Resp({"tag_name": "v" + appmod.APP_VERSION}))
-    assert client.post("/check-updates").get_json()["update_available"] is False
+    assert confirmed_post(client, "/check-updates").get_json()["update_available"] is False
 
     # Netzwerkfehler -> error=offline, kein Crash.
     def _boom(*a, **k):
         raise OSError("no net")
     monkeypatch.setattr("urllib.request.urlopen", _boom)
-    assert client.post("/check-updates").get_json()["error"] == "offline"
+    assert confirmed_post(client, "/check-updates").get_json()["error"] == "offline"
 
 
 def test_csv_storno_offsets_original(client):
@@ -672,7 +672,7 @@ def test_parallel_generate_preserves_all_invoices(client, monkeypatch):
 
 
 def test_precise_price_in_invoice_preview(client):
-    response = client.post('/preview-html', data=dict(_FORM, quantity='1000', unit_price='0.004'))
+    response = confirmed_post(client, '/preview-html', data=dict(_FORM, quantity='1000', unit_price='0.004'))
     assert response.status_code == 200
     assert '0,004' in response.get_data(as_text=True)
 
