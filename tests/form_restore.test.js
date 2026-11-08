@@ -749,3 +749,39 @@ test("restoring line discounts preserves percent/amount and row alignment", () =
   app.restoreForm(form, data);
   for (const key of Object.keys(data)) assert.deepEqual(fields[key].map(el => el.value), data[key]);
 });
+
+test('a queued customer autosave cannot recreate a customer during deletion', async () => {
+  const app = loadApp();
+  app.window.CUSTOMER_AUTOSAVE_URL = '/customers/autosave';
+  const name = {name: 'buyer_name', value: 'Existing customer'};
+  app.document.getElementById = id => id === 'invoice-form' ? {
+    querySelector: () => name, querySelectorAll: () => [name],
+  } : null;
+  app.FormData = class { append() {} };
+  let finishPrevious;
+  app.previousSave = new Promise(resolve => { finishPrevious = resolve; });
+  vm.runInContext('pendingCustomerSave = previousSave', app);
+  app.changeFetch = () => { throw new Error('must not save queued data during deletion'); };
+  const queued = app.autosaveCustomer();
+  vm.runInContext('customerDeletionPending = true', app);
+  finishPrevious();
+  await queued;
+  await app.autosaveCustomer();
+});
+
+test('customer autosave leaves an overwrite pending without showing a dialog', async () => {
+  const app = loadApp();
+  app.window.CUSTOMER_AUTOSAVE_URL = '/customers/autosave';
+  const name = {name: 'buyer_name', value: 'Existing customer'};
+  const notice = {hidden: true};
+  app.document.getElementById = id => id === 'invoice-form' ? {
+    querySelector: () => name, querySelectorAll: () => [name],
+  } : id === 'customer-change-pending' ? notice : null;
+  app.FormData = class { append() {} };
+  app.changeFetch = async (url, options, interactive) => {
+    assert.equal(interactive, false);
+    return {status: 428, json: async () => ({ok: false})};
+  };
+  await app.autosaveCustomer();
+  assert.equal(notice.hidden, false);
+});

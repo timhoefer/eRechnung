@@ -50,6 +50,7 @@
   </div>
 </div>
 
+{% include "_change_confirmation.html" %}
 <script>
   (function () {
     const archiveSelect = document.getElementById("archive-issuer-select");
@@ -73,7 +74,19 @@
     }
     function close() { modal.hidden = true; }
     document.querySelectorAll(".js-delete").forEach((btn) => {
-      btn.addEventListener("click", () => open(btn.dataset.filename));
+      btn.addEventListener("click", async () => {
+        if (!window.ChangeConfirmation) { open(btn.dataset.filename); return; }
+        const body = new FormData();
+        body.append("filename", btn.dataset.filename);
+        btn.disabled = true;
+        try {
+          const response = await window.ChangeConfirmation.fetch(btn.dataset.url, {method: "POST", body});
+          if (response.ok) location.reload();
+          else alert({{ t.action_failed|tojson }});
+        } catch (error) {
+          if (error.name !== "AbortError") alert({{ t.action_failed|tojson }});
+        } finally { btn.disabled = false; }
+      });
     });
     document.getElementById("del-cancel").addEventListener("click", close);
     modal.addEventListener("click", (e) => { if (e.target === modal) close(); });

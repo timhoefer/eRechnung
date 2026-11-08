@@ -30,6 +30,8 @@ Rechnungsformular. Aussteller und Kunde werden
 sichtbar zugeordnet; erstellt und archiviert wird erst nach Prüfung in der App.
 Die App kann dabei auch ein entsprechend beauftragter Agent bedienen.
 Die Funktion ist standardmäßig aus (`ERECHNUNG_DRAFT_IMPORT=1` zum Testen).
+In diesem Modus verlangt die App beim Löschen und beim Ändern bereits gespeicherter
+Kunden-/Stammdaten eine zusätzliche Bestätigung mit Anzeige der betroffenen Daten.
 [Anleitung, Agentenhinweise und Beispieldatei](docs/draft-import.md).
 
 ## Mehrere Rechnungsaussteller

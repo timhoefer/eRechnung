@@ -26,10 +26,12 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from werkzeug.datastructures import MultiDict
 
+from change_confirmation import Confirmations
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
@@ -228,9 +230,9 @@ def set_data_dir(raw: str):
     target = BASE if not raw else Path(raw).expanduser()
     try:
         target.mkdir(parents=True, exist_ok=True)
-        probe = target / ".write_test"
-        probe.write_text("ok", encoding="utf-8")
-        probe.unlink()
+        # Never overwrite a pre-existing file just to check directory access.
+        with tempfile.TemporaryFile(dir=target) as probe:
+            probe.write(b"ok")
     except OSError:
         return False, "data_dir_err_write"
 
@@ -353,6 +355,103 @@ app.jinja_env.auto_reload = True
 # Die App ist ein rein lokales Tool (127.0.0.1). Hostnamen, die als „lokal"
 # gelten – schützt gegen DNS-Rebinding und Cross-Site-Zugriffe von Webseiten.
 DATA_LOCK = threading.RLock()
+CHANGE_CONFIRMATIONS = Confirmations()
+
+
+class ChangeConfirmationRequired(Exception):
+    def __init__(self, confirmation: dict):
+        self.confirmation = confirmation
+
+
+def confirm_change(title: str, message: str, before, after, details: list[dict]) -> None:
+    """Protect writes in the experimental mode, while DATA_LOCK is held.
+
+    All handlers check before their first persistent side effect. The signature
+    includes the complete request and current data, not a client 'confirmed' flag.
+    """
+    if not has_request_context() or not app.config["DRAFT_IMPORT_ENABLED"]:
+        return
+    owner = session.setdefault("change_confirmation_owner", secrets.token_urlsafe(24))
+    fields = request.form.to_dict(flat=False)
+    fields.pop("_change_confirmation", None)
+    payload = [str(DATA_DIR.resolve()), current_issuer(), request.path,
+               request.args.to_dict(flat=False), fields, before, after]
+    fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    token = request.headers.get("X-Change-Confirmation") or request.form.get("_change_confirmation", "")
+    fresh = CHANGE_CONFIRMATIONS.check(token, owner, fingerprint)
+    if fresh:
+        raise ChangeConfirmationRequired({
+            "token": fresh, "title": title, "message": message, "details": details,
+            "cancel_url": url_for("change_confirmation_cancel", issuer=None),
+        })
+
+
+@app.errorhandler(ChangeConfirmationRequired)
+def change_confirmation_required(error):
+    ui = translate(get_ui_lang(request))
+    if request.headers.get("X-Requested-With") == "fetch":
+        response = app.make_response(({
+            "ok": False, "message": ui["change_pending"], "confirmation": error.confirmation,
+        }, 428))
+    else:
+        response = app.make_response((render_template(
+            "confirm_change.html", confirmation=error.confirmation,
+            action=request.full_path.rstrip("?"), fields=request.form.lists(),
+            back=url_for("index"),
+        ), 428))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/changes/cancel", methods=["POST"])
+def change_confirmation_cancel():
+    if not app.config["DRAFT_IMPORT_ENABLED"]:
+        abort(404)
+    CHANGE_CONFIRMATIONS.discard(request.form.get("token", ""), session.get("change_confirmation_owner", ""))
+    return "", 204
+
+
+def change_details(before: dict, after: dict) -> list[dict]:
+    ui = translate(get_ui_lang(request))
+    aliases = {"address_line": "street", "account_name": "account_holder",
+               "kind": "account_kind", "bank_kind": "account_kind", "contact": "attn",
+               "reference": "buyer_reference", "profile_label": "issuer_profile_label",
+               "payment_term_days": "buyer_term_days", "accounts": "sec_payment",
+               "unit": "unit", "unit_price": "unit_price", "quantity": "quantity"}
+
+    def display(value):
+        if value is None or value == "" or value == []:
+            return "—"
+        if isinstance(value, bool):
+            return ui["change_yes"] if value else ui["change_no"]
+        if isinstance(value, list):
+            return "\n\n".join(display(v) for v in value)
+        if isinstance(value, dict):
+            return "\n".join(f"{ui.get(aliases.get(k, k), k)}: {display(v)}" for k, v in value.items() if v)
+        return str(value)
+
+    def value(record, key):
+        if key == "show_tax_number":
+            return record.get(key, True)
+        if key == "bank_kind":
+            return record.get(key) or ("intl" if record.get("account_number") else "iban")
+        return record.get(key, "")
+
+    details = []
+    for key in sorted(before.keys() | after.keys()):
+        if key.startswith("_") or key == "last_invoice_number":
+            continue
+        old, new = value(before, key), value(after, key)
+        if old == new or (old in (None, "", []) and new in (None, "", [])):
+            continue
+        label = ui.get(aliases.get(key, key), key)
+        if key == "logo":
+            old = ui["change_old_logo"] if old else "—"
+            new = ui["change_new_logo"] if new else "—"
+        if key == "bank_kind":
+            old, new = (ui.get("kind_" + str(v), str(v)) for v in (old, new))
+        details.append({"label": label, "before": display(old), "after": display(new)})
+    return details
 
 LOCAL_HOSTNAMES = {"127.0.0.1", "localhost", "::1"}
 
@@ -459,7 +558,7 @@ CORRECTION_ENDPOINTS = {
 
 @app.before_request
 def _select_issuer():
-    if request.endpoint == "static":
+    if request.endpoint in {"static", "change_confirmation_cancel"}:
         return
     values = request.args.getlist("issuer") + request.form.getlist("issuer")
     if len(set(values)) > 1:
@@ -607,13 +706,17 @@ def issuer_delete():
     if request.form.get("issuer") != current_issuer() or request.form.get("confirm") != "delete":
         abort(400)
     t = translate(get_ui_lang(request))
+    seller = load_seller()
+    profiles = issuer_profiles()
+    confirm_change(t["issuer_delete_title"], t["issuer_delete_text"],
+                   [seller, profiles], {"retire": current_issuer()},
+                   [{"label": t["issuer"], "before": issuer_label(seller), "after": t["issuer_archived"]}])
     try:
-        remaining = [p for p in issuer_profiles() if p["id"] != current_issuer()]
+        remaining = [p for p in profiles if p["id"] != current_issuer()]
         # Use a fresh identity even when deleting the final profile. Old tabs
         # must not be able to autosave into the new, empty issuer.
         next_issuer = default_issuer(remaining) if remaining else _create_issuer({"country": "DE"})
         # Retire the identity without losing details needed for later corrections.
-        seller = load_seller()
         _write_json(seller_file(), dict(seller, _deleted=True, profile_label=issuer_label(seller)))
     except OSError:
         logger.warning("Could not delete issuer", exc_info=True)
@@ -797,6 +900,14 @@ def save_seller_form() -> tuple[dict, int]:
         return {"ok": False, "message": translate(get_ui_lang(request))["master_conflict"]}, 409
     # A repeated identical save is harmless, including normalization of old files.
     if updated_revision != current_revision:
+        existing_details = any(seller.get(key) for key in (*SELLER_FIELDS, "logo", "accounts")
+                               if key not in {"profile_label", "country", "bank_kind"})
+        if existing_details and app.config["DRAFT_IMPORT_ENABLED"]:
+            details = change_details(seller, updated)
+            if details:
+                ui = translate(get_ui_lang(request))
+                confirm_change(f'{ui["master"]}: {issuer_label(seller)}', ui["change_master_warning"],
+                               seller, updated, details)
         save_seller(updated)
     return {"ok": True, "revision": updated_revision,
             "message": translate(get_ui_lang(request))["master_saved"]}, 200
@@ -987,20 +1098,42 @@ def load_customers() -> list[dict]:
 
 
 def save_customers(customers: list[dict]) -> None:
+    if has_request_context() and app.config["DRAFT_IMPORT_ENABLED"]:
+        before = load_customers()
+        details = []
+        removed = False
+        for old in before:
+            name = old.get("name", "").casefold()
+            if name == request.form.get("prev_name", "").strip().casefold():
+                name = request.form.get("buyer_name", "").strip().casefold()
+            new = next((c for c in customers if c.get("name", "").casefold() == name), {})
+            removed = removed or not new
+            for detail in change_details(old, new):
+                detail["label"] = f'{old.get("name", "")} · {detail["label"]}'
+                details.append(detail)
+        if details:
+            ui = translate(get_ui_lang(request))
+            confirm_change(ui["customer"], ui["change_customer_delete" if removed else "change_customer_warning"],
+                           before, customers, details)
     _write_json(CUSTOMERS_FILE, customers)
 
 
-def upsert_customer(buyer: dict) -> None:
+def upsert_customer(buyer: dict, previous_name: str = "") -> None:
     """Kunden anhand des Namens anlegen oder aktualisieren."""
     if not buyer.get("name"):
         return
     customers = load_customers()
-    for c in customers:
-        if c["name"].lower() == buyer["name"].lower():
-            c.update(buyer)
-            break
-    else:
+    target = next((c for c in customers if previous_name and c["name"].lower() == previous_name.lower()), None)
+    if target is not None and any(c is not target and c["name"].lower() == buyer["name"].lower() for c in customers):
+        abort(app.make_response(({
+            "ok": False, "message": translate(get_ui_lang(request))["customer_name_conflict"],
+        }, 409)))
+    if target is None:
+        target = next((c for c in customers if c["name"].lower() == buyer["name"].lower()), None)
+    if target is None:
         customers.append(buyer)
+    else:
+        target.update(buyer)
     save_customers(customers)
 
 
@@ -1531,20 +1664,7 @@ def customers_autosave():
     buyer = buyer_from_form(request.form)
     if not buyer["name"]:
         return ("", 204)
-    prev = (request.form.get("prev_name") or "").strip().lower()
-    customers = load_customers()
-    target = None
-    if prev:
-        target = next((c for c in customers if c["name"].lower() == prev), None)
-    if target is None:
-        target = next(
-            (c for c in customers if c["name"].lower() == buyer["name"].lower()), None
-        )
-    if target is None:
-        customers.append(buyer)
-    else:
-        target.update(buyer)
-    save_customers(customers)
+    upsert_customer(buyer, request.form.get("prev_name", "").strip())
     return {"name": buyer["name"]}
 
 
@@ -1572,7 +1692,7 @@ def customers_save():
             return {"ok": False, "message": msg}
         flash(msg, "err")
         return redirect(url_for("index"))
-    upsert_customer(buyer)
+    upsert_customer(buyer, request.form.get("prev_name", "").strip())
     msg = ui["customer_saved"].replace("{name}", buyer["name"])
     # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner;
     # aktualisierte Kundenliste mitliefern, damit die Combobox frisch bleibt.
@@ -1705,6 +1825,12 @@ def generate():
     name, n = stem, 2
     while True:
         filename = f"{name}.pdf"
+        # Orphaned companion files are existing data too; reserve a fresh stem
+        # rather than replace an XML, source snapshot or CSV without a PDF.
+        if any((output_dir() / f"{name}.{suffix}").exists() for suffix in ("json", "xml", "csv")):
+            name = f"{stem} ({n})"
+            n += 1
+            continue
         try:
             # Exclusive creation also protects against a second app process.
             with (output_dir() / filename).open("xb") as f:
@@ -1719,7 +1845,8 @@ def generate():
     xml_filename = None
     if is_xr:
         xml_filename = f"{file_stem}.xml"
-        (output_dir() / xml_filename).write_bytes(xml)
+        with (output_dir() / xml_filename).open("xb") as companion:
+            companion.write(xml)
 
     # Sidecar mit den Formulardaten – ermöglicht „als Vorlage öffnen" und die
     # Archiv-Vorschau. seller wird mitgespeichert, damit die Vorschau dem Stand
@@ -1729,9 +1856,8 @@ def generate():
         "seller": seller, "buyer": data["buyer"],
         "invoice": data["invoice"], "items": data["items"],
     }
-    (output_dir() / f"{file_stem}.json").write_text(
-        json.dumps(sidecar, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    with (output_dir() / f"{file_stem}.json").open("x", encoding="utf-8") as companion:
+        json.dump(sidecar, companion, indent=2, ensure_ascii=False)
 
     # Validierung: XSD-Struktur + EN16931/BR-DE-Geschäftsregeln (Schematron).
     # XRechnung direkt aus der standalone-XML, ZUGFeRD aus dem eingebetteten XML.
@@ -1844,6 +1970,13 @@ def archive_delete():
     path = output_dir() / filename
     # Pfad-Traversal verhindern: nur einfache Dateinamen direkt im Ausgabeordner.
     if filename and path.name == filename and path.suffix == ".pdf" and path.exists():
+        files = [path, *(output_dir() / f"{path.stem}.{suffix}" for suffix in ("json", "xml", "csv"))]
+        existing = [p for p in files if p.exists()]
+        ui = translate(get_ui_lang(request))
+        confirm_change(ui["confirm_delete_title"], ui["change_archive_warning"],
+                       {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in existing}, None,
+                       [{"label": p.name, "before": ui["change_exists"], "after": ui["change_deleted"]}
+                        for p in existing])
         path.unlink()
         # Sidecar + XRechnung-XML + evtl. exportierte Einzel-CSV mitlöschen
         for sib in (f"{path.stem}.json", f"{path.stem}.xml", f"{path.stem}.csv"):
@@ -2129,9 +2262,17 @@ def export_csv():
         # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
         # schreiben und im Finder zeigen.
         out = output_dir() / name
-        out.write_bytes(data)
+        count = 2
+        while True:
+            try:
+                with out.open("xb") as export:
+                    export.write(data)
+                break
+            except FileExistsError:
+                out = output_dir() / f"{Path(name).stem} ({count}).csv"
+                count += 1
         reveal_in_finder(out)
-        return {"ok": True, "name": name}
+        return {"ok": True, "name": out.name}
     return Response(
         data, mimetype="text/csv",  # Flask ergänzt charset=utf-8 automatisch
         headers={"Content-Disposition": f'attachment; filename="{name}"'},

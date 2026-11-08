@@ -1,0 +1,16 @@
+{% if draft_import_enabled %}
+<dialog id="change-confirmation" class="modal change-confirmation" aria-labelledby="change-title" aria-describedby="change-message">
+  <h3 id="change-title">{{ t.change_title }}</h3>
+  <p id="change-message"></p>
+  <div class="change-details">
+    <table><thead><tr><th>{{ t.change_field }}</th><th>{{ t.change_before }}</th><th>{{ t.change_after }}</th></tr></thead>
+      <tbody id="change-rows"></tbody>
+    </table>
+  </div>
+  <form method="dialog" class="modal-actions">
+    <button value="cancel" class="secondary" autofocus>{{ t.cancel }}</button>
+    <button value="confirm" class="danger">{{ t.change_confirm }}</button>
+  </form>
+</dialog>
+<script src="{{ url_for('static', filename='change_confirmation.js') }}?v={{ asset_version('change_confirmation.js') }}"></script>
+{% endif %}

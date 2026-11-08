@@ -663,6 +663,11 @@ table.archive td.arch-date { color: var(--muted); white-space: nowrap;
 .modal h3 { margin: 0 0 10px; font-size: var(--text-lg); }
 .modal p { margin: 0 0 20px; font-size: var(--text-base); color: var(--ink); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.change-confirmation.modal { width: 720px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); }
+.change-details { overflow: auto; max-height: 50vh; margin: 20px 0; }
+.change-details table { width: 100%; table-layout: fixed; }
+.change-details th, .change-details td { white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; text-align: left; padding: 10px; }
+.change-page { max-width: 800px; margin: 40px auto; }
 
 /* Kuratierte Feature-Hinweise: ruhige, native Dialog-Anmutung in beiden Themes. */
 .whats-new {
