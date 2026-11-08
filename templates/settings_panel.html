@@ -144,8 +144,12 @@
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <p class="hint">{{ t.no_invoices }}</p>
+  {% endif %}
   {# CSV-Export als Innen-Box des Archivs (Optik wie die Positions-Boxen) #}
-  <div class="export-box">
+  {# Keep the form controls when empty so issuer switches retain the date range. #}
+  <div class="export-box" {{ 'hidden' if not archive else '' }}>
     <h3>{{ t.export_title }}</h3>
     <p class="hint">{{ t.export_hint }}</p>
     <div class="export-bar">
@@ -162,9 +166,6 @@
       <button type="button" class="link" data-preset="q4">Q4</button>
     </div>
   </div>
-  {% else %}
-  <p class="hint">{{ t.no_invoices }}</p>
-  {% endif %}
 </div>
 
 <div class="card">
