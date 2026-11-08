@@ -1,10 +1,12 @@
 """Create an explicitly fictional data directory for trying the optional skill."""
 import argparse
+import copy
 import json
+from datetime import date
 from pathlib import Path
 
 
-def create_demo(directory: Path) -> Path:
+def create_demo(directory: Path, *, multiple_issuers: bool = False) -> Path:
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "output").mkdir()
     seller = {"name": "Demo Studio – Beispieldaten", "country": "DE", "city": "Berlin",
@@ -14,7 +16,7 @@ def create_demo(directory: Path) -> Path:
               "account_name": "Demo Studio", "last_invoice_number": "DEMO-ALT"}
     buyer = {"name": "Beispiel GmbH", "country": "DE", "city": "Berlin", "postcode": "10115",
              "address_line": "Beispielweg 2", "email": "kunde@example.com", "reference": "04011000-12345-67"}
-    old = {"seller": seller, "buyer": buyer,
+    old: dict = {"seller": seller, "buyer": buyer,
            "invoice": {"number": "DEMO-ALT", "issue_date": "2026-09-01", "due_date": "2026-09-15",
                        "service_start": "2026-09-01", "service_end": "2026-09-03", "language": "de",
                        "currency": "EUR", "profile": "en16931", "doc_type": "380", "tax_treatment": "de_19"},
@@ -22,11 +24,25 @@ def create_demo(directory: Path) -> Path:
     for filename, data in {"seller.json": seller, "customers.json": [buyer],
                            "output/Rechnung_DEMO-ALT.json": old}.items():
         (directory / filename).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if multiple_issuers:
+        issuer = "b" * 32
+        folder = directory / "issuers" / issuer
+        (folder / "output").mkdir(parents=True)
+        company = dict(seller, name="Demo Company", profile_label="Company", account_name="Demo Company",
+                       iban="DE89370400440532013000", last_invoice_number=f"{date.today().year}-009")
+        previous = copy.deepcopy(old)
+        previous.update(issuer_id=issuer, seller=company)
+        previous["items"][0]["unit_price"] = "1200"
+        for path, value in {folder / "seller.json": company,
+                           folder / "output/Rechnung_DEMO-ALT.json": previous,
+                           directory / "issuer_preferences.json": {"default_issuer": issuer}}.items():
+            path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
     return directory
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
+    parser.add_argument("--multiple-issuers", action="store_true", help="Create two fictional issuer profiles")
     args = parser.parse_args()
-    print(create_demo(args.directory.expanduser().resolve()))
+    print(create_demo(args.directory.expanduser().resolve(), multiple_issuers=args.multiple_issuers))

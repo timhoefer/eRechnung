@@ -459,6 +459,10 @@ function updateDiscTypeLabels() {
 }
 
 // Formularzustand sichern/wiederherstellen (z. B. beim Sprachwechsel).
+const ITEM_FORM_DEFAULTS = {
+  description: "", quantity: "1", unit: "HUR", unit_price: "0",
+  item_start: "", item_end: "", item_discount: "0", item_discount_type: "pct", item_discount_reason: "",
+};
 function snapshotForm(form) {
   const data = {};
   new FormData(form).forEach((v, k) => {
@@ -468,7 +472,8 @@ function snapshotForm(form) {
 }
 function restoreForm(form, data) {
   if (!form || !data) return;
-  const repeating = ["description", "quantity", "unit", "unit_price", "item_start", "item_end", "item_discount", "item_discount_type", "item_discount_reason"];
+  if (data.issuer && data.issuer[0] !== window.ISSUER_ID) return;
+  const repeating = Object.keys(ITEM_FORM_DEFAULTS);
   const itemCount = (data.description || []).length;
   let rows = form.querySelectorAll("#items .item").length;
   while (rows < itemCount) {
@@ -482,7 +487,9 @@ function restoreForm(form, data) {
     });
   });
   Object.keys(data).forEach((name) => {
-    if (repeating.includes(name)) return;
+    if (["issuer", "seller_revision", "correction_source"].includes(name) || repeating.includes(name)) return;
+    if (window.ISSUER_RETIRED && (["ref_number", "ref_date"].includes(name)
+      || (name === "doc_type" && !["381", "384"].includes(data[name][0])))) return;
     const el = form.querySelector(`[name="${name}"]`);
     if (el) el.value = data[name][0];
   });
@@ -560,6 +567,7 @@ function applyDraft() {
   lastSavedCustomerName = b.name || ""; // verhindert Kunden-Duplikat beim Autosave
 
   const inv = d.invoice || {};
+  const items = d.items || [];
   const set = (n, v) => {
     const el = form.querySelector(`[name="${n}"]`);
     if (el && v != null && v !== "") el.value = v;
@@ -569,6 +577,15 @@ function applyDraft() {
   set("language", inv.language);
   set("tax_treatment", inv.tax_treatment);
   set("profile", inv.profile);
+  if (window.ISSUER_RETIRED) {
+    // Mirror the XML supply-date fallback: a correction has a new issue date,
+    // so an originally implicit supply date must now be shown explicitly.
+    const fallbackDate = inv.service_date || (
+      !items.some((item) => item.item_end) && inv.doc_type !== "386" ? inv.issue_date : null
+    );
+    set("service_start", inv.service_start || (!inv.service_end ? fallbackDate : null));
+    set("service_end", inv.service_end || fallbackDate);
+  }
   // Neue Sidecars speichern IBAN/Kontonummer als Option-value. Erst den Schlüssel
   // suchen, dann auf alte numerische Indizes zurückfallen: internationale
   // Kontonummern können ebenfalls nur aus Ziffern bestehen.
@@ -604,20 +621,13 @@ function applyDraft() {
     if (add && row) { row.hidden = false; add.hidden = true; }
   }
 
-  const items = d.items || [];
   if (items.length) {
-    const tbody = document.querySelector("#items");
-    while (tbody.querySelectorAll(".item").length < items.length) addRow();
-    const rows = tbody.querySelectorAll(".item");
-    items.forEach((it, i) => {
-      const row = rows[i];
-      row.querySelector('[name="description"]').value = it.description || "";
-      row.querySelector(".qty").value = it.quantity || "1";
-      const u = row.querySelector(".unit");
-      if (u && it.unit) u.value = it.unit;
-      syncUnitDisplay(u);
-      row.querySelector(".price").value = it.unit_price || "0";
-    });
+    // Share the complete line-field mapping with language/conflict restoration.
+    // Ordinary templates start with fresh service dates; adjustments retain them.
+    const fields = Object.entries(ITEM_FORM_DEFAULTS)
+      .filter(([name]) => window.ISSUER_RETIRED || !["item_start", "item_end"].includes(name));
+    restoreForm(form, Object.fromEntries(fields.map(([name, fallback]) =>
+      [name, items.map((item) => item[name] ?? fallback)])));
   }
 }
 
@@ -871,6 +881,7 @@ function positionRefMenu(input) {
   refMenu.style.width = Math.max(r.width, 240) + "px";
 }
 function openRefMenu(input) {
+  if (input.readOnly) return;
   const menu = ensureRefMenu();
   refInput = input;
   refIndex = -1;
@@ -1213,18 +1224,74 @@ function closePreviewDrawer() {
 }
 
 let sellerSaveTimer;
+let pendingSellerSave = Promise.resolve(true);
+let issuerDeletionPending = false;
+let sellerConflict = false;
+function showSellerConflict(message) {
+  sellerConflict = true;
+  const notice = document.getElementById("master-conflict");
+  if (notice) notice.hidden = false;
+  const details = document.getElementById("master-data");
+  if (details) details.open = true;
+  if (notice) notice.scrollIntoView({block: "center"});
+  if (message) flashError(message);
+}
 function autosaveSeller() {
+  if (window.ISSUER_RETIRED) return Promise.resolve(true);
+  if (issuerDeletionPending || sellerConflict) return Promise.resolve(false);
   const form = document.getElementById("settings-form");
-  if (!form || !window.SELLER_AUTOSAVE_URL) return;
+  if (!form || !window.SELLER_AUTOSAVE_URL) return Promise.resolve(true);
   // Nach dem Speichern Vorschau auffrischen (Stammdaten fließen ins PDF ein, stehen
   // aber nicht im invoice-form -> force, sonst greift die Dedup-Sperre).
-  fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body: new FormData(form) })
-    .then(() => updatePreview(true))
-    .catch(() => {});
+  const body = new FormData(form);
+  pendingSellerSave = pendingSellerSave.then(() => {
+    if (sellerConflict) return false;
+    const revision = form.querySelector('[name="seller_revision"]');
+    // Queued edits use the revision returned by the previous completed save.
+    body.set("seller_revision", revision.value);
+    return fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body })
+      .then(async (r) => {
+        if (r.status === 409) {
+          const data = await r.json();
+          showSellerConflict(data.message);
+          return false;
+        }
+        if (!r.ok) throw new Error("save failed");
+        revision.value = r.headers.get("X-Seller-Revision");
+        updatePreview(true);
+        const select = document.getElementById("issuer-select");
+        const label = body.get("profile_label") || body.get("name");
+        const option = select && [...select.options].find((o) => o.value === window.ISSUER_ID);
+        if (option && label) option.textContent = label;
+        return true;
+      })
+      .catch(() => { flashError(); return false; });
+  });
+  return pendingSellerSave;
 }
 function scheduleSellerSave() {
+  if (issuerDeletionPending || sellerConflict) return;
   clearTimeout(sellerSaveTimer);
   sellerSaveTimer = setTimeout(autosaveSeller, 700);
+}
+
+async function flushSellerSaves() {
+  const form = document.getElementById("settings-form");
+  const state = () => {
+    const fields = form ? snapshotForm(form) : {};
+    delete fields.seller_revision;
+    return JSON.stringify(fields);
+  };
+  // Edits remain possible while saving. Drain queued writes and capture edits
+  // still waiting for their debounce before allowing navigation or export.
+  for (;;) {
+    clearTimeout(sellerSaveTimer);
+    const before = state();
+    const saving = autosaveSeller();
+    const queued = pendingSellerSave;
+    if (!(await saving)) return false;
+    if (queued === pendingSellerSave && before === state()) return true;
+  }
 }
 
 let customerSaveTimer;
@@ -1457,7 +1524,7 @@ document.addEventListener("click", (e) => {
   const langLink = e.target.closest(".langswitch a");
   if (langLink) {
     const form = document.getElementById("invoice-form");
-    if (form) sessionStorage.setItem("erechnung:lang", JSON.stringify(snapshotForm(form)));
+    if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
     return; // Navigation zum Sprachwechsel zulassen
   }
   if (e.target.closest("#format-trigger")) {
@@ -1647,18 +1714,48 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// Reverse-Charge-Absicherung: ohne Kunden-USt-IdNr. kein Erzeugen (kein Datenverlust).
-document.addEventListener("submit", (e) => {
+// Export only after the current master data was saved and checked for conflicts.
+let invoiceSubmitPending = false;
+window.addEventListener("pageshow", (event) => {
+  // Back navigation may restore the disabled button and JS state from bfcache.
+  if (!event.persisted || !invoiceSubmitPending) return;
+  invoiceSubmitPending = false;
+  const button = document.getElementById("generate-btn");
+  if (button) button.disabled = false;
+});
+document.addEventListener("submit", async (e) => {
   const form = e.target;
   if (form.id !== "invoice-form") return;
   if (e.submitter && e.submitter.hasAttribute("formaction")) return; // nur der Erzeugen-Button
+  e.preventDefault();
+  if (invoiceSubmitPending) return;
+  if (sellerConflict) { showSellerConflict(); return; }
   const treatment = document.querySelector("#tax_treatment");
   const vat = form.querySelector('[name="buyer_vat_id"]');
   if (treatment && (treatment.value === "eu_reverse" || treatment.value === "non_eu") && vat && !vat.value.trim()) {
-    e.preventDefault();
     vat.setCustomValidity(window.MSG_NEED_BUYER_VAT || "VAT ID required");
     vat.reportValidity();
     vat.focus();
+    return;
+  }
+  invoiceSubmitPending = true;
+  const button = e.submitter;
+  if (button) button.disabled = true;
+  clearTimeout(sellerSaveTimer);
+  let submitted = false;
+  try {
+    if (await flushSellerSaves() && form.reportValidity()) {
+      const revision = document.getElementById("settings-form")?.querySelector('[name="seller_revision"]');
+      const expected = form.querySelector('[name="seller_revision"]');
+      if (revision && expected) expected.value = revision.value;
+      form.submit();
+      submitted = true;
+    }
+  } finally {
+    if (!submitted) {
+      invoiceSubmitPending = false;
+      if (button) button.disabled = false;
+    }
   }
 });
 document.addEventListener("input", (e) => {
@@ -1674,19 +1771,165 @@ document.addEventListener("input", (e) => {
 // "Stammdaten speichern" ohne Seiten-Reload: Scrollposition bleibt, Toast statt
 // Banner; danach Vorschau auffrischen (Stammdaten fließen ins PDF ein).
 const settingsFormEl = document.getElementById("settings-form");
+const masterReload = document.getElementById("master-reload");
+function reloadMasterData() {
+  sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(document.getElementById("invoice-form"))));
+  window.location.assign(window.FORM_URL);
+}
+if (masterReload) masterReload.addEventListener("click", reloadMasterData);
 if (settingsFormEl) {
   settingsFormEl.addEventListener("submit", (e) => {
     e.preventDefault();
-    fetch(settingsFormEl.action, {
-      method: "POST",
-      body: new FormData(settingsFormEl),
-      headers: { "X-Requested-With": "fetch" },
-    })
-      .then((r) => r.json())
-      .then((d) => { flashOk(d.message); updatePreview(true); })
-      .catch(() => flashError());
+    clearTimeout(sellerSaveTimer);
+    autosaveSeller().then((ok) => { if (ok) flashOk(window.MSG_MASTER_SAVED); });
   });
 }
+
+// A profile change starts a fresh invoice. Wait for pending master-data saves,
+// and never quietly discard a filled invoice form.
+const issuerCreateDialog = document.getElementById("issuer-create-dialog");
+if (issuerCreateDialog) {
+  document.getElementById("issuer-add-button").addEventListener("click", () => issuerCreateDialog.showModal());
+  document.getElementById("issuer-create-cancel").addEventListener("click", () => issuerCreateDialog.close());
+}
+async function setDefaultIssuer(button) {
+  if (button.disabled || issuerDeletionPending) return false;
+  button.disabled = true;
+  const body = new FormData();
+  body.append("issuer", window.ISSUER_ID);
+  try {
+    const response = await fetch(button.dataset.url, {method: "POST", body});
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error("default issuer save failed");
+    button.querySelector(".issuer-default-label").textContent = button.dataset.savedLabel;
+    button.querySelector(".issuer-default-check").removeAttribute("hidden");
+    return true;
+  } catch {
+    button.disabled = false;
+    flashError();
+    return false;
+  }
+}
+const issuerDefaultButton = document.getElementById("issuer-default-button");
+if (issuerDefaultButton) issuerDefaultButton.addEventListener("click", () => setDefaultIssuer(issuerDefaultButton));
+
+const issuerDeleteDialog = document.getElementById("issuer-delete-dialog");
+if (issuerDeleteDialog) {
+  document.getElementById("issuer-delete-button").addEventListener("click", () => {
+    const form = document.getElementById("settings-form");
+    const label = form.querySelector('[name="profile_label"]')?.value.trim()
+      || form.querySelector('[name="name"]')?.value.trim();
+    if (label) document.getElementById("issuer-delete-name").textContent = label;
+    issuerDeleteDialog.showModal();
+  });
+  document.getElementById("issuer-delete-cancel").addEventListener("click", () => issuerDeleteDialog.close());
+  document.getElementById("issuer-delete-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    deleteIssuer(event.currentTarget);
+  });
+}
+
+async function deleteIssuer(form) {
+  const button = document.getElementById("issuer-delete-confirm");
+  if (!button || issuerDeletionPending) return false;
+  issuerDeletionPending = true;
+  button.disabled = true;
+  clearTimeout(sellerSaveTimer);
+  let deleted = false;
+  try {
+    // Drain already queued writes before deletion and suppress any new autosave.
+    await pendingSellerSave;
+    const response = await fetch(form.action, {method: "POST", body: new FormData(form)});
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      document.getElementById("issuer-delete-dialog").close();
+      flashError(data.message);
+      return false;
+    }
+    window.location.assign(data.next_url);
+    deleted = true;
+    return true;
+  } catch (error) {
+    document.getElementById("issuer-delete-dialog").close();
+    flashError();
+    return false;
+  } finally {
+    if (!deleted) {
+      issuerDeletionPending = false;
+      button.disabled = false;
+      scheduleSellerSave();
+    }
+  }
+}
+
+function invoiceHasContent() {
+  const form = document.getElementById("invoice-form");
+  return !!form && [...form.querySelectorAll('[name="buyer_name"], [name="description"]')]
+    .some((el) => el.value.trim());
+}
+function confirmIssuerSwitch() {
+  const dialog = document.getElementById("issuer-switch-dialog");
+  return new Promise((resolve) => {
+    dialog.returnValue = "";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "switch"), {once: true});
+    dialog.showModal();
+  });
+}
+let issuerSwitchPending = false;
+async function switchIssuer(form) {
+  const select = document.getElementById("issuer-select");
+  const target = select && select.value;
+  // Also reset ignored changes so the selector always names the loaded form.
+  if (select) select.value = window.ISSUER_ID;
+  if (issuerSwitchPending || issuerDeletionPending) return;
+  if (form.id === "issuer-switch-form" && target === window.ISSUER_ID) return;
+  issuerSwitchPending = true;
+  if (select) select.disabled = true;
+  let submitted = false;
+  try {
+    if (invoiceHasContent() && !(await confirmIssuerSwitch())) return;
+    clearTimeout(sellerSaveTimer);
+    if (await flushSellerSaves()) {
+      // Native form submission omits disabled controls, including this select.
+      if (select) select.disabled = false;
+      if (form.id === "issuer-switch-form") select.value = target;
+      form.submit();
+      submitted = true;
+    }
+  } finally {
+    if (select) {
+      select.disabled = false;
+      if (!submitted) select.value = window.ISSUER_ID;
+    }
+    issuerSwitchPending = false;
+  }
+}
+for (const id of ["issuer-switch-form", "issuer-create-form"]) {
+  const form = document.getElementById(id);
+  if (!form) continue;
+  if (id === "issuer-switch-form") {
+    document.getElementById("issuer-select").addEventListener("change", () => form.requestSubmit());
+    document.getElementById("issuer-switch-submit").hidden = true;
+  }
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const editIssuer = form.querySelector('[name="edit_issuer"]');
+    if (editIssuer) editIssuer.value = document.getElementById("master-data").open ? "1" : "0";
+    switchIssuer(form);
+  });
+}
+
+function languageDraftKey() {
+  return "erechnung:lang:" + (window.ISSUER_SCOPE || "legacy") + ":" + (window.ISSUER_ID || "default");
+}
+
+// Restoration from either the creation dialog or archive keeps the same identity.
+// Like any issuer switch, it waits for saves and asks before discarding a draft.
+document.addEventListener("submit", (event) => {
+  if (!event.target.matches(".issuer-restore-form")) return;
+  event.preventDefault();
+  return switchIssuer(event.target);
+});
 
 // Konto-Auswähler VOR den Restore-Pfaden aufbauen, damit restoreForm (Sprachwechsel)
 // und applyDraft die gespeicherte Konto-Auswahl in existierende Optionen schreiben.
@@ -1694,11 +1937,11 @@ syncBankSelector();
 
 let restoredFromLang = false;
 (function restoreAfterLangSwitch() {
-  const raw = sessionStorage.getItem("erechnung:lang");
-  if (!raw) return;
-  sessionStorage.removeItem("erechnung:lang");
+  const raw = sessionStorage.getItem(languageDraftKey());
+  if (!window.SUBMITTED_FORM && !raw) return;
+  sessionStorage.removeItem(languageDraftKey());
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = window.SUBMITTED_FORM || JSON.parse(raw);
     restoreForm(document.getElementById("invoice-form"), parsed);
     updateStateField((parsed.buyer_state || [])[0]); // Staat-Auswahl nach Sprachwechsel wiederherstellen
     restoredFromLang = true;
@@ -1990,13 +2233,52 @@ function loadDepsAsync() {
     .catch(() => {});
 }
 
-function loadSettingsPanel() {
+let settingsPanelUrl;
+let settingsPanelLoadId = 0;
+async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options) {
   const pane = document.getElementById("settings-pane");
-  if (!pane || !window.SETTINGS_PANEL_URL) return Promise.resolve();
-  return fetch(window.SETTINGS_PANEL_URL)
-    .then((r) => r.text())
-    .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
-    .catch(() => flashError());
+  if (!pane || !url) return false;
+  const loadId = ++settingsPanelLoadId;
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error("archive load failed");
+    const html = await response.text();
+    if (loadId !== settingsPanelLoadId) return false;
+    settingsPanelUrl = url;
+    pane.innerHTML = html;
+    loadDepsAsync();
+    return true;
+  } catch (error) {
+    if (loadId === settingsPanelLoadId) flashError();
+    return false;
+  }
+}
+
+async function switchArchive(form) {
+  const url = new URL(form.action, window.location.href);
+  url.search = new URLSearchParams(new FormData(form)).toString();
+  const select = form.querySelector("select");
+  // Until loading succeeds, the label must still describe the visible invoices.
+  select.value = [...select.options].find((option) => option.defaultSelected).value;
+  if (await loadSettingsPanel(url.toString())) {
+    lastPreviewUrl = null;
+    showNoPreview(window.MSG_LIVE_PREVIEW);
+  }
+}
+
+async function saveDataDirectory(form) {
+  try {
+    const response = await fetch(form.action, {
+      method: "POST", body: new FormData(form), headers: {"X-Requested-With": "fetch"},
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) { flashError(data.message); return; }
+    window.ISSUER_SCOPE = data.issuer_scope;
+    flashOk(data.message);
+    await loadSettingsPanel();
+  } catch (error) {
+    flashError();
+  }
 }
 
 function openSettings() {
@@ -2007,18 +2289,22 @@ function openSettings() {
   settingsOpen = true;
   if (_previewAbort) _previewAbort.abort();
   checkMiniPages();
-  loadSettingsPanel().then(() => {
+  const loading = loadSettingsPanel();
+  const loadId = settingsPanelLoadId;
+  if (btn) {
+    btn.textContent = btn.dataset.close;
+    btn.classList.add("active");
+    btn.setAttribute("aria-expanded", "true");
+  }
+  return loading.then((loaded) => {
+    if (!settingsOpen || loadId !== settingsPanelLoadId) return;
+    if (!loaded) { closeSettings(); return; }
     pane.hidden = false;
     content.hidden = true;
     pane.focus({ preventScroll: true }); // Fokus ins Panel, aber nicht hinscrollen
     window.scrollTo(0, 0); // oben starten – Scrollposition des Formulars nicht übernehmen
     announce(window.MSG_SETTINGS_OPENED);
   });
-  if (btn) {
-    btn.textContent = btn.dataset.close;
-    btn.classList.add("active");
-    btn.setAttribute("aria-expanded", "true");
-  }
 }
 
 function closeSettings() {
@@ -2026,6 +2312,7 @@ function closeSettings() {
   const content = document.getElementById("form-content");
   const btn = document.getElementById("settings-toggle");
   settingsOpen = false;
+  ++settingsPanelLoadId; // Ignore responses from requests made before closing.
   lastPreviewUrl = null;
   if (pane) pane.hidden = true;
   if (content) content.hidden = false;
@@ -2044,6 +2331,9 @@ function closeSettings() {
   const toggle = document.getElementById("settings-toggle");
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
+  pane.addEventListener("change", (e) => {
+    if (e.target.id === "archive-issuer-select") e.target.form.requestSubmit();
+  });
 
   // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.
   pane.addEventListener("mouseover", (e) => {
@@ -2107,8 +2397,8 @@ function closeSettings() {
       if (!confirm(fn + "\n\n" + (window.MSG_CONFIRM_DELETE || ""))) return;
       const fd = new FormData();
       fd.append("filename", fn);
-      fetch(window.ARCHIVE_DELETE_URL, { method: "POST", body: fd })
-        .then(() => loadSettingsPanel())
+      fetch(del.dataset.url, { method: "POST", body: fd })
+        .then((r) => { if (!r.ok) throw new Error("delete failed"); return loadSettingsPanel(); })
         .catch(() => flashError());
       return;
     }
@@ -2116,7 +2406,7 @@ function closeSettings() {
     const reveal = e.target.closest(".reveal-btn");
     if (reveal) {
       e.preventDefault();
-      fetch("/reveal/" + encodeURIComponent(reveal.dataset.file), { method: "POST" })
+      fetch(reveal.dataset.url, { method: "POST" })
         .catch(() => flashError());
       return;
     }
@@ -2162,7 +2452,8 @@ function closeSettings() {
       if (from) qs.set("from", from);
       if (to) qs.set("to", to);
       const q = qs.toString();
-      const url = window.EXPORT_CSV_URL + (q ? "?" + q : "");
+      const baseUrl = e.target.closest("#export-csv").dataset.url;
+      const url = baseUrl + (q ? (baseUrl.includes("?") ? "&" : "?") + q : "");
       // Desktop: Server schreibt die CSV + zeigt sie im Finder (kein Download).
       if (window.IS_DESKTOP) fetch(url).catch(() => flashError());
       else window.location = url;
@@ -2177,16 +2468,14 @@ function closeSettings() {
   // Formulare im Panel ohne Seitenwechsel abschicken.
   pane.addEventListener("submit", (e) => {
     const form = e.target;
+    if (form.matches(".issuer-restore-form")) return; // handled by the document's switch guard
     e.preventDefault();
-    if (form.classList.contains("datadir-form")) {
-      fetch(window.DATA_DIR_SET_URL, { method: "POST", body: new FormData(form) })
-        .then(() => loadSettingsPanel())
-        .catch(() => flashError());
+    if (form.id === "archive-issuer-form") {
+      switchArchive(form);
+    } else if (form.classList.contains("datadir-form")) {
+      saveDataDirectory(form);
     } else { // Datei prüfen / Archiv-Rechnung prüfen -> Panel mit Ergebnis ersetzen
-      fetch(window.SETTINGS_PANEL_URL, { method: "POST", body: new FormData(form) })
-        .then((r) => r.text())
-        .then((html) => { pane.innerHTML = html; loadDepsAsync(); })
-        .catch(() => flashError());
+      loadSettingsPanel(form.action, { method: "POST", body: new FormData(form) });
     }
   });
 })();

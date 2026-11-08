@@ -32,7 +32,7 @@ _held = threading.local()
 
 
 @contextmanager
-def data_lock(directory: Path):
+def data_lock(directory: Path, *, blocking: bool = True):
     """Reentrant in a thread and exclusive across app/CLI processes."""
     directory = directory.resolve()
     with _mutex:
@@ -49,10 +49,10 @@ def data_lock(directory: Path):
                 lock.write(b"\0")
                 lock.flush()
                 lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
             else:
                 import fcntl
-                fcntl.flock(lock, fcntl.LOCK_EX)
+                fcntl.flock(lock, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
             _held.directories = held | {directory}
             try:
                 yield
@@ -200,18 +200,23 @@ def recover_archive(output: Path, seller_file: Path) -> None:
 
 
 def archive_invoice(data: dict, pdf: bytes, xml: bytes, output: Path,
-                    seller_file: Path, *, expected_seller: dict | None = None) -> dict:
+                    seller_file: Path, *, expected_seller: dict | None = None,
+                    lock_directory: Path | None = None, allow_inactive: bool = False) -> dict:
     """Publish already validated invoice files; identical retries reuse originals."""
     number = data["invoice"]["number"].strip()
     if not number:
         raise ArchiveError("missing_number", "An invoice number is required.")
     sidecar = {key: data[key] for key in ("seller", "buyer", "invoice", "items")}
+    sidecar["issuer_id"] = data.get("issuer_id", "default")
     identity = dict(sidecar, seller=seller_details(sidecar["seller"]))
     fingerprint = digest(canonical(identity))
     stem = "Rechnung_" + safe_name(number)
-    with data_lock(seller_file.parent):
+    with data_lock(lock_directory or seller_file.parent):
         recover_archive(output, seller_file)
-        if expected_seller is not None and seller_details(_read(seller_file)) != seller_details(expected_seller):
+        current_seller = _read(seller_file)
+        if current_seller.get("_deleted") is True and not allow_inactive:
+            raise ArchiveError("issuer_inactive", "This issuer is inactive. Reactivate it in the app before creating invoices.")
+        if expected_seller is not None and seller_details(current_seller) != seller_details(expected_seller):
             raise ArchiveError("stale_seller", "Issuer details changed. Create and review a fresh draft.")
         output.mkdir(parents=True, exist_ok=True)
         sidecar_path = output / (stem + ".json")
@@ -228,6 +233,7 @@ def archive_invoice(data: dict, pdf: bytes, xml: bytes, output: Path,
                 if data["invoice"]["profile"] == "xrechnung":
                     expected.add(stem + ".xml")
                 stored_identity = {key: stored[key] for key in ("seller", "buyer", "invoice", "items")}
+                stored_identity["issuer_id"] = stored.get("issuer_id", "default")
                 stored_identity["seller"] = seller_details(stored_identity["seller"])
                 if (set(hashes) != expected or digest(canonical(stored_identity)) != fingerprint
                         or not all(_matches(output / name, checksum) for name, checksum in hashes.items())):

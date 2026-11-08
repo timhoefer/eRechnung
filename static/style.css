@@ -46,6 +46,24 @@
   color-scheme: light;
 }
 
+.issuer-choice { display: flex; align-items: center; gap: 8px; flex: 0 1 300px; min-width: 0; }
+#issuer-select { flex: 1; min-width: 0; height: 36px; padding-top: 0; padding-bottom: 0; }
+#issuer-switch-submit { height: 36px; padding-top: 0; padding-bottom: 0; }
+.master-actions { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
+.master-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.issuer-default-choice, .archive-issuer-choice { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.issuer-default-choice .hint { margin: 0; }
+#issuer-default-button { display: inline-flex; align-items: center; gap: 6px; }
+.issuer-default-check { flex: none; }
+.archive-issuer-choice { margin: 12px 0; align-items: end; }
+.archive-issuer-choice label { flex: 1; min-width: 0; }
+#issuer-add-button { font-size: var(--text-sm); }
+#issuer-create-form .modal-actions { margin-top: 24px; }
+.issuer-restore-form { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+.issuer-restore-form .hint { flex: 1; min-width: 180px; }
+dialog.modal { color: var(--ink); border: 1px solid var(--line); max-width: min(420px, calc(100vw - 32px)); }
+dialog.modal::backdrop { background: var(--scrim); }
+
 /* Dark-Mode: nur die Variablen werden überschrieben; das Layout bleibt gleich.
    Aktiv über data-theme="dark" am <html> (gesetzt per Toggle/System – siehe
    _theme_script.html). Die Rechnungs-Vorschau (eigenes Dokument im iframe)
@@ -129,6 +147,10 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
 }
 details.card summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: var(--text-base); list-style: none; }
 .summary-text { flex: 1; min-width: 0; }
+.master-status {
+  flex: 0 0 20px; width: 20px; height: 20px;
+  display: inline-grid; place-items: center;
+}
 .ok-check {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;

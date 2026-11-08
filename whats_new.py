@@ -7,32 +7,32 @@ manuell erreichbar. ANNOUNCEMENT = None deaktiviert auch den Menüeintrag.
 from typing import Any
 
 ANNOUNCEMENT: dict[str, Any] | None = {
-    "id": "invoice-layout-1.1.4",
-    "version": "1.1.4",
-    "auto_open": False,
+    "id": "issuer-profiles-1.2.0",
+    "version": "1.2.0",
+    "auto_open": True,
     "items": [
         {
             "icon": "invoice",
-            "title": {"de": "Klarere Rechnungen", "en": "Clearer invoices"},
+            "title": {"de": "Mehrere Rechnungsaussteller", "en": "Multiple invoice issuers"},
             "text": {
-                "de": "Mehr Raum für Leistungen, ruhigere Tabellen und ein deutlich hervorgehobener Rechnungsbetrag.",
-                "en": "More room for your services, cleaner tables and a clearly highlighted total due.",
+                "de": "Lege weitere Stammdaten an, etwa für deine freiberufliche Tätigkeit und deine Firma. Jedes Profil hat eigene Bankdaten, Rechnungsnummern und ein eigenes Archiv.",
+                "en": "Add issuer profiles for your freelance work and your company. Each profile has its own bank details, invoice numbering and archive.",
             },
         },
         {
             "icon": "globe",
-            "title": {"de": "Für internationale Kunden", "en": "For international customers"},
+            "title": {"de": "Einfach wechseln", "en": "Switch with ease"},
             "text": {
-                "de": "Bei Kunden im Ausland erscheint dein Land automatisch in der Absenderadresse.",
-                "en": "When your customer is abroad, your country is automatically included in the sender address.",
+                "de": "Bei mehreren Profilen wechselst du direkt in der Stammdaten-Kopfzeile und legst einen Standard für den App-Start fest. Kunden bleiben gemeinsam nutzbar.",
+                "en": "With multiple profiles, switch directly in the issuer header and choose a default for app startup. Your customer list stays shared.",
             },
         },
         {
             "icon": "archive",
-            "title": {"de": "Originale im Archiv", "en": "Originals in your archive"},
+            "title": {"de": "Archive bleiben erhalten", "en": "Keep your archives"},
             "text": {
-                "de": "Die Archivvorschau zeigt die gespeicherte Rechnung – mit ihrem ursprünglichen Layout.",
-                "en": "The archive preview shows your saved invoice, with its original layout intact.",
+                "de": "Entfernte Profile bleiben mit ihren Belegen im Archiv. Dort kannst du Stornos und Korrekturen erstellen oder das Profil mit seiner bisherigen Nummernfolge reaktivieren.",
+                "en": "Removed profiles and their invoices remain in the archive. Create cancellations and corrections there, or reactivate a profile with its existing invoice sequence.",
             },
         },
     ],

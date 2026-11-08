@@ -21,12 +21,14 @@ from flask import (
     abort,
     flash,
     g,
+    has_request_context,
     redirect,
     render_template,
     request,
     url_for,
 )
 
+import issuer_store
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
@@ -46,6 +48,7 @@ from invoice_core import (
 )
 from invoice_core import safe_name as safe_name
 from invoice_core import seller_accounts as seller_accounts
+from issuer_store import seller_revision as seller_revision
 from version import __version__ as APP_VERSION
 from whats_new import ANNOUNCEMENT
 from zugferd import (
@@ -174,18 +177,49 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
         except OSError:
             pass
 
-    rm(src_dir / "seller.json", ref_dir / "seller.json")
     rm(src_dir / "customers.json", ref_dir / "customers.json")
+    rm(src_dir / "issuer_preferences.json", ref_dir / "issuer_preferences.json")
+    profiles: dict[str, list[Path]] = {}
+    for relative in _issuer_data_files(src_dir):
+        issuer = relative.parts[1] if relative.parts[0] == "issuers" else "default"
+        profiles.setdefault(issuer, []).append(relative)
+    # Keep each identity and its entire archive together, including the legacy one.
+    for files in profiles.values():
+        profile = files[0].parent if files[0].name == "seller.json" else files[0].parent.parent
+        if (src_dir / profile / "output" / ".archive-pending").exists():
+            continue
+        try:
+            identical = all((ref_dir / p).is_file() and filecmp.cmp(src_dir / p, ref_dir / p, shallow=False)
+                            for p in files)
+        except OSError:
+            identical = False
+        if identical:
+            for relative in files:
+                rm(src_dir / relative, ref_dir / relative)
     src_out = src_dir / "output"
     if src_out.is_dir():
-        for f in list(src_out.iterdir()):
-            if f.is_file():
-                rm(f, ref_dir / "output" / f.name)
         try:
             if not any(src_out.iterdir()):
                 src_out.rmdir()
         except OSError:
             pass
+
+
+def _issuer_data_files(directory: Path) -> list[Path]:
+    """Files of all issuers, including the legacy root; never follow symlinks."""
+    profiles = [directory]
+    root = directory / "issuers"
+    if root.is_dir() and not root.is_symlink():
+        profiles.extend(p for p in root.iterdir()
+                        if re.fullmatch(r"[a-f0-9]{32}", p.name) and p.is_dir() and not p.is_symlink())
+    files: list[Path] = []
+    for profile in profiles:
+        paths = [profile / "seller.json"]
+        out = profile / "output"
+        if out.is_dir() and not out.is_symlink():
+            paths.extend(out.iterdir())
+        files.extend(p.relative_to(directory) for p in paths if p.is_file() and not p.is_symlink())
+    return files
 
 
 DATA_DIR = _resolve_data_dir()
@@ -199,6 +233,26 @@ _drop_identical(BASE, DATA_DIR)
 
 
 def set_data_dir(raw: str):
+    target = BASE if not (raw or "").strip() else Path(raw.strip()).expanduser()
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        # Never move profiles out from under an agent finalizing an invoice.
+        # Nonblocking target acquisition also avoids opposing moves deadlocking.
+        with DATA_LOCK, data_lock(DATA_DIR), data_lock(target, blocking=False):
+            for profile in issuer_store.issuer_profiles(DATA_DIR):
+                directory = issuer_store.issuer_directory(DATA_DIR, profile["id"])
+                recover_archive(directory / "output", directory / "seller.json")
+            if target.resolve() != DATA_DIR.resolve():
+                for profile in issuer_store.issuer_profiles(target):
+                    directory = issuer_store.issuer_directory(target, profile["id"])
+                    if (directory / "output" / ".archive-pending").exists():
+                        return False, "data_dir_err_write"
+            return _set_data_dir(raw)
+    except (OSError, ValueError, ArchiveError):
+        return False, "data_dir_err_write"
+
+
+def _set_data_dir(raw: str):
     """Datenordner umstellen: prüfen, vorhandene Daten in den neuen Ordner
     verschieben (ohne zu überschreiben; Original erst nach verifizierter
     Kopie entfernt), Pfad speichern, globale Pfade aktualisieren. -> (ok, key)."""
@@ -216,20 +270,44 @@ def set_data_dir(raw: str):
         return False, "data_dir_err_write"
 
     old = DATA_DIR
+    # A profile/output folder cannot become the shared data root (or vice versa).
+    # Otherwise moving data would reclassify one issuer's invoices as another's.
+    if target.resolve() != old.resolve() and any(
+        target.resolve().is_relative_to((old / name).resolve())
+        or old.resolve().is_relative_to((target / name).resolve())
+        for name in ("issuers", "output")
+    ):
+        return False, "data_dir_err_nested"
     if target.resolve() != old.resolve():
-        # Vorhandene Daten in den neuen Ordner übernehmen, aber nichts
-        # überschreiben (Recovery-Fall: Zielordner enthält schon Daten).
-        (target / "output").mkdir(exist_ok=True)
-        for name in ("seller.json", "customers.json"):
-            src, dst = old / name, target / name
-            if src.exists() and not dst.exists():
-                shutil.copy2(src, dst)
-        src_out = old / "output"
-        if src_out.is_dir():
-            for f in src_out.iterdir():
-                dst = target / "output" / f.name
-                if f.is_file() and not dst.exists():
-                    shutil.copy2(f, dst)
+        # Reject partial merges of the same profile before moving anything.
+        # A conflicting copy needs a deliberate choice, not an automatic overwrite.
+        import filecmp
+
+        try:
+            files = [*_issuer_data_files(old), Path("issuer_preferences.json")]
+            archive_dirs = {Path("output"), *(p.parent / "output" for p in files
+                                             if p.name == "seller.json" and p.parent.name != "output")}
+            # Check parents too: a target folder must not redirect a copy elsewhere.
+            for relative in [*files, Path("customers.json"), *archive_dirs]:
+                if any((target / p).is_symlink() for p in (relative, *relative.parents)):
+                    return False, "data_dir_err_write"
+            for relative in files:
+                src, dst = old / relative, target / relative
+                if src.exists() and dst.exists() and (
+                    not dst.is_file() or not filecmp.cmp(src, dst, shallow=False)
+                ):
+                    return False, "issuer_move_conflict"
+            # One copy path for every issuer, including empty archives. Existing
+            # shared customers keep the previous recovery behavior (no overwrite).
+            for relative in archive_dirs:
+                (target / relative).mkdir(parents=True, exist_ok=True)
+            for relative in [*files, Path("customers.json")]:
+                src, dst = old / relative, target / relative
+                if src.is_file() and not dst.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+        except OSError:
+            return False, "data_dir_err_write"
 
     cfg = _load_app_config()
     cfg["data_dir"] = "" if target.resolve() == BASE.resolve() else str(target)
@@ -246,6 +324,8 @@ def set_data_dir(raw: str):
     # Verschieben abschließen: identische Originale im alten Ordner entfernen.
     if target.resolve() != old.resolve():
         _drop_identical(old, target)
+    if has_request_context():
+        _select_issuer()
     return True, "data_dir_ok"
 
 def _file_info(p: Path) -> dict:
@@ -264,7 +344,7 @@ def data_conflicts() -> list:
 
     out = []
     if DATA_DIR.resolve() != BASE.resolve():
-        for name in ("seller.json", "customers.json"):
+        for name in ("seller.json", "customers.json", "issuer_preferences.json"):
             s, r = BASE / name, DATA_DIR / name
             if s.is_file() and r.is_file():
                 try:
@@ -280,7 +360,8 @@ def data_conflicts() -> list:
                 out.append({"type": "orphan", "name": name, "a": _file_info(s)})
 
     markers = ("conflicted copy", "in konflikt stehende", "in-konflikt", "konfliktkopie")
-    for d in (DATA_DIR, DATA_DIR / "output"):
+    profile_dirs = {p.parent for p in _issuer_data_files(DATA_DIR)}
+    for d in sorted({DATA_DIR, DATA_DIR / "output", *(DATA_DIR / p for p in profile_dirs)}):
         if d.is_dir():
             for f in sorted(d.iterdir()):
                 if f.is_file() and any(m in f.name.lower() for m in markers):
@@ -348,7 +429,8 @@ def _lock_data_changes():
     if request.method == "POST" and request.endpoint in {
         "settings", "settings_autosave", "customers_autosave",
         "customers_items_save", "customers_save", "customers_delete",
-        "generate", "archive_delete", "data_dir_set", "whats_new_seen",
+        "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create", "issuer_delete",
+        "issuer_set_default", "issuer_restore",
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
@@ -356,10 +438,6 @@ def _lock_data_changes():
         lock = data_lock(SELLER_FILE.parent)
         lock.__enter__()
         g.archive_lock = lock
-        try:
-            recover_archive(OUTPUT_DIR, SELLER_FILE)
-        except (OSError, ValueError) as exc:
-            raise ArchiveError("archive_io", str(exc)) from exc
 
 
 @app.teardown_request
@@ -385,6 +463,206 @@ def _write_json(path: Path, data) -> None:
     finally:
         if name and os.path.exists(name):
             os.unlink(name)
+
+
+# The original issuer stays at the original paths. Additional issuers have their
+# own seller.json and output directory; customers remain shared. Never switch
+# global paths when selecting an issuer: concurrent tabs must remain independent.
+def issuer_directory(issuer: str) -> Path:
+    try:
+        return issuer_store.issuer_directory(SELLER_FILE.parent, issuer)
+    except issuer_store.IssuerError as exc:
+        abort(400 if exc.code == "invalid_issuer" else 404)
+
+
+def _issuer_deleted(path: Path) -> bool:
+    try:
+        seller = json.loads(path.read_text(encoding="utf-8"))
+        return isinstance(seller, dict) and seller.get("_deleted") is True
+    except (OSError, ValueError):
+        return False
+
+
+CORRECTION_ENDPOINTS = {
+    "index", "generate", "preview", "preview_html", "preview_pdf",
+    "customers_autosave", "customers_items_save", "customers_save", "customers_delete",
+}
+
+
+@app.before_request
+def _select_issuer():
+    if request.endpoint == "static":
+        return
+    values = request.args.getlist("issuer") + request.form.getlist("issuer")
+    if len(set(values)) > 1:
+        abort(400)
+    if values:
+        issuer = values[0]
+    else:
+        profiles = issuer_profiles()
+        if not profiles:
+            abort(410)
+        issuer = default_issuer(profiles)
+    # Retired issuers allow archive access and adjustments to an archived original,
+    # but no regular invoices or late writes from an old master-data form.
+    archive_endpoints = {
+        "validate", "settings_panel", "settings_depinfo", "view", "archive_preview",
+        "download", "download_zip", "reveal", "export_csv", "setlang",
+        "data_dir_set", "data_dir_browse", "check_updates", "whats_new_seen", "issuer_restore",
+    }
+    directory = issuer_directory(issuer)
+    g.issuer_id = issuer
+    g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
+    g.issuer_output_dir = OUTPUT_DIR if issuer == "default" else directory / "output"
+    if g.get("data_locked"):
+        try:
+            recover_archive(output_dir(), seller_file())
+        except (OSError, ValueError) as exc:
+            raise ArchiveError("archive_io", str(exc)) from exc
+    if _issuer_deleted(g.issuer_seller_file) and request.endpoint not in archive_endpoints:
+        kind = request.form.get("doc_type", request.args.get("doc_type"))
+        source = request.form.get("correction_source", request.args.get("correction_source", ""))
+        original = correction_original(source) if source else None
+        if request.endpoint not in CORRECTION_ENDPOINTS or kind not in {"381", "384"} or original is None:
+            abort(410)
+        g.correction_source = source
+        g.correction_kind = kind
+        g.correction_original = original
+
+
+def current_issuer() -> str:
+    return g.get("issuer_id", "default") if has_request_context() else "default"
+
+
+def seller_file() -> Path:
+    return g.get("issuer_seller_file", SELLER_FILE) if has_request_context() else SELLER_FILE
+
+
+def output_dir() -> Path:
+    return g.get("issuer_output_dir", OUTPUT_DIR) if has_request_context() else OUTPUT_DIR
+
+
+def issuer_scope() -> str:
+    """Stable namespace for browser drafts belonging to this data directory."""
+    return issuer_store.issuer_scope(SELLER_FILE.parent)
+
+
+@app.url_defaults
+def _issuer_urls(endpoint, values):
+    if endpoint != "static":
+        # The legacy profile also needs an explicit ID once the startup default
+        # can point elsewhere. Otherwise its archive links change issuer.
+        values.setdefault("issuer", current_issuer())
+        if (endpoint in CORRECTION_ENDPOINTS and has_request_context()
+                and g.get("correction_source") and values["issuer"] == current_issuer()):
+            values.setdefault("correction_source", g.correction_source)
+            values.setdefault("doc_type", g.correction_kind)
+
+
+def issuer_label(seller: dict) -> str:
+    return seller.get("profile_label") or seller.get("name") or translate(get_ui_lang(request))["issuer_default"]
+
+
+def issuer_profiles(*, include_deleted: bool = False) -> list[dict]:
+    ui = translate(get_ui_lang(request))
+    profiles = issuer_store.issuer_profiles(SELLER_FILE.parent)
+    return [{**p, "label": p["label"] or ui["issuer_default" if p["available"] or (p["id"] == "default" and not SELLER_FILE.exists())
+                                            else "issuer_unavailable"]}
+            for p in profiles if include_deleted or not p["deleted"]]
+
+
+def default_issuer(profiles: list[dict] | None = None) -> str:
+    return issuer_store.default_issuer(SELLER_FILE.parent, issuer_profiles() if profiles is None else profiles)
+
+
+@app.context_processor
+def _issuer_context():
+    seller = invoice_seller()
+    return {"issuer_id": current_issuer(), "issuer_name": issuer_label(seller),
+            "issuer_deleted": seller.get("_deleted") is True,
+            "correction_source": g.get("correction_source", "")}
+
+
+def _create_issuer(seller: dict) -> str:
+    issuer = secrets.token_hex(16)
+    root = SELLER_FILE.parent / "issuers"
+    if root.is_symlink():
+        abort(400)
+    directory = root / issuer
+    directory.mkdir(parents=True, exist_ok=False)
+    (directory / "output").mkdir()
+    _write_json(directory / "seller.json", seller)
+    return issuer
+
+
+@app.route("/issuers/create", methods=["POST"])
+def issuer_create():
+    label = request.form.get("profile_label", "").strip()
+    if not label or len(label) > 100:
+        abort(400)
+    issuer = _create_issuer({"country": "DE", "profile_label": label})
+    return redirect(url_for("index", issuer=issuer))
+
+
+@app.route("/issuers/default", methods=["POST"])
+def issuer_set_default():
+    if request.form.get("issuer") != current_issuer():
+        abort(400)
+    try:
+        _write_json(SELLER_FILE.parent / "issuer_preferences.json", {"default_issuer": current_issuer()})
+    except OSError:
+        logger.warning("Could not save default issuer", exc_info=True)
+        return {"ok": False}, 503
+    return {"ok": True}
+
+
+@app.route("/issuers/delete", methods=["POST"])
+def issuer_delete():
+    if request.form.get("issuer") != current_issuer() or request.form.get("confirm") != "delete":
+        abort(400)
+    t = translate(get_ui_lang(request))
+    try:
+        remaining = [p for p in issuer_profiles() if p["id"] != current_issuer()]
+        # Use a fresh identity even when deleting the final profile. Old tabs
+        # must not be able to autosave into the new, empty issuer.
+        next_issuer = default_issuer(remaining) if remaining else _create_issuer({"country": "DE"})
+        # Retire the identity without losing details needed for later corrections.
+        seller = load_seller()
+        _write_json(seller_file(), dict(seller, _deleted=True, profile_label=issuer_label(seller)))
+    except OSError:
+        logger.warning("Could not delete issuer", exc_info=True)
+        return {"ok": False, "message": t["action_failed"]}, 503
+    flash(t["issuer_deleted"], "ok")
+    return {"ok": True, "next_url": url_for("index", issuer=next_issuer, edit_issuer="1")}
+
+
+@app.route("/issuers/restore", methods=["POST"])
+def issuer_restore():
+    if request.form.get("issuer") != current_issuer() or request.form.get("confirm") != "restore":
+        abort(400)
+    seller = load_seller()
+    if seller.get("_deleted") is True:
+        try:
+            if not seller.get("name"):
+                # Early prototypes retained only a label. Recover the latest
+                # available snapshot without touching the original invoices.
+                originals = sorted(output_dir().glob("*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+                for pdf in originals:
+                    original = correction_original(pdf.name)
+                    if original:
+                        seller = {**original["seller"], **seller}
+                        break
+            # Reinstating an old default must not change the current startup choice.
+            _write_json(SELLER_FILE.parent / "issuer_preferences.json", {"default_issuer": default_issuer()})
+            seller.pop("_deleted", None)
+            # Tabs opened before deletion must still reload before saving edits.
+            seller["_revision"] = secrets.token_hex(16)
+            save_seller(seller)
+        except OSError:
+            logger.warning("Could not restore issuer", exc_info=True)
+            abort(503, description=translate(get_ui_lang(request))["action_failed"])
+    flash(translate(get_ui_lang(request))["issuer_restored"], "ok")
+    return redirect(url_for("index", edit_issuer="1"))
 
 
 @app.template_global()
@@ -458,7 +736,13 @@ def whats_new_seen():
 
 @app.route("/setlang/<code>")
 def setlang(code):
-    resp = redirect(request.referrer or url_for("index"))
+    target = request.args.get("next", "")
+    parsed = urlparse(target)
+    # A form returned after a rejected POST must go back to a GET-capable URL.
+    # Accept only this app's invoice form, never an external redirect target.
+    if parsed.scheme or parsed.netloc or parsed.path != "/":
+        target = request.referrer or url_for("index")
+    resp = redirect(target)
     if code in LANGUAGES:
         resp.set_cookie("lang", code, max_age=60 * 60 * 24 * 365)
     return resp
@@ -466,17 +750,33 @@ def setlang(code):
 
 # --- Persistenz ------------------------------------------------------------
 def load_seller() -> dict:
-    if SELLER_FILE.exists():
-        return json.loads(SELLER_FILE.read_text(encoding="utf-8"))
+    if seller_file().exists():
+        return json.loads(seller_file().read_text(encoding="utf-8"))
     return {"country": "DE"}
 
 
 def save_seller(data: dict) -> None:
-    _write_json(SELLER_FILE, data)
+    _write_json(seller_file(), data)
+
+
+def save_seller_form() -> tuple[dict, int]:
+    """Compare and write under DATA_LOCK; an old tab must never overwrite newer data."""
+    seller = load_seller()
+    expected = request.form.get("seller_revision")
+    current_revision = seller_revision(seller)
+    updated = apply_seller_form(dict(seller), request.form)
+    updated_revision = seller_revision(updated)
+    if not expected or (expected != current_revision and updated_revision != current_revision):
+        return {"ok": False, "message": translate(get_ui_lang(request))["master_conflict"]}, 409
+    # A repeated identical save is harmless, including normalization of old files.
+    if updated_revision != current_revision:
+        save_seller(updated)
+    return {"ok": True, "revision": updated_revision,
+            "message": translate(get_ui_lang(request))["master_saved"]}, 200
 
 
 SELLER_FIELDS = [
-    "name", "subtitle", "address_line", "postcode", "city", "country", "vat_id",
+    "profile_label", "name", "subtitle", "address_line", "postcode", "city", "country", "vat_id",
     "tax_number", "email", "phone", "web", "iban", "bic", "bank_name",
     "account_name",
     # Hauptkonto-Kontotyp + Nicht-IBAN-Felder (International): Kontonummer,
@@ -660,7 +960,7 @@ def load_draft(src: str | None) -> dict | None:
     if not src:
         return None
     name = Path(src).stem + ".json"  # Verzeichnis-/Endungsanteile entfernen (kein Traversal)
-    path = OUTPUT_DIR / name
+    path = output_dir() / name
     if path.name != name or not path.exists():
         return None
     try:
@@ -669,9 +969,35 @@ def load_draft(src: str | None) -> dict | None:
         return None
 
 
+def correction_original(source: str) -> dict | None:
+    """A retired issuer can issue adjustments only against its own archived PDF."""
+    if Path(source).name != source or Path(source).suffix.lower() != ".pdf":
+        return None
+    pdf = output_dir() / source
+    sidecar = pdf.with_suffix(".json")
+    if not pdf.is_file() or pdf.is_symlink() or sidecar.is_symlink():
+        return None
+    draft = load_draft(source)
+    if (not isinstance(draft, dict) or draft.get("issuer_id", current_issuer()) != current_issuer()
+            or not isinstance(draft.get("invoice"), dict) or not draft["invoice"].get("number")
+            or not isinstance(draft.get("seller"), dict) or not draft["seller"].get("name")
+            or not isinstance(draft.get("buyer"), dict) or not isinstance(draft.get("items"), list)):
+        return None
+    return draft
+
+
+def invoice_seller() -> dict:
+    seller = load_seller()
+    if has_request_context() and g.get("correction_original") and not seller.get("name"):
+        # Older retired profiles kept only a label. Recover their details from
+        # the selected original, while preserving the retired marker and counter.
+        return {**g.correction_original["seller"], **seller}
+    return seller
+
+
 def _assemble(form):
     """Formulardaten -> (data-dict, gerendertes HTML, totals-bundle)."""
-    seller = load_seller()
+    seller = invoice_seller()
     items = parse_items(form)
     inv_lang = form.get("language", "") or get_ui_lang(request)
     _pay_days = payment_days(form)
@@ -683,7 +1009,7 @@ def _assemble(form):
     profile = form.get("profile", "en16931")
     if profile not in ("en16931", "xrechnung"):
         profile = "en16931"
-    doc_type = form.get("doc_type", "380") or "380"
+    doc_type = g.get("correction_kind") or form.get("doc_type") or "380"
     if doc_type not in ("380", "381", "384", "386"):
         doc_type = "380"
     inv = {
@@ -713,6 +1039,10 @@ def _assemble(form):
         "bank_account": form.get("bank_account", "0"),  # gewähltes Konto (0 = Hauptkonto)
     }
     buyer = buyer_from_form(form)
+    if g.get("correction_original"):
+        original = g.correction_original["invoice"]
+        inv["ref_number"] = original["number"]
+        inv["ref_date"] = original.get("issue_date")
     data = {
         "seller": seller, "buyer": buyer, "invoice": inv, "items": items,
         "bank": select_account(seller, inv["bank_account"]),  # gewähltes Zahlungskonto
@@ -739,8 +1069,8 @@ def used_invoice_numbers() -> list[str]:
     """Bereits vergebene Rechnungsnummern im Archiv (für den Live-Hinweis im Formular).
     Quelle ist primär die Sidecar-JSON (exakt), sonst der Dateiname."""
     nums = set()
-    for p in OUTPUT_DIR.glob("*.pdf"):
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+    for p in output_dir().glob("*.pdf"):
+        sidecar = output_dir() / f"{p.stem}.json"
         num = None
         if sidecar.exists():
             try:
@@ -758,8 +1088,8 @@ def archived_invoices() -> list[dict]:
     """Im Tool erzeugte Rechnungen als {number, date} aus den Sidecars – für den
     Bezugs-Auswähler bei Storno/Korrektur. Neueste zuerst, je Nummer einmal."""
     rows = []
-    for p in OUTPUT_DIR.glob("*.pdf"):
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+    for p in output_dir().glob("*.pdf"):
+        sidecar = output_dir() / f"{p.stem}.json"
         if not sidecar.exists():
             continue
         try:
@@ -782,15 +1112,22 @@ DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änd
 
 
 @app.route("/")
-def index():
-    seller = load_seller()
+def index(submitted_form=None):
+    seller = invoice_seller()
+    numbers = used_invoice_numbers()
+    profiles = issuer_profiles(include_deleted=True)
     today = date.today()
     defaults = {
-        "number": suggest_invoice_number(seller, used_invoice_numbers()),
+        "number": suggest_invoice_number(seller, numbers),
         "issue_date": today.isoformat(),
         "due_date": (today + timedelta(days=DEFAULT_TERM_DAYS)).isoformat(),
     }
     draft = load_draft(request.args.get("from"))
+    if g.get("correction_original"):
+        draft = g.correction_original
+        defaults["doc_type"] = g.correction_kind
+        defaults["ref_number"] = draft["invoice"]["number"]
+        defaults["ref_date"] = draft["invoice"].get("issue_date") or ""
     # Erststart: noch kein Datenordner gewählt UND keine Stammdaten -> beim ersten
     # Öffnen aktiv nach dem Speicherort fragen (Vorschlag: sichtbarer Dokumente-Ordner
     # statt des versteckten Application-Support-Standards).
@@ -798,12 +1135,18 @@ def index():
     return render_template(
         "form.html",
         seller=seller,
+        seller_revision=seller_revision(seller),
+        issuers=[p for p in profiles if not p["deleted"]],
+        retired_issuers=[p for p in profiles if p["deleted"]],
+        default_issuer_id=default_issuer(),
+        issuer_scope=issuer_scope(),
         treatments=TAX_TREATMENTS,
         defaults=defaults,
         customers=load_customers(),
         units=UNITS,
         draft=draft,
-        used_numbers=used_invoice_numbers(),
+        submitted_form=submitted_form.to_dict(flat=False) if submitted_form is not None else None,
+        used_numbers=numbers,
         ref_invoices=archived_invoices(),
         first_run=first_run,
         show_whats_new=not first_run,
@@ -814,22 +1157,21 @@ def index():
 
 @app.route("/settings", methods=["POST"])
 def settings():
-    seller = apply_seller_form(load_seller(), request.form)
-    save_seller(seller)
-    msg = translate(get_ui_lang(request))["master_saved"]
+    result, status = save_seller_form()
     # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner.
-    if request.headers.get("X-Requested-With") == "fetch":
-        return {"ok": True, "message": msg}
-    flash(msg, "ok")
+    if request.headers.get("X-Requested-With") == "fetch" or status != 200:
+        return result, status
+    flash(result["message"], "ok")
     return redirect(url_for("index"))
 
 
 @app.route("/settings/autosave", methods=["POST"])
 def settings_autosave():
     """Stammdaten beim Tippen sichern (ohne Redirect/Flash)."""
-    seller = apply_seller_form(load_seller(), request.form)
-    save_seller(seller)
-    return ("", 204)
+    result, status = save_seller_form()
+    if status != 200:
+        return result, status
+    return "", 204, {"X-Seller-Revision": result["revision"]}
 
 
 @app.route("/customers/autosave", methods=["POST"])
@@ -971,8 +1313,12 @@ def preview_pdf():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    seller = load_seller()
     data, html, totals = _assemble(request.form)
+    seller = data["seller"]
+    # DATA_LOCK covers this check through archiving: another window cannot change
+    # the reviewed issuer between the comparison and PDF/XML creation.
+    if request.form.get("seller_revision") != seller_revision(seller):
+        return index(submitted_form=request.form), 409
     if not data["items"]:
         flash(translate(get_ui_lang(request))["need_item"], "err")
         return redirect(url_for("index"))
@@ -1012,7 +1358,9 @@ def generate():
     reused = False
     if valid:
         try:
-            archived = archive_invoice(data, pdf, xml, OUTPUT_DIR, SELLER_FILE)
+            archived = archive_invoice(dict(data, issuer_id=current_issuer()), pdf, xml, output_dir(), seller_file(),
+                                       lock_directory=SELLER_FILE.parent,
+                                       allow_inactive=bool(g.get("correction_original")))
         except ArchiveError:
             raise
         except (OSError, ValueError) as exc:
@@ -1060,13 +1408,13 @@ def download_zip(filename):
     import io
     import zipfile
 
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     if path.name != filename or path.suffix.lower() != ".pdf" or not path.exists():
         abort(404)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(path, arcname=path.name)
-        xml = OUTPUT_DIR / f"{path.stem}.xml"
+        xml = output_dir() / f"{path.stem}.xml"
         if xml.exists():
             z.write(xml, arcname=xml.name)
     return Response(
@@ -1095,7 +1443,7 @@ def reveal_in_finder(path) -> bool:
 def reveal(filename):
     """Datei im Finder zeigen. In der Desktop-App ersetzt das den Download –
     die Belege liegen ohnehin schon im output/-Ordner."""
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     if path.name != filename or not path.exists():
         abort(404)
     if not reveal_in_finder(path):
@@ -1120,13 +1468,13 @@ def archive_preview(filename):
 def archive_delete():
     """Archivierte Rechnung (PDF + Sidecar-JSON) löschen – nur innerhalb OUTPUT_DIR."""
     filename = request.form.get("filename", "")
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     # Pfad-Traversal verhindern: nur einfache Dateinamen direkt im Ausgabeordner.
     if filename and path.name == filename and path.suffix == ".pdf" and path.exists():
         path.unlink()
         # Sidecar + XRechnung-XML + evtl. exportierte Einzel-CSV mitlöschen
         for sib in (f"{path.stem}.json", f"{path.stem}.xml", f"{path.stem}.csv"):
-            p = OUTPUT_DIR / sib
+            p = output_dir() / sib
             if p.exists():
                 p.unlink()
         flash(translate(get_ui_lang(request))["invoice_deleted"], "ok")
@@ -1134,7 +1482,7 @@ def archive_delete():
 
 
 def _serve(filename, inline):
-    path = OUTPUT_DIR / filename
+    path = output_dir() / filename
     if path.name != filename or not path.exists():
         abort(404)
     disp = "inline" if inline else "attachment"
@@ -1229,10 +1577,10 @@ def check_updates():
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
-    for p in sorted(OUTPUT_DIR.glob("*.pdf"), reverse=True):
+    for p in sorted(output_dir().glob("*.pdf"), reverse=True):
         # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
         number, buyer_name, amount, currency = None, None, None, "EUR"
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+        sidecar = output_dir() / f"{p.stem}.json"
         if sidecar.exists():
             try:
                 d = json.loads(sidecar.read_text(encoding="utf-8"))
@@ -1260,8 +1608,9 @@ def _settings_context() -> dict:
                     "%Y-%m-%d %H:%M"
                 ),
                 "has_draft": sidecar.exists(),
+                "can_correct": correction_original(p.name) is not None,
                 "xml_filename": (
-                    f"{p.stem}.xml" if (OUTPUT_DIR / f"{p.stem}.xml").exists() else None
+                    f"{p.stem}.xml" if (output_dir() / f"{p.stem}.xml").exists() else None
                 ),
                 "number": number,
                 "buyer": buyer_name,
@@ -1271,6 +1620,8 @@ def _settings_context() -> dict:
         )
     return {
         "archive": archive,
+        "archive_issuers": issuer_profiles(include_deleted=True),
+        "default_issuer_id": default_issuer(),
         "data_dir": str(DATA_DIR),
         "data_dir_custom": DATA_DIR.resolve() != BASE.resolve(),
         "can_browse": (sys.platform == "darwin"),
@@ -1337,8 +1688,8 @@ def export_csv():
         return s.replace(".", ",") if de else s
 
     rows = []
-    for p in OUTPUT_DIR.glob("*.pdf"):
-        sidecar = OUTPUT_DIR / f"{p.stem}.json"
+    for p in output_dir().glob("*.pdf"):
+        sidecar = output_dir() / f"{p.stem}.json"
         if not sidecar.exists() or (only and p.name != only):
             continue
         try:
@@ -1404,7 +1755,7 @@ def export_csv():
     if app.config.get("DESKTOP") and sys.platform == "darwin":
         # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
         # schreiben und im Finder zeigen.
-        out = OUTPUT_DIR / name
+        out = output_dir() / name
         out.write_bytes(data)
         reveal_in_finder(out)
         return {"ok": True, "name": name}
@@ -1418,7 +1769,10 @@ def export_csv():
 def data_dir_set():
     ok, key = set_data_dir(request.form.get("data_dir", ""))
     ui = translate(get_ui_lang(request))
-    flash(ui.get(key, key), "ok" if ok else "err")
+    message = ui.get(key, key)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"ok": ok, "message": message, "issuer_scope": issuer_scope()}
+    flash(message, "ok" if ok else "err")
     # Beim Erststart kommt die Auswahl aus dem Willkommens-Dialog -> zurück aufs
     # Formular (nicht in die Einstellungen).
     dest = "index" if request.form.get("origin") == "onboarding" else "validate"
@@ -1461,7 +1815,7 @@ def _validate_request():
         raw = upload.read()
         label = upload.filename
     elif filename:
-        path = OUTPUT_DIR / filename
+        path = output_dir() / filename
         if path.name != filename or not path.exists():
             return {"label": filename, "ok": False, "messages": ["Datei nicht gefunden."]}
         raw = path.read_bytes()

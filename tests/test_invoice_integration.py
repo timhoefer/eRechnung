@@ -4,6 +4,7 @@ import json
 import os
 
 import pytest
+from helpers import export_invoice
 
 import app as appmod
 from zugferd import extract_xml_from_pdf, render_html_pdf, validate_schematron, validate_xml_bytes
@@ -46,7 +47,7 @@ def test_generated_invoice_roundtrip(tmp_path, monkeypatch, profile, language):
         "description": "Integrationstest", "quantity": "2", "unit": "C62", "unit_price": "100",
     }
     with appmod.app.test_client() as client:
-        response = client.post("/generate", data=form)
+        response = export_invoice(client, data=form)
     assert response.status_code == 200
     pdf = (out / "Rechnung_ROUNDTRIP-1.pdf").read_bytes()
     reader = PdfReader(io.BytesIO(pdf))

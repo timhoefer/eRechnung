@@ -36,7 +36,7 @@
 
 {% include "settings_panel.html" %}
 
-<p class="back-link"><a href="{{ url_for('index') }}" class="link">{{ t.back_to_form }}</a></p>
+<p class="back-link"><a href="{{ url_for('index', issuer=default_issuer_id if issuer_deleted else issuer_id) }}" class="link">{{ t.back_to_form }}</a></p>
 
 <div class="modal-backdrop" id="delete-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-title">
@@ -52,6 +52,17 @@
 
 <script>
   (function () {
+    const archiveSelect = document.getElementById("archive-issuer-select");
+    if (archiveSelect) archiveSelect.addEventListener("change", () => archiveSelect.form.requestSubmit());
+    const csv = document.getElementById("export-csv");
+    if (csv) csv.addEventListener("click", () => {
+      const url = new URL(csv.dataset.url, window.location.href);
+      for (const key of ["from", "to"]) {
+        const value = document.getElementById("export-" + key).value;
+        if (value) url.searchParams.set(key, value);
+      }
+      window.location.assign(url);
+    });
     const modal = document.getElementById("delete-modal");
     const nameEl = document.getElementById("del-filename");
     const input = document.getElementById("del-input");

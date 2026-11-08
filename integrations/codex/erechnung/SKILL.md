@@ -8,6 +8,8 @@ description: Prepare invoices with the local eRechnung engine, using saved custo
 Run `scripts/erechnung.py` with Python 3. The skill's `runtime.json` selects the
 local checkout, Python environment and source directory. No LLM API key or running
 desktop app is needed. Read [commands](references/commands.md) for syntax and fields.
+The launcher is an optional adapter to the agent-independent JSON CLI, not a
+permission boundary. There is no app opt-in or per-agent access control yet.
 
 This removable prototype shares the invoice engine and archive writer with the app.
 Only `archive` changes app data. Drafts, previews and separate export bundles stay
@@ -16,6 +18,17 @@ an app archive entry. Explain the distinction when delivering files.
 
 ## Workflow
 
+- Run `issuers` to identify the available profiles. Use the issuer explicitly named
+  by the user or already established for this invoice. With multiple active profiles
+  and no clear choice, ask which issuer to use; suggest the app's marked default
+  when appropriate, without treating it as confirmation. Use stable IDs, not names:
+  different profiles can have identical names. Pass `--issuer ID` before the command
+  for `next-number`, `templates` and `draft`. Customers and saved items are shared;
+  invoice history, bank details and numbering belong to the selected issuer.
+  Do not inspect other profiles' archives to fill gaps without a relevant user request.
+  Inactive profiles cannot issue new invoices through this prototype. Reactivation,
+  cancellations and corrections remain app actions, not reasons to create a replacement
+  identity or start a new number sequence.
 - Use `schema` for supported fields, units and tax treatments. Search customers by
   name, then inspect relevant previous invoices before asking for missing details.
   Prefer current conversation facts and saved customer/issuer data; historical
@@ -45,13 +58,18 @@ an app archive entry. Explain the distinction when delivering files.
   The command takes current issuer/customer details and clears old
   dates, numbers, deposits and discounts. Verify descriptions and prices against
   the user's request before carrying them forward. Do not use `draft` just to read
-  a template: inspect the relevant sidecar directly if only gathering suggestions.
+  a template: inspect only the relevant sidecar in the selected issuer's archive
+  if gathering suggestions. The archive paths are described in the command reference.
 - Edit only the draft's `buyer`, `invoice` and `items`. Keep issuer and bank details
-  from the source. Ask for genuinely missing dates, prices, invoice number or tax
+  from the source, including `issuer_id`, `data_scope` and `seller_revision`.
+  A default change does not retarget an existing draft. If the issuer, data folder
+  or master data changes, create a fresh draft and confirm the revised proposal;
+  do not patch its identity fields to bypass a conflict. Version 1 drafts must be
+  recreated with the updated interface. Ask for genuinely missing dates, prices, invoice number or tax
   treatment, using context-backed suggestions where possible. Do not infer tax
   treatment solely from the buyer's country or silently reuse old invoice dates.
 - Run `check` and resolve errors before presenting a complete proposal. Then show
-  a compact summary of customer, services/quantities/rates, supply period, invoice
+  a compact summary of issuer (including its profile label), customer, services/quantities/rates, supply period, invoice
   and due dates, invoice number, total/currency, tax treatment and intended output
   (preview, separate final export, or app archive). Identify remaining assumptions
   and any choice of bank account; never invent facts to make the summary complete.

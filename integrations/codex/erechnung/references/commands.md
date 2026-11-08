@@ -4,6 +4,20 @@ Run `python3 <skill-folder>/scripts/erechnung.py …` with the following argumen
 The launcher supplies the configured source directory; override it with
 `--data-dir /absolute/source/path` **before** the command. Quote paths and customer
 names; use argument arrays when invoking from code. Only `archive` modifies app data.
+The same commands work without Codex or an installed skill:
+`<python-environment>/bin/python <checkout>/assistant_cli.py …`.
+Use the shared app data root, never its `issuers/<id>` subfolder, as `--data-dir`.
+
+`issuers` returns stable IDs, display labels, legal names, `deleted`, `available`
+and the app's marked default. Pass `--issuer ID` **before** the command when choosing
+among multiple active issuers. Do not infer a choice from an identical label or a
+changed app default. A draft already holds its issuer; subsequent commands use
+that identity, and a conflicting `--issuer` is an error. Retired profiles are listed
+for clarity but cannot be used for new CLI invoices.
+
+Archives are `output/` for ID `default` and `issuers/<id>/output/` for additional
+profiles, relative to the shared root. Only inspect relevant sidecars from the chosen
+profile. Shared `customers.json` is always read from the root.
 
 The skill gathers evidence, clarifies missing details with suggested answers, and
 confirms a complete invoice summary with the user before `preview`, `export` or
@@ -14,6 +28,7 @@ for the skill; the CLI itself cannot determine whether a human has confirmed it.
 | Command | Purpose |
 | --- | --- |
 | `schema` | Fields, formats, units and supported tax treatments |
+| `issuers` | List issuer IDs, labels, active status and the app default without changing data |
 | `next-number` | Suggest a standard number; flag unclear/custom/year-change sequences for a user question |
 | `customers --query "Beispiel"` | Find customers by part of their name |
 | `templates --customer "Beispiel GmbH"` | Matching sidecars, newest issue date first |
@@ -31,7 +46,7 @@ should appear in the app. It preserves the issuer/customer snapshot, publishes P
 and JSON (plus XML for XRechnung) together, and updates only the issuer's last
 invoice number; it does not overwrite saved customers or bank details.
 
-`next-number` returns `number`, `suggestion`, `last_invoice_number`,
+`next-number` returns `issuer_id`, `number`, `suggestion`, `last_invoice_number`,
 `requires_clarification`, `reasons`, `duplicate_numbers` (number to filenames) and
 `reserved: false`. Duplicate numbers make both `number` and `suggestion` null; ask
 for the last actually issued invoice instead of using the highest archived number.
@@ -46,12 +61,23 @@ completed on retry or the next app write; keep the same draft and data folder.
 Older app builds do not use this shared lock: update the app before using both
 writers concurrently. Dropbox/iCloud must have the data locally available, and
 writing simultaneously from separate computers is not coordinated by this lock.
+Version 1.2.0 does not include the shared process lock; use the app from this PR
+for a concurrent prototype trial. No agent permission UI or access-control layer
+is included yet. The confirmation workflow is a skill instruction, not enforced
+by the CLI or a security boundary against an agent with filesystem access.
 
 ## Draft data
 
-`draft` returns a JSON path. Keep `schema_version: 1` and the `seller` snapshot.
+`draft` returns a JSON path. Keep `schema_version: 2`, `issuer_id`, `data_scope`,
+`seller_revision` and the `seller` snapshot. Recreate old version 1 drafts. Drafts
+cannot be silently moved between profiles or data roots, even with identical names
+and bank details. Current master data is checked again before archiving; changes
+to the number counter alone do not invalidate a reviewed draft.
 `buyer` uses app fields such as name, address_line, postcode, city, country, email,
 vat_id and reference. Changes apply to this draft only.
+`check`, `preview` and `archive` return the issuer ID, legal name and profile label
+in their `summary`. Separate exports live under `<out-dir>/<issuer-id>/Rechnung_<number>`
+so two issuers can export the same invoice number without sharing files.
 
 Example invoice/items (illustrative values, not user defaults):
 

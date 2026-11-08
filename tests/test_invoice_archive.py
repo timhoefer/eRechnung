@@ -227,7 +227,8 @@ def test_app_seller_autosave_waits_for_shared_archive_lock(setup):
     def autosave():
         started.set()
         with appmod.app.test_client() as client:
-            assert client.post("/settings/autosave", data={"name": "Changed name"}).status_code == 204
+            assert client.post("/settings/autosave", data={"name": "Changed name",
+                               "seller_revision": data["seller_revision"]}).status_code == 204
         finished.set()
     with archive.data_lock(source):
         thread = threading.Thread(target=autosave)

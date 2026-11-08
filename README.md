@@ -22,6 +22,89 @@ Zwei Wege:
 
 Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern — sie werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 
+## Mehrere Rechnungsaussteller
+
+Über **Weitere Stammdaten anlegen** unten links in den Stammdaten kannst du weitere Profile
+anlegen, etwa für deine freiberufliche Tätigkeit und eine Gesellschaft. Jedes Profil
+hat eigene Stammdaten, Steuerangaben, Logo, Bankverbindungen, Rechnungsnummern und
+ein eigenes Archiv. Der Profilname dient nur zur Unterscheidung in der App; auf der
+Rechnung steht der in den Stammdaten hinterlegte Name. Die Kundenliste und deren
+gespeicherte Positionen werden gemeinsam genutzt.
+
+Solange nur ein Profil vorhanden ist, bleibt die Oberfläche wie gewohnt. Ab dem
+zweiten Profil zeigt die Kopfzeile der Stammdaten den aktiven Rechnungsaussteller
+als Auswahl. Sie bleibt auch bei eingeklappten Stammdaten bedienbar. Beim Wechsel
+bleibt eine geöffnete Stammdatenansicht geöffnet.
+
+Die vorhandenen Stammdaten und Rechnungen bilden automatisch das erste Profil;
+bestehende Dateien werden dafür weder verschoben noch umgeschrieben. Weitere
+Profile liegen unter `issuers/<Profil-ID>/seller.json` und
+`issuers/<Profil-ID>/output/` im gemeinsamen Datenordner. Ein Datenordnerwechsel
+nimmt alle Profile mit; abweichende Kopien desselben Profils im Ziel stoppen den
+Umzug. Sichere immer den vollständigen Datenordner.
+
+Die automatische Nummernfolge `JJJJ-NNN` läuft pro Aussteller unabhängig. Der
+Vorschlag folgt der höchsten Nummer des laufenden Jahres aus gespeichertem Zähler
+und Archiv dieses Profils. Bei einem neuen Profil beginnt er mit `JJJJ-001`;
+existieren Rechnungen außerhalb dieses Archivs, trage beim ersten Erstellen die
+passende nächste Nummer ein. Abweichende Nummernformate bleiben manuell
+eingebbar. Archiv, CSV-Export, Vorlagen und Bezüge für Korrekturen beziehen sich
+jeweils auf das ausgewählte Profil. Gespeicherte Originalrechnungen bleiben bei
+späteren Änderungen an den Stammdaten unverändert.
+
+Bei einer **neuen Anschrift oder einem geänderten Namen** die vorhandenen
+Stammdaten bearbeiten. Die Identität des Profils und seine Nummernfolge ändern
+sich dabei nicht; neue Belege verwenden die aktualisierten Angaben.
+
+Ein Profilwechsel öffnet ein neues Rechnungsformular. Bei bereits eingetragenem
+Kunden oder Positionen fragt die App vor dem Verwerfen nach. Jedes Fenster behält
+seinen eigenen Aussteller. Bei mehreren aktiven Profilen kannst du unter dem
+Profilnamen **Als Standard verwenden** wählen. Dieses Profil wird beim nächsten
+App-Start ausgewählt; ein manueller Profilwechsel verändert den Standard nicht.
+Die Auswahl liegt in `issuer_preferences.json` im Datenordner und wird beim Umzug
+mitgenommen. Ohne Auswahl oder nach dem Löschen des Standards wird das erste
+noch aktive Profil geöffnet. Profile lassen sich über ihren Profilnamen umbenennen.
+
+**Löschen** erscheint erst ab zwei aktiven Profilen und steht unten rechts neben
+**Stammdaten speichern**. Nach Bestätigung wird das Profil aus der normalen Auswahl
+entfernt, etwa nach Stilllegung einer Firma. Seine Stammdaten und Nummernfolge
+bleiben für spätere Stornos und Korrekturen erhalten und sind nicht mehr bearbeitbar.
+Alte Fenster können das Profil nicht durch automatisches Speichern wiederherstellen.
+
+**Aussteller reaktivieren** macht dasselbe Profil wieder auswählbar, mit seinen
+bisherigen Stammdaten, Rechnungen und seiner Nummernfolge. Die Aktion steht im
+Archiv und im Dialog **Weitere Stammdaten anlegen** zur Verfügung, auch für
+entfernte Profile ohne Belege. Der bisherige Standardaussteller bleibt bestehen.
+Fenster aus der Zeit vor dem Löschen müssen ihre Stammdaten neu laden, bevor sie
+Änderungen speichern können. Ein bewusst neu angelegtes Profil bleibt unabhängig;
+gleiche Namen oder Adressen führen nicht zu einer automatischen Zusammenlegung.
+
+**Das Archiv bleibt erhalten.** In den Einstellungen hat das Archiv eine eigene
+Aussteller-Auswahl. Entfernte Profile sind dort als
+**Nur Archiv** gekennzeichnet. Ihre Rechnungen lassen sich ansehen, herunterladen,
+prüfen und als CSV exportieren. Im Menü einer Rechnung mit vollständig gespeicherten
+Formulardaten stehen **Storno erstellen** und **Korrektur erstellen** zur Verfügung.
+Der Aussteller und der Originalbezug sind fest hinterlegt; normale Rechnungen und
+Vorausrechnungen bleiben gesperrt. Positionsrabatte und die ursprünglichen
+Leistungszeiträume werden übernommen; Rechnungsnummer und Ausstellungsdatum sind neu.
+Bereits früher entfernte Profile können die Absenderdaten aus der ausgewählten
+Originalrechnung übernehmen. PDF, XML und
+gespeicherte Rechnungsdaten einschließlich der damaligen Absenderangaben bleiben
+unverändert. Ein Wechsel des Archivs lässt den aktuellen Rechnungsentwurf und seinen
+Aussteller unangetastet.
+
+**Schutz vor veralteten Stammdaten:** Ein geöffnetes Formular merkt sich den
+geladenen Stand. Hat ein anderes Fenster oder eine bereits eingetroffene
+Synchronisation die Stammdaten inzwischen geändert, wird das Speichern abgewiesen.
+Die App zeigt einen Hinweis und bietet **Aktuelle Stammdaten laden** an; der
+Rechnungsentwurf bleibt dabei erhalten. Die Prüfung reserviert keine Rechnungsnummern.
+Der Export wartet auf das Speichern und die Konfliktprüfung der Stammdaten.
+
+Paralleles Schreiben auf mehreren Macs mit getrennten synchronisierten Kopien ist
+weiterhin nicht abgesichert. Die lokalen Simulationen und der noch ausstehende Test
+mit zwei echten Macs sind in [Mehrgeräte-Prüfung](docs/multi-device-validation.md)
+beschrieben.
+
 ## Steuerliche Behandlungen
 
 | Auswahl | EN-16931-Code | Verwendung |
@@ -50,19 +133,38 @@ Das Format wählst du pro Rechnung oben im Kopf:
 
 Beide werden gegen die offizielle XSD validiert; das Ergebnis lässt sich zusätzlich mit Validatoren wie dem [KoSIT-Validator] oder Mustang prüfen.
 
-## Optionaler lokaler Assistent (Prototyp)
+## Lokale Agenten-Schnittstelle (Prototyp)
 
-Ein separat installierbarer Codex-Skill kann Kunden und frühere Rechnungen als
-Vorlagen lesen, Entwürfe vorbereiten und PDF-Vorschauen oder validierte
-ZUGFeRD-/XRechnung-Dateien erzeugen. Er verwendet denselben Rechnungskern und
-dieselbe Vorlage wie die App. Die App selbst benötigt weder den Skill noch einen
-LLM-API-Schlüssel; es wird kein zusätzlicher Server gestartet.
+Die Schnittstelle `assistant_cli.py` ist agentenunabhängig: Jeder Agent mit lokalem
+Prozesszugriff kann Kunden und Rechnungsvorlagen lesen, JSON-Entwürfe vorbereiten und
+PDF-Vorschauen oder validierte ZUGFeRD-/XRechnung-Dateien erzeugen. Sie verwendet
+denselben Rechnungskern und dieselbe Vorlage wie die App. Es gibt keine Abhängigkeit
+von Codex, einem Modellanbieter oder einem LLM-API-Schlüssel und keinen zusätzlichen
+Server. Der separat installierbare Codex-Skill ist ein optionaler Adapter.
+Die [Agenten-Schnittstelle](docs/agent-interface.md) beschreibt die direkte Nutzung,
+Rückgaben und Grenzen für andere Agenten und Automatisierungen.
+
+`issuers` listet die Aussteller mit stabilen IDs und dem App-Standard auf.
+Bei mehreren aktiven Profilen muss für Nummernvorschlag, Vorlagen und neue Entwürfe
+`--issuer ID` vor dem Befehl angegeben werden. Der Standard wird bei Unklarheit
+vorgeschlagen, aber nicht stillschweigend ausgewählt. Kunden und gespeicherte
+Positionen bleiben gemeinsam; Bankdaten, Nummern und Archive gehören zum gewählten
+Aussteller. Deaktivierte Profile können über die Schnittstelle keine neuen
+Rechnungen ausstellen; Reaktivierung, Stornos und Korrekturen bleiben App-Aktionen.
+
+Ein Entwurf enthält eine feste Aussteller-ID, den Datenordner-Bezug und den
+geprüften Stammdatenstand. Ein geänderter Standard leitet ihn nicht um. Nach einer
+Adress-/Bankdatenänderung, Reaktivierung oder einem Ordnerwechsel muss ein neuer
+Entwurf erstellt und bestätigt werden. Alte Entwürfe im Format 1 werden ebenfalls
+neu erstellt. Separate Exporte liegen in Unterordnern pro Aussteller, sodass beide
+dieselbe Rechnungsnummer verwenden können.
 
 Vor dem Erzeugen einer PDF oder dem finalen Export fasst der Skill die geplante
 Rechnung zusammen und wartet auf eine ausdrückliche Bestätigung. Offene Angaben
 fragt er mit passenden Vorschlägen aus dem Gespräch, Kundendaten und früheren
 Rechnungen ab; die Herkunft eines Vorschlags wird benannt. Erst nach Bestätigung
-erstellt er die vereinbarte Vorschau, den Export oder den Archiveintrag. Diese
+erstellt er die vereinbarte Vorschau, den Export oder den Archiveintrag. Der
+gewählte Aussteller ist Teil dieser Zusammenfassung. Diese
 Gesprächsregel gilt für den Skill; direkte CLI-Aufrufe haben keinen Bestätigungsdialog.
 
 Der Prototyp unterstützt gewöhnliche Rechnungen (`380`) auf macOS/Linux. Kunden,
@@ -90,7 +192,8 @@ Testrechnungen ist die höchste Archivnummer kein verlässlicher Ausgangspunkt;
 der Skill fragt nach der letzten tatsächlich ausgestellten Rechnung. Bestehende
 Belege werden nicht automatisch als Tests eingeordnet oder umnummeriert. Ein separates `export` registriert ebenfalls keine Nummer im Archiv.
 Vor gleichzeitiger Nutzung von App und Skill muss die App auf diesen gemeinsamen
-Speicherweg aktualisiert sein; ältere Builds kennen die Sperre nicht. Sie gilt nur
+Speicherweg aktualisiert sein; auch die veröffentlichte Version 1.2.0 kennt diese
+Sperre noch nicht. Für parallele Tests die App aus diesem PR verwenden. Sie gilt nur
 auf demselben Rechner, nicht über Dropbox/iCloud zwischen verschiedenen Geräten.
 Die Dateien im Datenordner müssen lokal verfügbar sein.
 
@@ -99,8 +202,12 @@ und Pango wie oben installieren):
 
 ```bash
 .venv/bin/python scripts/create_assistant_demo.py /tmp/erechnung-demo-daten
+.venv/bin/python assistant_cli.py --data-dir /tmp/erechnung-demo-daten issuers
 .venv/bin/python scripts/install_assistant_skill.py --data-dir /tmp/erechnung-demo-daten
 ```
+
+Mit `--multiple-issuers` beim Erstellen der Beispieldaten werden zwei fiktive
+Aussteller angelegt. Die Skill-Installation ist für direkte CLI-Aufrufe nicht nötig.
 
 Der Installer speichert die Pfade dieses Checkouts und dieser Python-Umgebung im
 Skill. Beide müssen nach der Installation erhalten bleiben. In Codex lässt sich
@@ -125,6 +232,9 @@ Abhängigkeit der App. Befehle und Datenformat stehen in
 Für echte Daten muss der betreffende Datenordner explizit ausgewählt werden.
 Die Dateien werden lokal erzeugt; Angaben, die der Assistent liest, gelangen aber
 in seinen Modellkontext und gegebenenfalls zum Cloud-Anbieter.
+Eine Freigabe-Oberfläche und Berechtigungen pro Agent sind noch nicht enthalten.
+Die Bestätigung im Skill ist eine Gesprächsregel, keine technische Zugriffssperre.
+Dieses Konzept wird separat entworfen; der PR bleibt vorerst ein Prototyp.
 
 ## Hinweise
 
@@ -171,7 +281,7 @@ Texte gemeinsam aktualisieren. **Nur bei ausgewählten größeren Feature-Releas
 `auto_open: True` setzen. Bei kleineren Neuerungen und Fehlerkorrekturen bleibt es
 `False`; ohne dieses Feld öffnet sich der Dialog ebenfalls nur manuell. Eine neue
 ID oder Versionsnummer allein löst keine automatische Anzeige aus. Die Hinweise
-zu 1.1.4 sind zunächst nur manuell erreichbar. `ANNOUNCEMENT = None` deaktiviert
+zur Aussteller-Verwaltung in 1.2.0 erscheinen einmalig automatisch. `ANNOUNCEMENT = None` deaktiviert
 den Dialog und den Menüeintrag vollständig.
 
 Die App speichert gelesene IDs in ihrer lokalen `config.json`, unabhängig vom

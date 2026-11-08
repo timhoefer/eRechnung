@@ -6,6 +6,10 @@ import shutil
 import sys
 from pathlib import Path
 
+# Use the same data-root checks as the engine without importing the desktop app.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from issuer_store import issuer_profiles  # noqa: E402
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -23,8 +27,9 @@ def main() -> int:
         shutil.rmtree(target)
         print(json.dumps({"ok": True, "removed": str(target)}))
         return 0
-    if args.data_dir is None or not (args.data_dir.expanduser() / "seller.json").is_file():
-        parser.error("Provide --data-dir with an existing seller.json.")
+    if args.data_dir is None or not any(p["available"] and not p["deleted"]
+                                       for p in issuer_profiles(args.data_dir.expanduser())):
+        parser.error("Provide the shared --data-dir with an available active issuer.")
     if target.exists() or target.is_symlink():
         parser.error("Skill already exists; no files were changed.")
     checkout = Path(__file__).resolve().parents[1]
