@@ -58,19 +58,28 @@
 {% endif %}
 
 <div class="card">
-  <h2>{{ t.archive }} ({{ archive|length }})</h2>
-  {% if archive_issuers|length > 1 %}
-  <form method="get" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=None) }}" id="archive-issuer-form" class="archive-issuer-choice">
-    <label>{{ t.issuer }}
+  <form method="get" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=None) }}" id="archive-issuer-form" novalidate>
+    <div class="archive-header">
+      <h2>{{ t.archive }} ({{ archive|length }})</h2>
+      <label class="archive-sort"><span>{{ t.archive_sort }}</span>
+        <select name="sort" id="archive-sort-select">
+          <option value="created" {{ 'selected' if archive_sort == 'created' else '' }}>{{ t.archive_sort_created }}</option>
+          <option value="number" {{ 'selected' if archive_sort == 'number' else '' }}>{{ t.archive_sort_number }}</option>
+          <option value="customer" {{ 'selected' if archive_sort == 'customer' else '' }}>{{ t.archive_sort_customer }}</option>
+        </select>
+      </label>
+    </div>
+    {% if archive_issuers|length > 1 %}
+    <div class="archive-issuer-choice"><label>{{ t.issuer }}
       <select name="issuer" id="archive-issuer-select">
         {% for p in archive_issuers %}<option value="{{ p.id }}" {{ 'selected' if p.id == issuer_id else '' }}>{{ p.label }}{{ ' · ' ~ t.issuer_archived if p.deleted else '' }}</option>{% endfor %}
       </select>
-    </label>
-    <button type="submit" class="secondary small">{{ t.issuer_switch }}</button>
+    </label></div>
+    {% else %}
+    <input type="hidden" name="issuer" value="{{ issuer_id }}">
+    <p class="hint">{{ t.issuer }}: <strong>{{ issuer_name }}</strong></p>
+    {% endif %}
   </form>
-  {% else %}
-  <p class="hint">{{ t.issuer }}: <strong>{{ issuer_name }}</strong></p>
-  {% endif %}
   {% if issuer_deleted %}
   <p class="hint">{{ t.issuer_archive_hint }}</p>
   <form method="post" action="{{ url_for('issuer_restore') }}" class="issuer-restore-form">
@@ -135,13 +144,17 @@
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <p class="hint">{{ t.no_invoices }}</p>
+  {% endif %}
   {# CSV-Export als Innen-Box des Archivs (Optik wie die Positions-Boxen) #}
-  <div class="export-box">
+  {# Keep the form controls when empty so issuer switches retain the date range. #}
+  <div class="export-box" {{ 'hidden' if not archive else '' }}>
     <h3>{{ t.export_title }}</h3>
     <p class="hint">{{ t.export_hint }}</p>
     <div class="export-bar">
-      <label>{{ t.export_from }}<input type="date" id="export-from"></label>
-      <label>{{ t.export_to }}<input type="date" id="export-to"></label>
+      <label>{{ t.export_from }}<input type="date" id="export-from" name="export_from" form="archive-issuer-form" value="{{ request.args.get('export_from', '') }}"></label>
+      <label>{{ t.export_to }}<input type="date" id="export-to" name="export_to" form="archive-issuer-form" value="{{ request.args.get('export_to', '') }}"></label>
       <button type="button" class="secondary" id="export-csv" data-url="{{ url_for('export_csv') }}">{{ t.export_csv }}</button>
     </div>
     <div class="export-presets">
@@ -153,9 +166,6 @@
       <button type="button" class="link" data-preset="q4">Q4</button>
     </div>
   </div>
-  {% else %}
-  <p class="hint">{{ t.no_invoices }}</p>
-  {% endif %}
 </div>
 
 <div class="card">

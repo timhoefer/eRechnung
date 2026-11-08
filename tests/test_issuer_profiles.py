@@ -442,6 +442,36 @@ def test_archive_preview_download_csv_template_and_delete_are_scoped(client, fas
     assert (appmod.OUTPUT_DIR / filename).exists()
 
 
+@pytest.mark.parametrize("endpoint", ["/settings/panel", "/validate"])
+@pytest.mark.parametrize("dates", [
+    ("2026-07-01", "2026-09-30"), ("2026-07-01", ""), ("", ""),
+])
+def test_csv_dates_survive_empty_archive_issuer_roundtrip(client, endpoint, dates):
+    empty_issuer, _ = add_issuer(client, "Empty Company")
+    (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").write_bytes(b"%PDF-test")
+    page = html.fromstring(client.get(endpoint, query_string={"issuer": "default", "sort": "customer"}).data)
+    for field_id, value in zip(("export-from", "export-to"), dates, strict=True):
+        page.get_element_by_id(field_id).value = value
+
+    def switch_issuer(page, issuer):
+        form = page.get_element_by_id("archive-issuer-form")
+        values = dict(form.form_values())
+        # Include controls outside the form that belong to it via form="...".
+        values.update((el.name, el.value) for el in page.xpath('//input[@form="archive-issuer-form"]'))
+        values["issuer"] = issuer
+        return html.fromstring(client.get(form.action, query_string=values).data)
+
+    # Also sort and reload while the archive is empty before returning.
+    for issuer in (empty_issuer, empty_issuer, "default"):
+        page = switch_issuer(page, issuer)
+        assert page.get_element_by_id("export-from").value == dates[0]
+        assert page.get_element_by_id("export-to").value == dates[1]
+        assert page.get_element_by_id("archive-issuer-select").value == issuer
+        export_box = page.xpath('//div[@class="export-box"]')[0]
+        assert ("hidden" in export_box.attrib) == (issuer == empty_issuer)
+        page.get_element_by_id("archive-sort-select").value = "number"
+
+
 def test_number_conflict_warning_uses_only_selected_archive(client):
     issuer, directory = add_issuer(client)
     (directory / "output" / f"Rechnung_{YEAR}-030.pdf").write_bytes(b"%PDF-test")

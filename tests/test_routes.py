@@ -689,3 +689,67 @@ def test_uploaded_validation_requires_schematron(client, monkeypatch):
         result = appmod._validate_request()
     assert result['xsd_ok'] is True
     assert result['ok'] is False
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+@pytest.mark.parametrize('with_sidecars', [False, True])
+def test_archive_orders_by_displayed_timestamp_not_number(client, endpoint, with_sidecars):
+    import os
+
+    from lxml import html
+
+    numbers = ['2026-07', '2026-008', '2026-009', '2026-010', '2026-011']
+    for index, number in enumerate(numbers):
+        pdf = appmod.OUTPUT_DIR / f'Rechnung_{number}.pdf'
+        pdf.write_bytes(b'%PDF-1.4')
+        # Same displayed minute, different seconds: sort by the actual timestamp.
+        stamp = 1_780_000_000 + index
+        os.utime(pdf, (stamp, stamp))
+        if with_sidecars:
+            pdf.with_suffix('.json').write_text(json.dumps({
+                'invoice': {'number': number, 'issue_date': '2026-01-01'},
+                'buyer': {'name': 'Example Client'}, 'items': [],
+            }))
+    before = {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()}
+    page = html.fromstring(client.get(endpoint).data)
+    ordered = page.xpath('//button[contains(@class, "js-delete")]/@data-filename')
+    assert ordered == [f'Rechnung_{n}.pdf' for n in reversed(numbers)]
+    assert {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()} == before
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+def test_archive_sort_choices_use_numeric_numbers_and_customer_names(client, endpoint):
+    import os
+
+    from lxml import html
+
+    for index, (number, customer) in enumerate([('2026-07', 'Alpha'), ('2026-008', 'Zulu'), ('2026-011', 'Beta')]):
+        pdf = appmod.OUTPUT_DIR / f'Rechnung_{number}.pdf'
+        pdf.write_bytes(b'%PDF-1.4')
+        # Creation order deliberately differs from number and customer order.
+        stamp = 1_780_000_000 - index
+        os.utime(pdf, (stamp, stamp))
+        pdf.with_suffix('.json').write_text(json.dumps({'invoice': {'number': number}, 'buyer': {'name': customer}}))
+
+    def numbers(url):
+        page = html.fromstring(client.get(url).data)
+        return page.xpath('//span[@class="arch-id"]/text()')
+
+    assert numbers(endpoint + '?sort=number') == ['2026-011', '2026-008', '2026-07']
+    assert numbers(endpoint) == ['2026-011', '2026-008', '2026-07']  # remembered preference
+    assert numbers(endpoint + '?sort=customer') == ['2026-07', '2026-011', '2026-008']
+    assert numbers(endpoint + '?sort=created') == ['2026-07', '2026-008', '2026-011']
+    assert numbers(endpoint + '?sort=invalid') == ['2026-07', '2026-008', '2026-011']
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+def test_archive_sort_keeps_csv_dates(client, endpoint):
+    from lxml import html
+
+    (appmod.OUTPUT_DIR / 'Rechnung_2026-001.pdf').write_bytes(b'%PDF-1.4')
+    page = html.fromstring(client.get(endpoint, query_string={
+        'sort': 'customer', 'export_from': '2026-07-01', 'export_to': '2026-09-30',
+    }).data)
+    assert page.get_element_by_id('export-from').value == '2026-07-01'
+    assert page.get_element_by_id('export-to').value == '2026-09-30'
+    assert page.get_element_by_id('archive-sort-select').value == 'customer'
