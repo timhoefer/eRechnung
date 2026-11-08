@@ -5,6 +5,9 @@
 - Änderungen an bestehenden Stammdaten, Kunden und gespeicherten Positionen sowie Löschungen erhalten eine zusätzliche Bestätigung mit den betroffenen Daten. Unbestätigte Änderungen bleiben im Formular; beim Kundenwechsel wird vor ihrem Verlust gewarnt.
 - Bestätigungen sind einmalig, zeitlich begrenzt und an Sitzung, konkrete Anfrage und bisherigen Datenstand gebunden. Abbrechen widerruft die Bestätigung.
 - CSV-Exporte, Rechnungsbegleitdateien und Schreibproben ersetzen keine vorhandenen Dateien. Ein interner Testmodus verwendet ausschließlich temporäre Daten und einen eigenen Nummernlauf.
+- Rechnungen werden erst nach erfolgreicher XSD-/Schematron-Prüfung archiviert. Fehlgeschlagene Prüfungen verändern weder Archiv, Kunden noch Nummernstand.
+- Gleiche Rechnungsnummern desselben Ausstellers werden bei abweichendem Inhalt abgewiesen. Identische Wiederholungen verwenden den vorhandenen Beleg; verschiedene Aussteller behalten getrennte Nummernfolgen.
+- Archivdateien werden vollständig vorbereitet, ohne vorhandene Dateien zu ersetzen. Unterbrochene Schreibvorgänge werden beim nächsten schreibenden Zugriff abgeschlossen. Eine gemeinsame lokale Prozesssperre schützt Stammdaten, Nummernstand und Datenordnerwechsel.
 
 ## 1.2.1
 

@@ -24,6 +24,7 @@ def client(tmp_path, monkeypatch):
     root = tmp_path / "data"
     root.mkdir()
     (root / "output").mkdir()
+    (root / ".erechnung.lock").touch()
     monkeypatch.setattr(appmod, "BASE", tmp_path / "app")
     monkeypatch.setattr(appmod, "DATA_DIR", root)
     monkeypatch.setattr(appmod, "SELLER_FILE", root / "seller.json")

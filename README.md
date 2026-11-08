@@ -24,8 +24,8 @@ benötigen eine neue Bestätigung. Ohne JavaScript erscheint eine Bestätigungss
 
 Diese Bestätigung ist kein Nachweis eines menschlichen Bedieners und keine
 Zugriffskontrolle gegen Programme mit direktem Datei- oder Bedienzugriff. Die
-Prüfung gilt innerhalb der laufenden App; sie ist kein Schutz vor gleichzeitigen
-Schreibzugriffen anderer App-Prozesse oder Macs.
+Prüfung und Schreiben verwenden die gemeinsame lokale Prozesssperre. Bestätigungen
+sind an die laufende App gebunden; mehrere Macs bleiben unkoordiniert.
 
 ## Sicherer Entwicklungs-Testmodus
 
@@ -35,6 +35,28 @@ und unabhängigem Nummernlauf. Die produktive Konfiguration wird nicht geladen,
 der Datenordner kann nicht umgestellt werden, und beim normalen Beenden werden
 die Testdaten entfernt. Nur fiktive Daten verwenden. Es gibt keine zusätzliche
 Einstellung für Endnutzer. Automatisierte Tests isolieren bereits den App-Start.
+## Robustere Rechnungsablage
+
+PDF-Darstellung, Ausstellerverwaltung und Archivablage liegen in eigenständigen
+internen Modulen. Vorschau und Erzeugung der App verwenden dieselbe Darstellung.
+Es wird keine externe Agentenschnittstelle aktiviert.
+
+Ein Beleg wird nur nach erfolgreicher XSD- und Schematron-Prüfung archiviert.
+Fehlt die Prüfung oder schlägt sie fehl, zeigt die App die Fehler; Belegdateien,
+Kundendaten und Rechnungsnummernstand bleiben unverändert.
+
+Die Nummer gehört weiterhin zu einem Aussteller. Eine identische Wiederholung
+verwendet die ursprünglichen Dateien. Abweichende Inhalte mit derselben Nummer
+werden abgewiesen; vorhandene Altbelege bleiben bestehen. Das Archiv wird nicht
+umbenannt oder nachträglich bereinigt.
+
+Vor der Veröffentlichung werden die Dateien vollständig vorbereitet; das PDF wird
+zuletzt sichtbar. Ein unterbrochener Schreibvorgang bleibt für die Wiederherstellung
+vorgemerkt und wird beim nächsten schreibenden Zugriff abgeschlossen. Konflikte
+mit zwischenzeitlich geänderten Dateien werden gemeldet, nicht überschrieben.
+Die Sperre koordiniert Prozesse dieser App-Version auf demselben Rechner. Sie
+koordiniert keine unterschiedlichen Macs über Dropbox oder andere Cloud-Synchronisation
+und macht das Arbeitsarchiv nicht revisionssicher.
 
 ## Voraussetzungen
 

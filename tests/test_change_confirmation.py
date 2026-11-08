@@ -254,9 +254,9 @@ def test_orphaned_companions_are_preserved_on_export(client, suffix):
     fields.update(number=['TEST-1'], issue_date=[date.today().isoformat()],
                   seller_revision=[m.seller_revision(m.load_seller())])
     form = MultiDict((k, v) for k, values in fields.items() for v in values)
-    assert post(client, '/generate', form).status_code == 200
+    assert post(client, '/generate', form).status_code == 409
     assert original.read_text() == 'Keep this file'
-    assert (m.OUTPUT_DIR / 'Rechnung_TEST-1 (2).pdf').is_file()
+    assert not list(m.OUTPUT_DIR.glob('*.pdf'))
 
 
 def test_desktop_csv_exports_never_overwrite_existing_files(client, monkeypatch):
