@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.2.1
+
+- Das Archiv zeigt standardmäßig die neuesten Dateien zuerst. Alternativ lässt es sich nach Rechnungsnummer oder Kunde sortieren. Unterschiedlich lange Nummern wie „2026-07“ und „2026-008“ werden numerisch korrekt eingeordnet.
+- Die Sortierauswahl steht neben der Archivüberschrift, wirkt sofort und wird lokal gemerkt. Aussteller-Auswahl und Belege bleiben bei einem Wechsel zusammengehörig; der CSV-Zeitraum bleibt auch beim Wechsel über ein leeres Archiv erhalten.
+- SaxonC auf 13.1.1 aktualisiert; die festgeschriebene Paketliste verwendet dieselbe Version. Die Testumgebung verwendet pytest 9.2.0.
+
+Bestehende Rechnungsdateien und Nummernfolgen bleiben unverändert.
+
 ## 1.2.0
 
 - Mehrere auswählbare Rechnungsaussteller mit eigenen Stammdaten, Bankverbindungen, Nummernfolgen und Archiven. Kunden bleiben gemeinsam nutzbar. Bestehende Daten bilden unverändert das erste Profil; weitere Profile werden im gleichen Datenordner getrennt gespeichert.
