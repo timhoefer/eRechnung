@@ -2355,8 +2355,14 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     if (!response.ok) throw new Error("archive load failed");
     const html = await response.text();
     if (loadId !== settingsPanelLoadId) return false;
+    // Read just before replacement, so edits made during loading also survive.
+    const csvDates = ["export-from", "export-to"].map(id => [id, document.getElementById(id)?.value]);
     settingsPanelUrl = url;
     pane.innerHTML = html;
+    for (const [id, value] of csvDates) {
+      const input = document.getElementById(id);
+      if (input && value !== undefined) input.value = value;
+    }
     loadDepsAsync();
     return true;
   } catch (error) {
@@ -2366,14 +2372,25 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
 }
 
 async function switchArchive(form) {
+  if (form.ariaBusy === "true") return;
   const url = new URL(form.action, window.location.href);
   url.search = new URLSearchParams(new FormData(form)).toString();
-  const select = form.querySelector("select");
+  const selects = form.querySelectorAll("select");
+  form.ariaBusy = "true";
   // Until loading succeeds, the label must still describe the visible invoices.
-  select.value = [...select.options].find((option) => option.defaultSelected).value;
-  if (await loadSettingsPanel(url.toString())) {
-    lastPreviewUrl = null;
-    showNoPreview(window.MSG_LIVE_PREVIEW);
+  // Lock both controls so a second change cannot submit the rolled-back issuer.
+  selects.forEach(select => {
+    select.value = [...select.options].find(option => option.defaultSelected).value;
+    select.disabled = true;
+  });
+  try {
+    if (await loadSettingsPanel(url.toString())) {
+      lastPreviewUrl = null;
+      showNoPreview(window.MSG_LIVE_PREVIEW);
+    }
+  } finally {
+    selects.forEach(select => { select.disabled = false; });
+    form.ariaBusy = "false";
   }
 }
 
@@ -2443,7 +2460,7 @@ function closeSettings() {
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
   pane.addEventListener("change", (e) => {
-    if (e.target.id === "archive-issuer-select") e.target.form.requestSubmit();
+    if (["archive-issuer-select", "archive-sort-select"].includes(e.target.id)) e.target.form.requestSubmit();
   });
 
   // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.

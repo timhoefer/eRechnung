@@ -6,7 +6,7 @@ Der volle /generate-Roundtrip ruft build_pdf (WeasyPrint/Pango) auf und wird
 import json
 
 import pytest
-from helpers import export_invoice
+from helpers import confirmed_post, export_invoice
 
 import app as appmod
 
@@ -40,7 +40,7 @@ def test_index_ok(client):
 
 
 def test_preview_html_renders(client):
-    r = client.post("/preview-html", data={
+    r = confirmed_post(client, "/preview-html", data={
         "description": "Test", "quantity": "1", "unit_price": "100",
         "tax_treatment": "de_19",
     })
@@ -65,7 +65,7 @@ def test_preview_sender_country(client, monkeypatch, mode, seller_country,
     seller = appmod.load_seller()
     seller["country"] = seller_country
     monkeypatch.setattr(appmod, "load_seller", lambda: seller)
-    response = client.post("/preview-html", data={
+    response = confirmed_post(client, "/preview-html", data={
         "description": "Test", "quantity": "1", "unit_price": "100",
         "buyer_country": buyer_country, "language": language, "_full": mode,
     })
@@ -117,6 +117,7 @@ _FORM = {
     "description": "Leistung", "quantity": "1", "unit": "C62", "unit_price": "100",
     "tax_treatment": "de_19", "language": "de",
     "buyer_name": "Muster GmbH", "buyer_country": "DE",
+    "buyer_city": "Berlin", "buyer_postcode": "10115", "buyer_address_line": "Teststr. 2",
 }
 
 
@@ -163,16 +164,19 @@ def test_xrechnung_writes_standalone_xml(client):
 
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
-def test_generate_duplicate_number_keeps_both(client):
+def test_generate_retry_reuses_original_and_conflict_is_rejected(client):
     export_invoice(client, data=dict(_FORM))
-    r2 = export_invoice(client, data=dict(_FORM))  # gleiche Nummer erneut
-    assert r2.status_code == 200
-    pdfs = sorted(p.name for p in appmod.OUTPUT_DIR.glob("*.pdf"))
-    assert len(pdfs) == 2  # nichts überschrieben
-    assert "Rechnung_2026-001.pdf" in pdfs
-    assert any("(2)" in n for n in pdfs)
-    body = r2.get_data(as_text=True)
-    assert "bereits" in body or "already" in body  # Duplikat-Hinweis
+    original = (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").read_bytes()
+    retry = export_invoice(client, data=dict(_FORM))
+    assert retry.status_code == 200
+    assert len(list(appmod.OUTPUT_DIR.glob("*.pdf"))) == 1
+    assert "bereits unverändert" in retry.get_data(as_text=True)
+    conflict = export_invoice(client, data=dict(_FORM, unit_price="200"), follow_redirects=True)
+    import re
+    flashes = json.loads(re.search(r"window.FLASHES = (.*);", conflict.get_data(as_text=True)).group(1))
+    assert any("bestehende Rechnung wurde nicht verändert" in message for _, message in flashes)
+    assert (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").read_bytes() == original
+    assert len(list(appmod.OUTPUT_DIR.glob("*.pdf"))) == 1
 
 
 # --- Desktop-Modus: „Im Finder zeigen" statt Download (WKWebView lädt nicht) ----
@@ -236,7 +240,7 @@ def test_archive_rows_offer_original_pdf_preview(client, has_sidecar):
 
 def test_reveal_missing_file_404(client):
     # Pfad-Prüfung greift vor dem Plattform-Check -> 404 auch auf der CI (Linux).
-    assert client.post("/reveal/gibtsnicht.pdf").status_code == 404
+    assert confirmed_post(client, "/reveal/gibtsnicht.pdf").status_code == 404
 
 
 def test_reveal_existing_file_opens_finder(client, monkeypatch):
@@ -244,7 +248,7 @@ def test_reveal_existing_file_opens_finder(client, monkeypatch):
     calls = []
     monkeypatch.setattr("subprocess.run", lambda *a, **k: calls.append(a[0]))
     monkeypatch.setattr(appmod.sys, "platform", "darwin")
-    r = client.post("/reveal/" + pdf)
+    r = confirmed_post(client, "/reveal/" + pdf)
     assert r.status_code == 200 and r.get_json()["ok"]
     assert calls and calls[0][:2] == ["open", "-R"]
 
@@ -275,13 +279,13 @@ def test_export_csv_browser_downloads(client):
 
 def test_settings_save_fetch_returns_json(client):
     # Stammdaten speichern per fetch -> JSON + Toast statt Redirect/Banner.
-    r = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())},
+    r = confirmed_post(client, "/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())},
                     headers={"X-Requested-With": "fetch"})
     d = r.get_json()
     assert d["ok"] and d["message"]
     assert json.loads(appmod.SELLER_FILE.read_text(encoding="utf-8"))["name"] == "Neu GmbH"
     # Ohne Header: klassischer Redirect (No-JS-Fallback)
-    r2 = client.post("/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())})
+    r2 = confirmed_post(client, "/settings", data={"name": "Neu GmbH", "seller_revision": appmod.seller_revision(appmod.load_seller())})
     assert r2.status_code in (302, 303)
 
 
@@ -302,11 +306,11 @@ def test_csv_export_escapes_formula_injection(client):
 def test_customers_delete_fetch_json(client):
     appmod.save_customers([{"name": "Muster GmbH", "country": "DE"}])
     hdr = {"X-Requested-With": "fetch"}
-    r = client.post("/customers/delete", headers=hdr, data={"buyer_name": "Muster GmbH"})
+    r = confirmed_post(client, "/customers/delete", headers=hdr, data={"buyer_name": "Muster GmbH"})
     d = r.get_json()
     assert d["ok"] and "Muster GmbH" in d["message"] and d["customers"] == []
     # Unbekannter Name -> ok:False
-    assert client.post("/customers/delete", headers=hdr,
+    assert confirmed_post(client, "/customers/delete", headers=hdr,
                        data={"buyer_name": "Gibtsnicht"}).get_json()["ok"] is False
 
 
@@ -342,7 +346,7 @@ def test_logo_appears_in_preview(client):
     base = json.loads(out.read_text(encoding="utf-8"))
     base["logo"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
     out.write_text(json.dumps(base), encoding="utf-8")
-    body = client.post("/preview-html", data={
+    body = confirmed_post(client, "/preview-html", data={
         "description": "L", "quantity": "1", "unit_price": "100", "tax_treatment": "de_19",
     }).get_data(as_text=True)
     assert "brand-mark" in body and base["logo"] in body
@@ -351,15 +355,15 @@ def test_logo_appears_in_preview(client):
 def test_customers_save_fetch_returns_json(client):
     # Per fetch (JS): JSON statt Redirect -> kein Reload, Toast im Client.
     hdr = {"X-Requested-With": "fetch"}
-    r = client.post("/customers/save", headers=hdr,
+    r = confirmed_post(client, "/customers/save", headers=hdr,
                     data={"buyer_name": "Muster GmbH", "buyer_country": "DE"})
     d = r.get_json()
     assert d["ok"] and "Muster GmbH" in d["message"]
     assert any(c["name"] == "Muster GmbH" for c in d["customers"])
     # Fehlender Name -> ok: False mit Meldung
-    assert client.post("/customers/save", headers=hdr, data={}).get_json()["ok"] is False
+    assert confirmed_post(client, "/customers/save", headers=hdr, data={}).get_json()["ok"] is False
     # Ohne fetch-Header bleibt der klassische Redirect (No-JS-Fallback)
-    r2 = client.post("/customers/save", data={"buyer_name": "X", "buyer_country": "DE"})
+    r2 = confirmed_post(client, "/customers/save", data={"buyer_name": "X", "buyer_country": "DE"})
     assert r2.status_code in (302, 303)
 
 
@@ -491,22 +495,22 @@ def test_preview_uses_selected_account(client):
     form = {"description": "L", "quantity": "1", "unit_price": "100",
             "tax_treatment": "de_19"}
     # Konto per IBAN gewählt -> erscheint im Vorschau-HTML ...
-    body1 = client.post("/preview-html", data=dict(form, bank_account="DE99USD0")).get_data(as_text=True)
+    body1 = confirmed_post(client, "/preview-html", data=dict(form, bank_account="DE99USD0")).get_data(as_text=True)
     assert "DE99USD0" in body1
     # ... Hauptkonto (per IBAN) zeigt die flache IBAN, nicht das Zweitkonto.
-    body0 = client.post("/preview-html", data=dict(form, bank_account=base["iban"])).get_data(as_text=True)
+    body0 = confirmed_post(client, "/preview-html", data=dict(form, bank_account=base["iban"])).get_data(as_text=True)
     assert base["iban"] in body0 and "DE99USD0" not in body0
     # Alt-Sidecar-Kompatibilität: numerischer Index funktioniert weiter.
-    bodyl = client.post("/preview-html", data=dict(form, bank_account="1")).get_data(as_text=True)
+    bodyl = confirmed_post(client, "/preview-html", data=dict(form, bank_account="1")).get_data(as_text=True)
     assert "DE99USD0" in bodyl
 
 
 def test_data_dir_set_onboarding_redirects_to_form(client, monkeypatch):
     # set_data_dir stubben -> keine echten Dateioperationen; nur Redirect-Ziel prüfen.
     monkeypatch.setattr(appmod, "set_data_dir", lambda raw: (True, "data_dir_saved"))
-    r = client.post("/data-dir", data={"data_dir": "/x", "origin": "onboarding"})
+    r = confirmed_post(client, "/data-dir", data={"data_dir": "/x", "origin": "onboarding"})
     assert r.status_code in (302, 303) and "validate" not in r.headers["Location"]
-    r2 = client.post("/data-dir", data={"data_dir": "/x"})  # ohne origin -> Einstellungen
+    r2 = confirmed_post(client, "/data-dir", data={"data_dir": "/x"})  # ohne origin -> Einstellungen
     assert r2.status_code in (302, 303) and "validate" in r2.headers["Location"]
 
 
@@ -542,7 +546,7 @@ def test_archive_check_targets_xml_for_xrechnung(client):
     assert 'value="Rechnung_2026-001.xml"' in html
     assert 'value="Rechnung_2026-002.pdf"' in html
     # Die Prüfung der XML läuft direkt über den XML-Pfad (kein PDF-Extrakt).
-    r = client.post("/settings/panel", data={"filename": "Rechnung_2026-001.xml"})
+    r = confirmed_post(client, "/settings/panel", data={"filename": "Rechnung_2026-001.xml"})
     assert r.status_code == 200
     assert "Rechnung_2026-001.xml" in r.get_data(as_text=True)
 
@@ -586,7 +590,7 @@ def test_check_updates_compares_version(client, monkeypatch):
     # Neuere Version verfügbar -> update_available True, Tag-"v" wird gestrippt.
     monkeypatch.setattr("urllib.request.urlopen",
                         lambda *a, **k: _Resp({"tag_name": "v9.9.9", "html_url": "https://x/rel"}))
-    r = client.post("/check-updates")
+    r = confirmed_post(client, "/check-updates")
     d = r.get_json()
     assert d["update_available"] is True and d["latest"] == "9.9.9"
     assert d["current"] == appmod.APP_VERSION and d["url"] == "https://x/rel"
@@ -594,13 +598,13 @@ def test_check_updates_compares_version(client, monkeypatch):
     # Gleiche Version -> kein Update.
     monkeypatch.setattr("urllib.request.urlopen",
                         lambda *a, **k: _Resp({"tag_name": "v" + appmod.APP_VERSION}))
-    assert client.post("/check-updates").get_json()["update_available"] is False
+    assert confirmed_post(client, "/check-updates").get_json()["update_available"] is False
 
     # Netzwerkfehler -> error=offline, kein Crash.
     def _boom(*a, **k):
         raise OSError("no net")
     monkeypatch.setattr("urllib.request.urlopen", _boom)
-    assert client.post("/check-updates").get_json()["error"] == "offline"
+    assert confirmed_post(client, "/check-updates").get_json()["error"] == "offline"
 
 
 def test_csv_storno_offsets_original(client):
@@ -641,6 +645,8 @@ def test_generation_never_claims_unverified_success(client, monkeypatch, sch):
     response = export_invoice(client, data=_FORM)
     assert response.status_code == 200
     assert 'Validierung bestanden' not in response.get_data(as_text=True)
+    assert not list(appmod.OUTPUT_DIR.glob("*.pdf"))
+    assert "last_invoice_number" not in appmod.load_seller()
     if sch['error']:
         assert sch['error'] in response.get_data(as_text=True)
 
@@ -663,7 +669,7 @@ def test_parallel_generate_preserves_all_invoices(client, monkeypatch):
     _mock_generation(monkeypatch)
     def generate(i):
         with appmod.app.test_client() as c:
-            return export_invoice(c, data=dict(_FORM, buyer_name=f'Buyer {i}')).status_code
+            return export_invoice(c, data=dict(_FORM, number=f'2026-{i+1:03d}', buyer_name=f'Buyer {i}')).status_code
     with ThreadPoolExecutor(max_workers=4) as pool:
         assert list(pool.map(generate, range(8))) == [200] * 8
     assert len(list(appmod.OUTPUT_DIR.glob('*.pdf'))) == 8
@@ -672,7 +678,7 @@ def test_parallel_generate_preserves_all_invoices(client, monkeypatch):
 
 
 def test_precise_price_in_invoice_preview(client):
-    response = client.post('/preview-html', data=dict(_FORM, quantity='1000', unit_price='0.004'))
+    response = confirmed_post(client, '/preview-html', data=dict(_FORM, quantity='1000', unit_price='0.004'))
     assert response.status_code == 200
     assert '0,004' in response.get_data(as_text=True)
 
@@ -689,3 +695,89 @@ def test_uploaded_validation_requires_schematron(client, monkeypatch):
         result = appmod._validate_request()
     assert result['xsd_ok'] is True
     assert result['ok'] is False
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+@pytest.mark.parametrize('with_sidecars', [False, True])
+def test_archive_orders_by_displayed_timestamp_not_number(client, endpoint, with_sidecars):
+    import os
+
+    from lxml import html
+
+    numbers = ['2026-07', '2026-008', '2026-009', '2026-010', '2026-011']
+    for index, number in enumerate(numbers):
+        pdf = appmod.OUTPUT_DIR / f'Rechnung_{number}.pdf'
+        pdf.write_bytes(b'%PDF-1.4')
+        # Same displayed minute, different seconds: sort by the actual timestamp.
+        stamp = 1_780_000_000 + index
+        os.utime(pdf, (stamp, stamp))
+        if with_sidecars:
+            pdf.with_suffix('.json').write_text(json.dumps({
+                'invoice': {'number': number, 'issue_date': '2026-01-01'},
+                'buyer': {'name': 'Example Client'}, 'items': [],
+            }))
+    before = {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()}
+    page = html.fromstring(client.get(endpoint).data)
+    ordered = page.xpath('//button[contains(@class, "js-delete")]/@data-filename')
+    assert ordered == [f'Rechnung_{n}.pdf' for n in reversed(numbers)]
+    assert {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()} == before
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+def test_archive_sort_choices_use_numeric_numbers_and_customer_names(client, endpoint):
+    import os
+
+    from lxml import html
+
+    for index, (number, customer) in enumerate([('2026-07', 'Alpha'), ('2026-008', 'Zulu'), ('2026-011', 'Beta')]):
+        pdf = appmod.OUTPUT_DIR / f'Rechnung_{number}.pdf'
+        pdf.write_bytes(b'%PDF-1.4')
+        # Creation order deliberately differs from number and customer order.
+        stamp = 1_780_000_000 - index
+        os.utime(pdf, (stamp, stamp))
+        pdf.with_suffix('.json').write_text(json.dumps({'invoice': {'number': number}, 'buyer': {'name': customer}}))
+
+    def numbers(url):
+        page = html.fromstring(client.get(url).data)
+        return page.xpath('//span[@class="arch-id"]/text()')
+
+    assert numbers(endpoint + '?sort=number') == ['2026-011', '2026-008', '2026-07']
+    assert numbers(endpoint) == ['2026-011', '2026-008', '2026-07']  # remembered preference
+    assert numbers(endpoint + '?sort=customer') == ['2026-07', '2026-011', '2026-008']
+    assert numbers(endpoint + '?sort=created') == ['2026-07', '2026-008', '2026-011']
+    assert numbers(endpoint + '?sort=invalid') == ['2026-07', '2026-008', '2026-011']
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+def test_archive_sort_keeps_csv_dates(client, endpoint):
+    from lxml import html
+
+    (appmod.OUTPUT_DIR / 'Rechnung_2026-001.pdf').write_bytes(b'%PDF-1.4')
+    page = html.fromstring(client.get(endpoint, query_string={
+        'sort': 'customer', 'export_from': '2026-07-01', 'export_to': '2026-09-30',
+    }).data)
+    assert page.get_element_by_id('export-from').value == '2026-07-01'
+    assert page.get_element_by_id('export-to').value == '2026-09-30'
+    assert page.get_element_by_id('archive-sort-select').value == 'customer'
+
+
+@pytest.mark.parametrize("failure", ["xsd", "rules", "unavailable", "missing_xml", "wrong_xml"])
+def test_failed_validation_leaves_archive_customers_and_counter_unchanged(client, monkeypatch, failure):
+    _mock_generation(monkeypatch)
+    seller = appmod.SELLER_FILE.read_bytes()
+    appmod.CUSTOMERS_FILE.write_text('[{"name": "Example Client", "city": "Original"}]')
+    customers = appmod.CUSTOMERS_FILE.read_bytes()
+    if failure == "xsd":
+        monkeypatch.setattr(appmod, "validate_xml_bytes", lambda _: (False, ["Invalid XML"]))
+    elif failure in {"rules", "unavailable"}:
+        monkeypatch.setattr(appmod, "validate_schematron", lambda _: {
+            "available": failure != "unavailable", "ok": False, "errors": ["Failed rule"],
+        })
+    else:
+        monkeypatch.setattr(appmod, "extract_xml_from_pdf", lambda _: None if failure == "missing_xml" else b"<other/>")
+    response = export_invoice(client, data=_FORM)
+    assert response.status_code == 200
+    assert not list(appmod.OUTPUT_DIR.iterdir())
+    assert appmod.SELLER_FILE.read_bytes() == seller
+    assert appmod.CUSTOMERS_FILE.read_bytes() == customers
+    assert '/download/' not in response.text

@@ -19,14 +19,7 @@ Helpful details: affected version/commit, steps to reproduce, and impact.
   DNS-rebinding), input validation, a hardened XML parser, and an upload size limit.
 - The Werkzeug debugger is **off** by default (only `FLASK_DEBUG=1` enables it) and
   must never be enabled on a shared machine.
-- With `ERECHNUNG_DRAFT_IMPORT=1`, app requests that delete invoices/customers,
-  retire issuers or change existing issuer/customer details and saved items require
-  an expiring, single-use confirmation bound to the browser session, request and
-  previous data state. This is an accidental-change safeguard, **not human
-  authentication**: a program with app control can confirm its own request.
-  Direct filesystem writes, other app instances and the separate CLI prototype
-  are outside this safeguard. No per-agent permissions or OS authentication are
-  implemented. See [draft import](docs/draft-import.md#destruktive-aktionen).
+
 
 ## Data at rest
 
@@ -54,3 +47,12 @@ Protect this folder like any financial document folder:
 
 The software is provided without warranty of any kind (see `LICENSE`). It generates
 tax-relevant documents — always verify generated invoices yourself.
+
+## Confirmation of destructive changes
+
+The app requires an operation-bound confirmation before deleting or changing
+existing saved records. Confirmations are single-use, expire, and are invalidated
+by cancellation or a changed request/state. This is an accidental-change safeguard,
+not human authentication: software controlling the app can confirm the dialog.
+It does not cover direct file access or separate command-line tools. No agent
+connection, additional network listener, or per-agent authorization is enabled.

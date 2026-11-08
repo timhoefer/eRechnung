@@ -31,12 +31,30 @@ from flask import (
 )
 from werkzeug.datastructures import MultiDict
 
+import issuer_store
 from change_confirmation import Confirmations
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
+from invoice_archive import ArchiveError, archive_invoice, data_lock, recover_archive
+from invoice_core import (
+    UNITS,
+    datefmt_filter,
+    money_filter,
+    payment_days,
+    payment_terms_text,
+    price_filter,
+    qtyfmt_filter,
+    render_invoice_preview,
+    select_account,
+    suggest_invoice_number,
+    xrechnung_missing,
+)
+from invoice_core import safe_name as safe_name
+from invoice_core import seller_accounts as seller_accounts
 from invoice_draft import MAX_BYTES as DRAFT_MAX_BYTES
 from invoice_draft import DraftError, draft_form_values, parse_draft, validate_draft_amounts
+from issuer_store import seller_revision as seller_revision
 from version import __version__ as APP_VERSION
 from whats_new import ANNOUNCEMENT
 from zugferd import (
@@ -46,9 +64,7 @@ from zugferd import (
     build_xml,
     compute_totals,
     extract_xml_from_pdf,
-    fmt_money,
     loc,
-    q,
     render_html_pdf,
     validate_schematron,
     validate_xml_bytes,
@@ -178,6 +194,9 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
         profiles.setdefault(issuer, []).append(relative)
     # Keep each identity and its entire archive together, including the legacy one.
     for files in profiles.values():
+        profile = files[0].parent if files[0].name == "seller.json" else files[0].parent.parent
+        if (src_dir / profile / "output" / ".archive-pending").exists():
+            continue
         try:
             identical = all((ref_dir / p).is_file() and filecmp.cmp(src_dir / p, ref_dir / p, shallow=False)
                             for p in files)
@@ -223,6 +242,28 @@ _drop_identical(BASE, DATA_DIR)
 
 
 def set_data_dir(raw: str):
+    target = BASE if not (raw or "").strip() else Path(raw.strip()).expanduser()
+    if TEST_MODE and target.resolve() != BASE.resolve():
+        return False, "test_data_dir_locked"
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        # Keep profiles in place while another process finalizes an invoice.
+        # Nonblocking target acquisition also avoids opposing moves deadlocking.
+        with DATA_LOCK, data_lock(DATA_DIR), data_lock(target, blocking=False):
+            for profile in issuer_store.issuer_profiles(DATA_DIR):
+                directory = issuer_store.issuer_directory(DATA_DIR, profile["id"])
+                recover_archive(directory / "output", directory / "seller.json")
+            if target.resolve() != DATA_DIR.resolve():
+                for profile in issuer_store.issuer_profiles(target):
+                    directory = issuer_store.issuer_directory(target, profile["id"])
+                    if (directory / "output" / ".archive-pending").exists():
+                        return False, "data_dir_err_write"
+            return _set_data_dir(raw)
+    except (OSError, ValueError, ArchiveError):
+        return False, "data_dir_err_write"
+
+
+def _set_data_dir(raw: str):
     """Datenordner umstellen: prüfen, vorhandene Daten in den neuen Ordner
     verschieben (ohne zu überschreiben; Original erst nach verifizierter
     Kopie entfernt), Pfad speichern, globale Pfade aktualisieren. -> (ok, key)."""
@@ -369,12 +410,12 @@ class ChangeConfirmationRequired(Exception):
 
 
 def confirm_change(title: str, message: str, before, after, details: list[dict]) -> None:
-    """Protect writes in the experimental mode, while DATA_LOCK is held.
+    """Protect changes to saved data while DATA_LOCK is held.
 
     All handlers check before their first persistent side effect. The signature
     includes the complete request and current data, not a client 'confirmed' flag.
     """
-    if not has_request_context() or not app.config["DRAFT_IMPORT_ENABLED"]:
+    if not has_request_context():
         return
     owner = session.setdefault("change_confirmation_owner", secrets.token_urlsafe(24))
     fields = request.form.to_dict(flat=False)
@@ -411,8 +452,6 @@ def change_confirmation_required(error):
 
 @app.route("/changes/cancel", methods=["POST"])
 def change_confirmation_cancel():
-    if not app.config["DRAFT_IMPORT_ENABLED"]:
-        abort(404)
     CHANGE_CONFIRMATIONS.discard(request.form.get("token", ""), session.get("change_confirmation_owner", ""))
     if request.headers.get("X-Requested-With") != "fetch" and "back" in request.form:
         back = request.form["back"]
@@ -511,10 +550,17 @@ def _lock_data_changes():
     }:
         DATA_LOCK.acquire()
         g.data_locked = True
+        # Hold the shared process lock across the complete read/modify/write operation.
+        lock = data_lock(SELLER_FILE.parent)
+        lock.__enter__()
+        g.archive_lock = lock
 
 
 @app.teardown_request
 def _unlock_data_changes(error):
+    lock = g.pop("archive_lock", None)
+    if lock is not None:
+        lock.__exit__(None, None, None)
     if g.pop("data_locked", False):
         DATA_LOCK.release()
 
@@ -539,19 +585,10 @@ def _write_json(path: Path, data) -> None:
 # own seller.json and output directory; customers remain shared. Never switch
 # global paths when selecting an issuer: concurrent tabs must remain independent.
 def issuer_directory(issuer: str) -> Path:
-    if issuer == "default":
-        return SELLER_FILE.parent
-    if not re.fullmatch(r"[a-f0-9]{32}", issuer):
-        abort(400)
-    root = SELLER_FILE.parent / "issuers"
-    directory = root / issuer
-    if root.is_symlink() or directory.is_symlink() or not directory.is_dir():
-        abort(404)
-    if not (directory / "seller.json").is_file() or (directory / "seller.json").is_symlink():
-        abort(404)
-    if (directory / "output").is_symlink():
-        abort(404)
-    return directory
+    try:
+        return issuer_store.issuer_directory(SELLER_FILE.parent, issuer)
+    except issuer_store.IssuerError as exc:
+        return abort(400 if exc.code == "invalid_issuer" else 404)
 
 
 def _issuer_deleted(path: Path) -> bool:
@@ -593,6 +630,11 @@ def _select_issuer():
     g.issuer_id = issuer
     g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
     g.issuer_output_dir = OUTPUT_DIR if issuer == "default" else directory / "output"
+    if g.get("data_locked"):
+        try:
+            recover_archive(output_dir(), seller_file())
+        except (OSError, ValueError) as exc:
+            raise ArchiveError("archive_io", str(exc)) from exc
     if _issuer_deleted(g.issuer_seller_file) and request.endpoint not in archive_endpoints:
         kind = request.form.get("doc_type", request.args.get("doc_type"))
         source = request.form.get("correction_source", request.args.get("correction_source", ""))
@@ -618,7 +660,7 @@ def output_dir() -> Path:
 
 def issuer_scope() -> str:
     """Stable namespace for browser drafts belonging to this data directory."""
-    return hashlib.sha256(str(SELLER_FILE.parent.resolve()).encode()).hexdigest()[:16]
+    return issuer_store.issuer_scope(SELLER_FILE.parent)
 
 
 @app.url_defaults
@@ -638,38 +680,15 @@ def issuer_label(seller: dict) -> str:
 
 
 def issuer_profiles(*, include_deleted: bool = False) -> list[dict]:
-    ids = ["default"]
-    root = SELLER_FILE.parent / "issuers"
-    if root.is_dir() and not root.is_symlink():
-        ids += sorted(p.name for p in root.iterdir()
-                      if re.fullmatch(r"[a-f0-9]{32}", p.name) and p.is_dir() and not p.is_symlink()
-                      and (p / "seller.json").exists())
-    profiles = []
-    for issuer in ids:
-        path = SELLER_FILE if issuer == "default" else root / issuer / "seller.json"
-        if path.is_symlink():
-            continue
-        try:
-            seller = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-            deleted = isinstance(seller, dict) and seller.get("_deleted") is True
-            if deleted and not include_deleted:
-                continue
-            profiles.append({"id": issuer, "label": issuer_label(seller), "deleted": deleted})
-        except (OSError, ValueError, AttributeError):
-            # Keep an unreadable profile visible; selecting it surfaces the error
-            # instead of silently creating a replacement with a fresh counter.
-            profiles.append({"id": issuer, "label": translate(get_ui_lang(request))["issuer_unavailable"], "deleted": False})
-    return profiles
+    ui = translate(get_ui_lang(request))
+    profiles = issuer_store.issuer_profiles(SELLER_FILE.parent)
+    return [{**p, "label": p["label"] or ui["issuer_default" if p["available"] or (p["id"] == "default" and not SELLER_FILE.exists())
+                                            else "issuer_unavailable"]}
+            for p in profiles if include_deleted or not p["deleted"]]
 
 
 def default_issuer(profiles: list[dict] | None = None) -> str:
-    profiles = issuer_profiles() if profiles is None else profiles
-    try:
-        preference = json.loads((SELLER_FILE.parent / "issuer_preferences.json").read_text(encoding="utf-8"))
-        preferred = preference.get("default_issuer") if isinstance(preference, dict) else None
-    except (OSError, ValueError):
-        preferred = None
-    return next((p["id"] for p in profiles if p["id"] == preferred), profiles[0]["id"] if profiles else "default")
+    return issuer_store.default_issuer(SELLER_FILE.parent, issuer_profiles() if profiles is None else profiles)
 
 
 @app.context_processor
@@ -766,14 +785,6 @@ def issuer_restore():
     return redirect(url_for("index", edit_issuer="1"))
 
 
-@app.template_filter("price")
-def price_filter(value, lang="de"):
-    amount = _dec(value)
-    decimals = max(2, -int(amount.normalize().as_tuple().exponent))
-    text = f"{amount:,.{decimals}f}"
-    return text if lang == "en" else text.translate(str.maketrans(",.", ".,"))
-
-
 @app.template_global()
 def asset_version(filename: str) -> str:
     """Cache-Busting-Token aus der mtime der Static-Datei – automatisch, ohne
@@ -782,32 +793,6 @@ def asset_version(filename: str) -> str:
         return str(int((RESOURCE_BASE / "static" / filename).stat().st_mtime))
     except OSError:
         return "0"
-
-
-@app.template_filter("money")
-def money_filter(value, lang="de"):
-    return fmt_money(value, lang)
-
-
-@app.template_filter("datefmt")
-def datefmt_filter(value):
-    """ISO-Datum (YYYY-MM-DD) -> DD.MM.YYYY; unbekanntes Format unverändert."""
-    if not value:
-        return ""
-    try:
-        return datetime.strptime(str(value), "%Y-%m-%d").strftime("%d.%m.%Y")
-    except (ValueError, TypeError):
-        return str(value)
-
-
-@app.template_filter("qtyfmt")
-def qtyfmt_filter(value, lang="de"):
-    """Menge ohne überflüssige Nachkommastellen, lokalisiertes Dezimaltrennzeichen."""
-    d = Decimal(str(value))
-    s = format(d.normalize(), "f")
-    if lang != "en" and "." in s:
-        s = s.replace(".", ",")
-    return s
 
 
 def _country_sortkey(name: str) -> str:
@@ -895,12 +880,6 @@ def save_seller(data: dict) -> None:
     _write_json(seller_file(), data)
 
 
-def seller_revision(seller: dict) -> str:
-    # Invoice generation advances the counter without changing the master-data form.
-    fields = {key: value for key, value in seller.items() if key != "last_invoice_number"}
-    return hashlib.sha256(json.dumps(fields, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-
-
 def save_seller_form() -> tuple[dict, int]:
     """Compare and write under DATA_LOCK; an old tab must never overwrite newer data."""
     seller = load_seller()
@@ -914,7 +893,7 @@ def save_seller_form() -> tuple[dict, int]:
     if updated_revision != current_revision:
         existing_details = any(seller.get(key) for key in (*SELLER_FIELDS, "logo", "accounts")
                                if key not in {"profile_label", "country", "bank_kind"})
-        if existing_details and app.config["DRAFT_IMPORT_ENABLED"]:
+        if existing_details:
             details = change_details(seller, updated)
             if details:
                 ui = translate(get_ui_lang(request))
@@ -988,129 +967,14 @@ def apply_seller_form(seller: dict, form) -> dict:
     return seller
 
 
-def _norm_account(a: dict) -> dict:
-    """Ein Konto-Dict auf einheitliche Form bringen: alle Felder gesetzt (leer, falls
-    unbenutzt), 'kind' abgeleitet ("intl", wenn eine Kontonummer da ist, sonst "iban").
-    So können Templates und XML jedes Konto gleich behandeln."""
-    kind = a.get("kind") or ("intl" if (a.get("account_number") or "").strip() else "iban")
-    return {
-        "kind": kind,
-        "account_name": a.get("account_name", ""),
-        "bank_name": a.get("bank_name", ""),
-        "iban": a.get("iban", ""), "bic": a.get("bic", ""),
-        "account_number": a.get("account_number", ""),
-        "routing": a.get("routing", ""), "swift": a.get("swift", ""),
-    }
-
-
-def _acct_id(a: dict) -> str:
-    """Stabiler Schlüssel eines Kontos: Kontonummer (International) bzw. IBAN (SEPA)."""
-    return a["account_number"] if a["kind"] == "intl" else a["iban"]
-
-
-def seller_accounts(seller: dict) -> list:
-    """Alle Zahlungskonten: Hauptkonto (flache Felder) zuerst, danach die weiteren
-    aus seller['accounts']. Konten ohne Schlüssel (IBAN bzw. Kontonummer) werden
-    ausgelassen. Identifiziert wird ein Konto über diesen Schlüssel (stabil), nicht
-    über die Listenposition."""
-    out = []
-    primary = _norm_account({
-        "kind": seller.get("bank_kind"),
-        "account_name": seller.get("account_name", ""),
-        "bank_name": seller.get("bank_name", ""),
-        "iban": seller.get("iban", ""), "bic": seller.get("bic", ""),
-        "account_number": seller.get("account_number", ""),
-        "routing": seller.get("routing", ""), "swift": seller.get("swift", ""),
-    })
-    if _acct_id(primary).strip():
-        out.append(primary)
-    for a in (seller.get("accounts") or []):
-        na = _norm_account(a)
-        if _acct_id(na).strip():
-            out.append(na)
-    return out
-
-
-def _norm_iban(s) -> str:
-    return "".join(str(s or "").split()).upper()
-
-
-def select_account(seller: dict, key) -> dict | None:
-    """Konto anhand seines Schlüssels (IBAN bzw. Kontonummer) wählen. Zuerst per
-    Schlüssel matchen – so übersteht die Auswahl Umsortieren/Entfernen. Alt-Sidecars
-    enthalten noch einen numerischen Index; der greift nur, wenn kein Schlüssel passt.
-    Fallback: erstes Konto; None, wenn keins hinterlegt ist."""
-    accts = seller_accounts(seller)
-    if not accts:
-        return None
-    k = str(key or "").strip()
-    if k:
-        kn = _norm_iban(k)  # tolerant gegen Leerzeichen/Kleinschreibung
-        for a in accts:
-            if _norm_iban(_acct_id(a)) == kn:
-                return a
-    if k.isdigit():  # Alt-Sidecar: numerischer Index (nur ohne Schlüssel-Treffer)
-        i = int(k)
-        if 0 <= i < len(accts):
-            return accts[i]
-    return accts[0]
-
-
-def payment_terms_text(days: int, lang: str) -> str:
-    """Lokalisierter Zahlungsbedingungs-Satz aus dem Zahlungsziel (Tage)."""
-    if lang == "en":
-        unit = "day" if days == 1 else "days"
-        return f"Payable within {days} {unit} net."
-    unit = "Tag" if days == 1 else "Tagen"
-    return f"Zahlbar innerhalb von {days} {unit} ohne Abzug."
-
-
-def payment_days(form):
-    """Zahlungsziel in Tagen aus Fällig − Rechnungsdatum (None, wenn kein Fällig-Datum)."""
-    issue, due = form.get("issue_date"), form.get("due_date")
-    if not issue or not due:
-        return None
-    try:
-        d = (date.fromisoformat(due) - date.fromisoformat(issue)).days
-    except ValueError:
-        return None
-    return d if d >= 0 else None
-
-
-def xrechnung_missing(seller: dict, buyer: dict) -> list:
-    """Pflichtfelder, die XRechnung über EN16931 hinaus verlangt (BR-DE-*)."""
-    missing = []
-    if not seller.get("phone"):
-        missing.append("xr_seller_phone")
-    if not seller.get("email"):
-        missing.append("xr_seller_email")
-    if not buyer.get("email"):
-        missing.append("xr_buyer_email")
-    if not buyer.get("reference"):
-        missing.append("xr_buyer_ref")
-    return missing
-
-
-# Einheiten: menschenlesbares Label (de/en) -> UN/ECE-Code (für das XML).
-UNITS = [
-    ("HUR", {"de": "Stunde", "en": "Hour"}, {"de": "Stunden", "en": "Hours"}),
-    ("DAY", {"de": "Tag", "en": "Day"}, {"de": "Tage", "en": "Days"}),
-    ("WEE", {"de": "Woche", "en": "Week"}, {"de": "Wochen", "en": "Weeks"}),
-    ("MON", {"de": "Monat", "en": "Month"}, {"de": "Monate", "en": "Months"}),
-    ("ANN", {"de": "Jahr", "en": "Year"}, {"de": "Jahre", "en": "Years"}),
-    ("C62", {"de": "Stück", "en": "Piece"}, {"de": "Stück", "en": "Pieces"}),
-    ("LS", {"de": "Pauschal", "en": "Lump sum"}, {"de": "Pauschal", "en": "Lump sum"}),
-]
-
-
 def load_customers() -> list[dict]:
     if CUSTOMERS_FILE.exists():
         return json.loads(CUSTOMERS_FILE.read_text(encoding="utf-8"))
     return []
 
 
-def save_customers(customers: list[dict]) -> None:
-    if has_request_context() and app.config["DRAFT_IMPORT_ENABLED"]:
+def confirm_customer_changes(customers: list[dict]) -> None:
+    if has_request_context():
         before = load_customers()
         details = []
         removed = False
@@ -1127,14 +991,18 @@ def save_customers(customers: list[dict]) -> None:
             ui = translate(get_ui_lang(request))
             confirm_change(ui["customer"], ui["change_customer_delete" if removed else "change_customer_warning"],
                            before, customers, details)
+
+
+def save_customers(customers: list[dict]) -> None:
+    confirm_customer_changes(customers)
     _write_json(CUSTOMERS_FILE, customers)
 
 
-def upsert_customer(buyer: dict, previous_name: str = "") -> None:
+def prepare_customer_update(buyer: dict, previous_name: str = "") -> list[dict]:
     """Kunden anhand des Namens anlegen oder aktualisieren."""
-    if not buyer.get("name"):
-        return
     customers = load_customers()
+    if not buyer.get("name"):
+        return customers
     target = next((c for c in customers if previous_name and c["name"].lower() == previous_name.lower()), None)
     if target is not None and any(c is not target and c["name"].lower() == buyer["name"].lower() for c in customers):
         abort(app.make_response(({
@@ -1146,7 +1014,11 @@ def upsert_customer(buyer: dict, previous_name: str = "") -> None:
         customers.append(buyer)
     else:
         target.update(buyer)
-    save_customers(customers)
+    return customers
+
+
+def upsert_customer(buyer: dict, previous_name: str = "") -> None:
+    save_customers(prepare_customer_update(buyer, previous_name))
 
 
 def save_customer_items(name: str, items: list, buyer: dict) -> list:
@@ -1181,72 +1053,7 @@ def buyer_from_form(form) -> dict:
     }
 
 
-# --- Adressformatierung ----------------------------------------------------
-# Code -> {"de": ..., "en": ...} für den lokalisierten Ländernamen im Adressblock.
-COUNTRY_NAME = dict(COUNTRIES)
-
-# Länder, für die ein Bundesland/Staat im Adressblock landesüblich ist.
-ADDRESS_STATE_COUNTRIES = {"US", "CA", "AU"}
-
-
-def _clean(line: str) -> str:
-    """Mehrfach-Leerzeichen reduzieren, Ränder und verwaiste Kommata entfernen."""
-    line = re.sub(r"\s+", " ", line).strip()
-    line = re.sub(r"\s+,", ",", line)
-    return line.strip(" ,")
-
-
-def format_buyer_address(buyer: dict, lang: str) -> list[str]:
-    """Adresszeilen des Kunden landesüblich anordnen (rein für die PDF-Optik).
-
-    Das XML bleibt unberührt – dort sind alle Adressteile strukturiert.
-    """
-    lines: list[str] = []
-    if buyer.get("address_line"):
-        lines.append(buyer["address_line"].strip())
-
-    country = (buyer.get("country") or "DE").upper()
-    city = (buyer.get("city") or "").strip()
-    postcode = (buyer.get("postcode") or "").strip()
-    state = (buyer.get("state") or "").strip()
-
-    if country in ADDRESS_STATE_COUNTRIES and state:
-        if country == "US":
-            locality = [f"{city}, {state} {postcode}"]
-        else:  # CA, AU: "Stadt ST PLZ"
-            locality = [f"{city} {state} {postcode}"]
-    elif country == "GB":
-        locality = [city, postcode]  # UK: Stadt und Postcode auf eigenen Zeilen
-    else:
-        locality = [f"{postcode} {city}"]  # DE/EU-Standard: "PLZ Stadt"
-
-    for raw in locality:
-        cleaned = _clean(raw)
-        if cleaned:
-            lines.append(cleaned)
-
-    if country != "DE":
-        lines.append(loc(COUNTRY_NAME.get(country, {"de": country, "en": country}), lang))
-
-    return lines
-
-
-def format_seller_country(seller: dict, buyer: dict, lang: str) -> str:
-    """Absenderland in Rechnungssprache, wenn der Kunde im Ausland sitzt."""
-    seller_country = (seller.get("country") or "DE").strip().upper() or "DE"
-    buyer_country = (buyer.get("country") or "DE").strip().upper() or "DE"
-    if seller_country == buyer_country:
-        return ""
-    return loc(COUNTRY_NAME.get(seller_country, {"de": seller_country, "en": seller_country}), lang)
-
-
 # --- Helfer ----------------------------------------------------------------
-def suggest_invoice_number(seller: dict, used_numbers: list[str] | None = None) -> str:
-    year = date.today().year
-    numbers = [seller.get("last_invoice_number") or "", *(used_numbers or [])]
-    sequence = [int(m.group(1)) for number in numbers
-                if (m := re.fullmatch(fr"{year}-(\d+)", number))]
-    return f"{year}-{max(sequence, default=0) + 1:03d}"
 
 
 def _num_str(s) -> str:
@@ -1307,10 +1114,6 @@ def stored_items(items: list[dict]) -> list[dict]:
     return [{k: it[k] for k in SAVED_ITEM_FIELDS} for it in items]
 
 
-def safe_name(text: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_-]", "_", text)
-
-
 def load_draft(src: str | None) -> dict | None:
     """Sidecar-JSON einer archivierten Rechnung laden (für „als Vorlage öffnen")."""
     if not src:
@@ -1349,59 +1152,6 @@ def invoice_seller() -> dict:
         # the selected original, while preserving the retired marker and counter.
         return {**g.correction_original["seller"], **seller}
     return seller
-
-
-def render_invoice_preview(seller, buyer, inv, items, mode=""):
-    """Rechnungs-HTML für Live-Vorschau und neue Exporte rendern.
-    Rückgabe: (html, (line_total, discount, tax_basis, tax_total, grand_total, treatment))."""
-    inv_lang = inv.get("language") or "de"
-    tt = inv.get("tax_treatment", "de_19")
-    if tt not in TAX_TREATMENTS:
-        tt = "de_19"
-    treatment = TAX_TREATMENTS[tt]
-    computed, line_total, discount, tax_basis, tax_total, grand_total = compute_totals(
-        items, cast(Decimal, treatment["rate"]), _dec(inv.get("discount") or "0"),
-        inv.get("discount_type") or "abs",
-    )
-    # Anzahlung (BT-113): vom Brutto abziehen -> Zahlbetrag (BT-115).
-    prepaid = q(_dec(inv.get("prepaid") or "0"))
-    if prepaid < Decimal("0"):
-        prepaid = Decimal("0")
-    if prepaid > grand_total:
-        prepaid = grand_total
-    due_amount = q(grand_total - prepaid)
-    unit_labels = {code: loc(sg, inv_lang) for code, sg, pl in UNITS}
-    unit_labels_pl = {code: loc(pl, inv_lang) for code, sg, pl in UNITS}
-    body_class = "mini" if mode == "mini" else ("page" if mode else "")
-    bank = select_account(seller, inv.get("bank_account"))
-    html = render_template(
-        "invoice_pdf.html",
-        preview_base=(url_for("index", issuer=None)
-                      if has_request_context() and request.endpoint == "preview_html" else None),
-        ti=translate(inv_lang),
-        body_class=body_class,
-        seller=seller,
-        seller_country=format_seller_country(seller, buyer, inv_lang),
-        bank=bank,
-        buyer=buyer,
-        buyer_address_lines=format_buyer_address(buyer, inv_lang),
-        inv=inv,
-        items=computed,
-        unit_labels=unit_labels,
-        unit_labels_pl=unit_labels_pl,
-        treatment=treatment,
-        treatment_note=loc(treatment["note"], inv_lang),
-        treatment_label=loc(treatment["label"], inv_lang),
-        line_total=line_total,
-        discount=discount,
-        tax_basis=tax_basis,
-        tax_total=tax_total,
-        grand_total=grand_total,
-        prepaid=prepaid,
-        due_amount=due_amount,
-        D=Decimal,
-    )
-    return html, (line_total, discount, tax_basis, tax_total, grand_total, treatment)
 
 
 def _assemble(form):
@@ -1458,7 +1208,8 @@ def _assemble(form):
     }
 
     html, (line_total, discount, tax_basis, tax_total, grand_total, treatment) = \
-        render_invoice_preview(seller, buyer, inv, items, mode=form.get("_full") or "")
+        render_invoice_preview(seller, buyer, inv, items, mode=form.get("_full") or "",
+                               preview_base=url_for("index", issuer=None) if request.endpoint == "preview_html" else None)
     totals = {
         "line_total": line_total,
         "discount": discount,
@@ -1468,6 +1219,9 @@ def _assemble(form):
         "treatment_label": loc(treatment["label"], get_ui_lang(request)),
     }
     return data, html, totals
+
+
+app.jinja_env.filters.update(price=price_filter, money=money_filter, datefmt=datefmt_filter, qtyfmt=qtyfmt_filter)
 
 
 # --- Routen ----------------------------------------------------------------
@@ -1819,57 +1573,16 @@ def generate():
             flash(ui["need_xrechnung"] + " " + ", ".join(ui[k] for k in missing), "err")
             return redirect(url_for("index"))
 
-    # Kunde automatisch sichern (anlegen/aktualisieren)
-    upsert_customer(data["buyer"])
+    # Review implicit customer changes before publishing any invoice files.
+    # The shared lock keeps this reviewed state stable until the final write.
+    customers = prepare_customer_update(data["buyer"])
+    confirm_customer_changes(customers)
 
-    inv_number = data["invoice"]["number"]
     is_xr = data["invoice"]["profile"] == "xrechnung"
     xml = build_xml(data)
     # XRechnung: die einreichbare .xml ist der Hauptbeleg; das PDF ist nur ein
     # visuelles Sichtexemplar (kein eingebettetes XML). ZUGFeRD: ein hybrides PDF.
     pdf = render_html_pdf(html) if is_xr else build_pdf(html, xml)
-
-    # Archivieren – eine vorhandene Datei NIE überschreiben. Wird dieselbe
-    # Rechnungsnummer erneut verwendet (z. B. versehentlich), würde sonst eine
-    # evtl. korrekte Rechnung still zerstört. Bei Kollision eindeutigen Namen
-    # vergeben; beide bleiben im Archiv sichtbar, der Fehler ist korrigierbar.
-    stem = f"Rechnung_{safe_name(inv_number)}"
-    name, n = stem, 2
-    while True:
-        filename = f"{name}.pdf"
-        # Orphaned companion files are existing data too; reserve a fresh stem
-        # rather than replace an XML, source snapshot or CSV without a PDF.
-        if any((output_dir() / f"{name}.{suffix}").exists() for suffix in ("json", "xml", "csv")):
-            name = f"{stem} ({n})"
-            n += 1
-            continue
-        try:
-            # Exclusive creation also protects against a second app process.
-            with (output_dir() / filename).open("xb") as f:
-                f.write(pdf)
-            break
-        except FileExistsError:
-            name = f"{stem} ({n})"
-            n += 1
-    duplicate = name != stem
-    file_stem = Path(filename).stem
-    # XRechnung: standalone-XML neben das PDF legen (der eigentliche Beleg).
-    xml_filename = None
-    if is_xr:
-        xml_filename = f"{file_stem}.xml"
-        with (output_dir() / xml_filename).open("xb") as companion:
-            companion.write(xml)
-
-    # Sidecar mit den Formulardaten – ermöglicht „als Vorlage öffnen" und die
-    # Archiv-Vorschau. seller wird mitgespeichert, damit die Vorschau dem Stand
-    # zum Erzeugungszeitpunkt entspricht (auch wenn die Stammdaten sich ändern).
-    sidecar = {
-        "issuer_id": current_issuer(),
-        "seller": seller, "buyer": data["buyer"],
-        "invoice": data["invoice"], "items": data["items"],
-    }
-    with (output_dir() / f"{file_stem}.json").open("x", encoding="utf-8") as companion:
-        json.dump(sidecar, companion, indent=2, ensure_ascii=False)
 
     # Validierung: XSD-Struktur + EN16931/BR-DE-Geschäftsregeln (Schematron).
     # XRechnung direkt aus der standalone-XML, ZUGFeRD aus dem eingebetteten XML.
@@ -1881,17 +1594,28 @@ def generate():
         embedded = extract_xml_from_pdf(pdf)
         ok, messages = validate_xml_bytes(embedded) if embedded else (False, ["Kein XML im PDF gefunden."])
         sch = validate_schematron(embedded) if embedded else None
+        if embedded is not None and embedded != xml:
+            ok = False
+            messages.append(translate(get_ui_lang(request))["archive_xml_mismatch"])
     valid = bool(ok and sch and sch["available"] and sch["ok"] and not sch.get("error"))
 
-    # Letzte Rechnungsnummer merken
-    current_seller = load_seller()
-    last = current_seller.get("last_invoice_number", "")
-    old_standard = re.fullmatch(r"(\d{4})-(\d+)", last or "")
-    new_standard = re.fullmatch(r"(\d{4})-(\d+)", inv_number)
-    if not (old_standard and new_standard
-            and tuple(map(int, old_standard.groups())) > tuple(map(int, new_standard.groups()))):
-        current_seller["last_invoice_number"] = inv_number
-    save_seller(current_seller)
+    filename = xml_filename = None
+    reused = False
+    if valid:
+        try:
+            archived = archive_invoice(dict(data, issuer_id=current_issuer()), pdf, xml, output_dir(), seller_file(),
+                                       lock_directory=SELLER_FILE.parent,
+                                       allow_inactive=bool(g.get("correction_original")))
+        except ArchiveError:
+            raise
+        except (OSError, ValueError) as exc:
+            logger.exception("Invoice could not be archived")
+            raise ArchiveError("archive_io", str(exc)) from exc
+        filename = archived["filename"]
+        reused = archived["reused"]
+        xml_filename = str(Path(filename).with_suffix(".xml")) if is_xr else None
+        # Only update customer data after a successful final archive operation.
+        _write_json(CUSTOMERS_FILE, customers)
 
     return render_template(
         "result.html",
@@ -1904,8 +1628,18 @@ def generate():
         valid=valid,
         messages=messages,
         sch=sch,
-        duplicate=duplicate,
+        reused=reused,
     )
+
+
+@app.errorhandler(ArchiveError)
+def archive_error(error):
+    ui = translate(get_ui_lang(request))
+    key = "archive_number_conflict" if error.code == "number_conflict" else "archive_save_failed"
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"ok": False, "message": ui[key]}, 409
+    flash(ui[key], "err")
+    return redirect(url_for("index"))
 
 
 @app.route("/download/<path:filename>")
@@ -2095,7 +1829,9 @@ def check_updates():
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
-    for p in sorted(output_dir().glob("*.pdf"), reverse=True):
+    # Match the displayed timestamp; filename ordering misplaces 07 vs 008.
+    files = [(p.stat().st_mtime, p) for p in output_dir().glob("*.pdf")]
+    for modified_at, p in sorted(files, reverse=True):
         # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
         number, buyer_name, amount, currency = None, None, None, "EUR"
         sidecar = output_dir() / f"{p.stem}.json"
@@ -2122,7 +1858,7 @@ def _settings_context() -> dict:
         archive.append(
             {
                 "filename": p.name,
-                "modified": datetime.fromtimestamp(p.stat().st_mtime).strftime(
+                "modified": datetime.fromtimestamp(modified_at).strftime(
                     "%Y-%m-%d %H:%M"
                 ),
                 "has_draft": sidecar.exists(),
@@ -2136,8 +1872,19 @@ def _settings_context() -> dict:
                 "currency": currency,
             }
         )
+    archive_sort = request.args.get("sort", request.cookies.get("archive_sort", "created"))
+    if archive_sort not in {"created", "number", "customer"}:
+        archive_sort = "created"
+    if archive_sort == "number":
+        def number_key(row):
+            parts = re.split(r"([0-9]+)", row["number"] or row["filename"])
+            return tuple((1, int(p)) if p.isascii() and p.isdigit() else (0, p.casefold()) for p in parts)
+        archive.sort(key=number_key, reverse=True)  # stable: timestamp breaks equal-number ties
+    elif archive_sort == "customer":
+        archive.sort(key=lambda row: _country_sortkey(str(row["buyer"] or "")))
     return {
         "archive": archive,
+        "archive_sort": archive_sort,
         "archive_issuers": issuer_profiles(include_deleted=True),
         "default_issuer_id": default_issuer(),
         "data_dir": str(DATA_DIR),
@@ -2146,6 +1893,15 @@ def _settings_context() -> dict:
         "conflicts": data_conflicts(),
         "app_version": APP_VERSION,
     }
+
+
+@app.after_request
+def remember_archive_sort(response):
+    sort = request.args.get("sort")
+    if (request.endpoint in {"settings_panel", "validate"} and response.status_code == 200
+            and sort is not None and sort in {"created", "number", "customer"}):
+        response.set_cookie("archive_sort", sort, max_age=365 * 86400, httponly=True, samesite="Lax")
+    return response
 
 
 def _localized_validation():

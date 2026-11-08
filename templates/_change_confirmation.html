@@ -1,4 +1,3 @@
-{% if draft_import_enabled %}
 <dialog id="change-confirmation" class="modal change-confirmation" aria-labelledby="change-title" aria-describedby="change-message">
   <h3 id="change-title">{{ t.change_title }}</h3>
   <p id="change-message"></p>
@@ -13,4 +12,3 @@
   </form>
 </dialog>
 <script src="{{ url_for('static', filename='change_confirmation.js') }}?v={{ asset_version('change_confirmation.js') }}"></script>
-{% endif %}

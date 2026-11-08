@@ -25,7 +25,7 @@ pyobjc-framework-UniformTypeIdentifiers==12.2
 pyobjc-framework-WebKit==12.2
 pypdf==6.12.2
 pyphen==0.17.2
-saxonche==13.0.0
+saxonche==13.1.1
 setuptools==82.0.1
 tinycss2==1.5.1
 tinyhtml5==2.1.0

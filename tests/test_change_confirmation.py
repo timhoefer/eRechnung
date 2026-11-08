@@ -4,9 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 import pytest
+from confirmation_helpers import BUYER, add_other, invoice_fields, snapshot
+from confirmation_helpers import client as client
 from lxml import html
-from test_draft_import import BUYER, add_other, open_draft, snapshot, submitted
-from test_draft_import import client as client
 from werkzeug.datastructures import MultiDict
 
 import app as m
@@ -183,8 +183,7 @@ def test_fallback_cancel_never_redirects_to_untrusted_target(client, back):
 
 
 def test_generate_cannot_silently_overwrite_existing_customer(client):
-    response = open_draft(client)
-    fields = submitted(response)
+    fields = invoice_fields(client)
     fields['seller_revision'] = [m.seller_revision(m.load_seller())]
     fields['buyer_city'] = ['Hamburg']
     fields['number'] = ['TEST-1']
@@ -201,7 +200,7 @@ def test_generate_cannot_silently_overwrite_existing_customer(client):
 
 
 def test_export_cancel_page_exposes_scoped_draft_for_restoration(client):
-    fields = submitted(open_draft(client))
+    fields = invoice_fields(client)
     fields.update(buyer_city=['Hamburg'], number=['TEST-1'],
                   seller_revision=[m.seller_revision(m.load_seller())])
     form = MultiDict((k, v) for k, values in fields.items() for v in values)
@@ -217,12 +216,12 @@ def test_export_cancel_page_exposes_scoped_draft_for_restoration(client):
     assert not list(m.OUTPUT_DIR.iterdir())
 
 
-def test_flag_off_keeps_existing_app_behavior(client, monkeypatch):
-    monkeypatch.setitem(m.app.config, 'DRAFT_IMPORT_ENABLED', False)
+def test_confirmations_are_enabled_without_experimental_import(client):
     path, fields = change_case('customers/delete')
-    assert post(client, path, fields).json['ok']
-    assert client.post('/changes/cancel', data={'token': 'x'}).status_code == 404
-    assert 'change_confirmation.js' not in client.get('/').text
+    assert post(client, path, fields).status_code == 428
+    assert 'change_confirmation.js' in client.get('/').text
+    assert client.get('/drafts/import').status_code == 404
+    assert client.post('/drafts/open').status_code == 404
 
 
 def test_only_one_concurrent_request_can_consume_confirmation():
@@ -251,13 +250,13 @@ def test_default_normalization_does_not_prompt_for_unchanged_master_data(client)
 def test_orphaned_companions_are_preserved_on_export(client, suffix):
     original = m.OUTPUT_DIR / f'Rechnung_TEST-1.{suffix}'
     original.write_text('Keep this file')
-    fields = submitted(open_draft(client))
+    fields = invoice_fields(client)
     fields.update(number=['TEST-1'], issue_date=[date.today().isoformat()],
                   seller_revision=[m.seller_revision(m.load_seller())])
     form = MultiDict((k, v) for k, values in fields.items() for v in values)
-    assert post(client, '/generate', form).status_code == 200
+    assert post(client, '/generate', form).status_code == 409
     assert original.read_text() == 'Keep this file'
-    assert (m.OUTPUT_DIR / 'Rechnung_TEST-1 (2).pdf').is_file()
+    assert not list(m.OUTPUT_DIR.glob('*.pdf'))
 
 
 def test_desktop_csv_exports_never_overwrite_existing_files(client, monkeypatch):

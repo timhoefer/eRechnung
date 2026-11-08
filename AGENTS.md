@@ -1,7 +1,6 @@
 # Testing invoice workflows
 
 - Start manual/browser tests with `ERECHNUNG_TEST_MODE=1` (default port 5001).
-  Add `ERECHNUNG_DRAFT_IMPORT=1` when testing the experimental import/confirmations.
 - Never create test invoices through an installed production app or its data folder.
   Use fictional issuer/customer data in the temporary test directory.
 - The test mode owns a fresh, fixed data directory and invoice-number sequence for
