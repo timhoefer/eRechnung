@@ -88,6 +88,8 @@ RELEASE_ZIP="$BUILD_STAGE/eRechnung.app.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$RELEASE_ZIP"
 
 RELEASE_DMG="$BUILD_STAGE/eRechnung.dmg"
+# Nur der Hintergrund-Renderer braucht den Homebrew-Suchpfad, nicht die App.
+DYLD_FALLBACK_LIBRARY_PATH="${HOMEBREW_LIB:-/opt/homebrew/lib}${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}" \
 .venv/bin/python scripts/build_dmg.py --app "$APP" --output "$RELEASE_DMG"
 if [ -n "${SIGN_IDENTITY:-}" ]; then
   codesign --force --timestamp --sign "$SIGN_IDENTITY" "$RELEASE_DMG"
