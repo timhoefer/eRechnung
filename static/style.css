@@ -783,3 +783,12 @@ input[type="file"] { border: 1px dashed var(--line); padding: 14px; width: 100%;
 .drawer-body { flex: 1 1 auto; overflow: auto; }
 #drawer-frame { display: block; width: 100%; height: 100%; border: none; background: var(--drawer-frame); }
 body.drawer-open { overflow: hidden; }
+/* Experimental draft handoff: selection precedes the normal invoice form. */
+.draft-import-page { max-width: 780px; margin: 40px auto; padding: 0 20px; }
+.draft-import-fields { display: grid; gap: 18px; }
+.draft-import-table { overflow-x: auto; }
+.draft-import-table table { width: 100%; border-collapse: collapse; }
+.draft-import-table th, .draft-import-table td { text-align: left; padding: 12px 8px; vertical-align: top; }
+.draft-import-table td:first-child { white-space: pre-wrap; overflow-wrap: anywhere; }
+.draft-import-table th:nth-child(n+2), .draft-import-table td:nth-child(n+2) { text-align: right; white-space: nowrap; }
+.draft-import-link { margin: 14px 0 0; font-size: .85rem; }

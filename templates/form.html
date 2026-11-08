@@ -90,6 +90,10 @@
 <div class="layout">
 <div class="form-pane">
 <div id="form-content">
+{% if imported_draft %}
+<div class="flash ok" role="status">{{ t.draft_loaded }}</div>
+<noscript><div class="flash error">{{ t.draft_needs_js }}</div></noscript>
+{% endif %}
 {% if issuer_deleted %}
 <div class="card status" id="retired-issuer-notice">
   <strong>{{ issuer_name }} · {{ t.issuer_archived }}</strong>
@@ -120,8 +124,8 @@
 </div>
 {% endif %}
 
-{% if submitted_form is not none %}<div class="callout" id="export-conflict" role="alert">{{ t.export_master_conflict }}</div>{% endif %}
-<details class="card" id="master-data" {% if not seller.name or submitted_form is not none or request.args.get('edit_issuer') == '1' %}open{% endif %}>
+{% if submitted_form is not none and not imported_draft %}<div class="callout" id="export-conflict" role="alert">{{ t.export_master_conflict }}</div>{% endif %}
+<details class="card" id="master-data" {% if not seller.name or (submitted_form is not none and not imported_draft) or request.args.get('edit_issuer') == '1' %}open{% endif %}>
   <summary>
     <span class="summary-text"><strong>{{ t.master }}</strong>{% if issuers|length == 1 %} &mdash; {{ t.master_hint }}{% endif %}</span>
     {% if issuers|length > 1 and not issuer_deleted %}
@@ -533,9 +537,12 @@
     </div>
   </div>
   <div class="preview-actions">
-    <button type="submit" form="invoice-form" id="generate-btn" data-zug="{{ t.generate }}" data-xr="{{ t.generate_xr }}">{{ t.generate }}</button>
+    <button type="submit" form="invoice-form" id="generate-btn" data-zug="{{ t.generate }}" data-xr="{{ t.generate_xr }}" {% if imported_draft %}disabled{% endif %}>{{ t.generate }}</button>
     <button type="button" id="settings-toggle" class="btn-secondary" aria-expanded="false" aria-controls="settings-pane" data-open="{{ t.settings }}" data-close="{{ t.settings_close }}">{{ t.settings }}</button>
   </div>
+  {% if draft_import_enabled and not issuer_deleted %}
+  <p class="draft-import-link"><a href="{{ url_for('draft_import') }}" target="_blank" rel="noopener">{{ t.draft_import }}</a></p>
+  {% endif %}
 </aside>
 <p class="preview-note" data-zug="{{ t.app_sub }}" data-xr="{{ t.app_sub_xr }}">{{ t.app_sub }}</p>
 </div><!-- /preview-col -->
@@ -566,6 +573,7 @@
   window.CUSTOMERS = {{ customers|tojson }};
   window.DRAFT = {{ draft|tojson }};
   window.SUBMITTED_FORM = {{ submitted_form|tojson }};
+  window.IMPORTED_DRAFT = {{ imported_draft|tojson }};
   window.ISSUER_RETIRED = {{ issuer_deleted|tojson }};
   window.UI_LANG = {{ lang|tojson }};
   window.VAT_LABEL = {{ t.vat|tojson }};

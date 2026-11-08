@@ -28,10 +28,13 @@ from flask import (
     request,
     url_for,
 )
+from werkzeug.datastructures import MultiDict
 
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
+from invoice_draft import MAX_BYTES as DRAFT_MAX_BYTES
+from invoice_draft import DraftError, draft_form_values, parse_draft
 from version import __version__ as APP_VERSION
 from whats_new import ANNOUNCEMENT
 from zugferd import (
@@ -341,6 +344,7 @@ app = Flask(
 app.secret_key = os.environ.get("ERECHNUNG_SECRET_KEY") or secrets.token_hex(32)
 # Upload-/Form-Größe begrenzen (Schutz vor Speicher-DoS über /validate).
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
+app.config["DRAFT_IMPORT_ENABLED"] = os.environ.get("ERECHNUNG_DRAFT_IMPORT") == "1"
 # Templates bei Änderung neu laden, ohne Server-Neustart (Quell-Start). Vernachlässig-
 # barer Aufwand lokal; verhindert „neues CSS auf altem HTML" nach einem git pull.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -712,6 +716,7 @@ def inject_i18n():
         "countries": countries,
         "is_desktop": bool(app.config.get("DESKTOP")),
         "whats_new": whats_new_context(lang),
+        "draft_import_enabled": app.config["DRAFT_IMPORT_ENABLED"],
     }
 
 
@@ -1226,6 +1231,8 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
     bank = select_account(seller, inv.get("bank_account"))
     html = render_template(
         "invoice_pdf.html",
+        preview_base=(url_for("index", issuer=None)
+                      if has_request_context() and request.endpoint == "preview_html" else None),
         ti=translate(inv_lang),
         body_class=body_class,
         seller=seller,
@@ -1366,7 +1373,7 @@ DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änd
 
 
 @app.route("/")
-def index(submitted_form=None):
+def index(submitted_form=None, *, imported_draft=False):
     seller = invoice_seller()
     numbers = used_invoice_numbers()
     profiles = issuer_profiles(include_deleted=True)
@@ -1400,6 +1407,7 @@ def index(submitted_form=None):
         units=UNITS,
         draft=draft,
         submitted_form=submitted_form.to_dict(flat=False) if submitted_form is not None else None,
+        imported_draft=imported_draft,
         used_numbers=numbers,
         ref_invoices=archived_invoices(),
         first_run=first_run,
@@ -1407,6 +1415,85 @@ def index(submitted_form=None):
         suggested_data_dir=str(Path.home() / "Documents" / "eRechnung"),
         can_browse=(sys.platform == "darwin"),
     )
+
+
+def _read_imported_draft(raw: bytes) -> dict:
+    return parse_draft(raw, units={unit[0] for unit in UNITS}, treatments=set(TAX_TREATMENTS))
+
+
+def _draft_import_page(draft=None, *, error=None, status=200):
+    profiles = issuer_profiles()
+    customers = load_customers()
+    selected_issuer = profiles[0]["id"] if len(profiles) == 1 else ""
+    selected_customer = "new"
+    if draft:
+        hint = draft.get("issuer", "").casefold()
+        matches = [p for p in profiles if p["label"].casefold() == hint]
+        if len(matches) == 1:
+            selected_issuer = matches[0]["id"]
+        matches = [c for c in customers if c.get("name", "").casefold() == draft["customer"].casefold()]
+        selected_customer = "saved:" + matches[0]["name"] if len(matches) == 1 else ""
+    return render_template(
+        "draft_import.html", draft=draft, error=error,
+        issuers=profiles, customers=customers,
+        selected_issuer=selected_issuer, selected_customer=selected_customer,
+    ), status
+
+
+@app.route("/drafts/import", methods=["GET", "POST"])
+def draft_import():
+    if not app.config["DRAFT_IMPORT_ENABLED"]:
+        abort(404)
+    if request.method == "GET":
+        return _draft_import_page()
+    upload = request.files.get("draft_file")
+    try:
+        if upload is None:
+            raise DraftError("file")
+        draft = _read_imported_draft(upload.stream.read(DRAFT_MAX_BYTES + 1))
+    except DraftError as exc:
+        return _draft_import_page(error=exc, status=400)
+    return _draft_import_page(draft)
+
+
+@app.route("/drafts/open", methods=["POST"])
+def draft_open():
+    if not app.config["DRAFT_IMPORT_ENABLED"]:
+        abort(404)
+    try:
+        # Revalidate hidden form data too. No uploaded path, number, seller or bank
+        # field can reach the invoice form, even with a handcrafted request.
+        draft = _read_imported_draft(request.form.get("draft", "").encode("utf-8"))
+        if len(request.form.getlist("issuer")) != 1 or not request.form["issuer"]:
+            raise DraftError("selection")
+        choice = request.form.get("customer_choice", "")
+        if choice == "new":
+            buyer = {"name": draft["customer"], "country": "DE"}
+        else:
+            matches = [c for c in load_customers() if "saved:" + c.get("name", "") == choice]
+            if len(matches) != 1:
+                raise DraftError("selection")
+            buyer = matches[0]
+        fields = draft_form_values(draft, buyer)
+        fields["issuer"] = [current_issuer()]
+        issue = date.fromisoformat(draft["invoice"].get("issue_date", date.today().isoformat()))
+        try:
+            days = int(buyer.get("payment_term_days", DEFAULT_TERM_DAYS))
+        except (ValueError, TypeError):
+            days = DEFAULT_TERM_DAYS
+        days = days if 0 <= days <= 3650 else DEFAULT_TERM_DAYS
+        fields["buyer_payment_term_days"] = [str(days)]
+        if "due_date" not in fields:
+            try:
+                fields["due_date"] = [(issue + timedelta(days=days)).isoformat()]
+            except OverflowError as exc:
+                raise DraftError("invalid", "invoice.issue_date") from exc
+        elif date.fromisoformat(fields["due_date"][0]) < issue:
+            raise DraftError("invalid", "invoice.due_date")
+    except DraftError as exc:
+        return _draft_import_page(error=exc, status=400)
+    form = MultiDict((key, value) for key, values in fields.items() for value in values)
+    return index(submitted_form=form, imported_draft=True)
 
 
 @app.route("/settings", methods=["POST"])

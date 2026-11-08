@@ -22,6 +22,14 @@ Zwei Wege:
 
 Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern — sie werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 
+## Entwürfe importieren (experimentell)
+
+Ein experimenteller **Entwurfsimport** übernimmt vorbereitete Rechnungspositionen
+aus einer JSON-Datei ins normale Rechnungsformular. Aussteller und Kunde werden
+sichtbar zugeordnet; erstellt und archiviert wird erst nach Prüfung in der App.
+Die Funktion ist standardmäßig aus (`ERECHNUNG_DRAFT_IMPORT=1` zum Testen).
+[Anleitung, Agentenhinweise und Beispieldatei](docs/draft-import.md).
+
 ## Mehrere Rechnungsaussteller
 
 Über **Weitere Stammdaten anlegen** unten links in den Stammdaten kannst du weitere Profile

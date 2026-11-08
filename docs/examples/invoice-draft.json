@@ -1,0 +1,21 @@
+{
+  "format": "erechnung-draft",
+  "schema_version": 1,
+  "customer": "Example Client",
+  "issuer": "Example Studio",
+  "invoice": {
+    "currency": "EUR",
+    "language": "en",
+    "service_start": "2026-11-01",
+    "service_end": "2026-11-30"
+  },
+  "items": [
+    {
+      "description": "Design retainer (fictional example)",
+      "quantity": "15",
+      "unit": "DAY",
+      "unit_price": "800"
+    }
+  ]
+}
+

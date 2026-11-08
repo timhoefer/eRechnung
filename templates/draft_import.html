@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.draft_import }} · eRechnung</title>
+  {% include "_theme_script.html" %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_version('style.css') }}">
+</head>
+<body>
+<main class="draft-import-page">
+  <h1>{{ t.draft_import }}</h1>
+  <p class="hint">{{ t.draft_import_intro }}</p>
+  {% if error %}
+  <div class="flash error" role="alert">
+    {{ t['draft_error_' ~ error.code] }}{% if error.field %} ({{ error.field }}){% endif %}
+  </div>
+  {% endif %}
+  {% if draft %}
+  <section class="card" aria-labelledby="draft-contents-title">
+    <h2 id="draft-contents-title">{{ t.draft_contents }}</h2>
+    <p>{{ t.customer }}: <strong>{{ draft.customer }}</strong></p>
+    {% if draft.issuer %}<p>{{ t.issuer }}: <strong>{{ draft.issuer }}</strong></p>{% endif %}
+    <div class="draft-import-table">
+      <table>
+        <thead><tr><th>{{ t.description }}</th><th>{{ t.draft_quantity }}</th><th>{{ t.draft_unit_price }}</th></tr></thead>
+        <tbody>{% for item in draft['items'] %}
+          <tr><td>{{ item.description }}</td><td>{{ item.quantity }} {{ item.unit }}</td><td>{{ item.unit_price }} {{ draft.invoice.currency or 'EUR' }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+  <form class="card" method="post" action="{{ url_for('draft_open', issuer=None) }}">
+    <h2>{{ t.draft_assign }}</h2>
+    <p class="hint">{{ t.draft_assign_hint }}</p>
+    <textarea name="draft" hidden>{{ draft|tojson }}</textarea>
+    <div class="draft-import-fields">
+      <label>{{ t.issuer }}
+        <select name="issuer" required>
+          <option value="">{{ t.draft_choose }}</option>
+          {% for p in issuers %}<option value="{{ p.id }}" {{ 'selected' if p.id == selected_issuer else '' }}>{{ p.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>{{ t.customer }}
+        <select name="customer_choice" required>
+          <option value="">{{ t.draft_choose }}</option>
+          {% for c in customers %}<option value="saved:{{ c.name }}" {{ 'selected' if ('saved:' ~ c.name) == selected_customer else '' }}>{{ c.name }}</option>{% endfor %}
+          <option value="new">{{ t.draft_new_customer }}</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint">{{ t.draft_review_hint }}</p>
+    <button type="submit">{{ t.draft_open }}</button>
+  </form>
+  {% else %}
+  <form class="card" method="post" enctype="multipart/form-data" action="{{ url_for('draft_import') }}">
+    <label>{{ t.draft_file }}<input type="file" name="draft_file" accept=".json,application/json" required></label>
+    <p class="hint">{{ t.draft_file_hint }}</p>
+    <button type="submit">{{ t.draft_check }}</button>
+  </form>
+  {% endif %}
+  <p><a href="{{ url_for('draft_import') if draft else url_for('index') }}">{{ t.draft_other_file if draft else t.back_to_form }}</a></p>
+</main>
+</body>
+</html>
