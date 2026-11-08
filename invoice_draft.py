@@ -17,8 +17,12 @@ MAX_ITEMS = 100
 INVOICE_FIELDS = {
     "issue_date", "due_date", "service_start", "service_end", "currency",
     "language", "profile", "tax_treatment", "note",
+    "discount", "discount_type", "discount_reason", "prepaid", "prepaid_ref",
 }
-ITEM_FIELDS = {"description", "quantity", "unit", "unit_price", "item_start", "item_end"}
+ITEM_FIELDS = {
+    "description", "quantity", "unit", "unit_price", "item_start", "item_end",
+    "item_discount", "item_discount_type", "item_discount_reason",
+}
 
 
 class DraftError(ValueError):
@@ -72,6 +76,30 @@ def _dates(values: dict, fields: tuple[str, str], path: str) -> None:
         raise DraftError("invalid", f"{path}.{fields[1]}")
 
 
+def _amount(value, field: str) -> str:
+    value = _decimal(value, field)
+    if Decimal(value) != Decimal(value).quantize(Decimal("0.01")):
+        raise DraftError("invalid", field)
+    return value
+
+
+def _discount(values: dict, key: str, path: str) -> None:
+    kind, reason = f"{key}_type", f"{key}_reason"
+    if not {key, kind, reason}.intersection(values):
+        return
+    # An explicit type is required: "10" alone must never become 10% or EUR 10
+    # merely because the UI/XML renderer happens to have a different default.
+    if key not in values or kind not in values:
+        raise DraftError("fields", f"{path}.{key}")
+    if not isinstance(values[kind], str) or values[kind] not in {"pct", "abs"}:
+        raise DraftError("invalid", f"{path}.{kind}")
+    values[key] = (_amount if values[kind] == "abs" else _decimal)(values[key], f"{path}.{key}")
+    if values[kind] == "pct" and Decimal(values[key]) > 100:
+        raise DraftError("invalid", f"{path}.{key}")
+    if reason in values:
+        values[reason] = _text(values[reason], f"{path}.{reason}", 500)
+
+
 def _unique_keys(pairs: list[tuple[str, object]]) -> dict:
     result = {}
     for key, value in pairs:
@@ -110,6 +138,17 @@ def parse_draft(raw: bytes, *, units: set[str], treatments: set[str]) -> dict:
         raise DraftError("invalid", "invoice.currency")
     if "note" in inv:
         inv["note"] = _text(inv["note"], "invoice.note", 4000, multiline=True)
+    _discount(inv, "discount", "invoice")
+    if "prepaid" in inv:
+        inv["prepaid"] = _amount(inv["prepaid"], "invoice.prepaid")
+        if Decimal(inv["prepaid"]) > 0 and "tax_treatment" not in inv:
+            # The gross total is needed to reject overpayments rather than let
+            # the normal renderer silently cap the imported paid amount.
+            raise DraftError("prepaid_tax", "invoice.tax_treatment")
+    if "prepaid_ref" in inv:
+        if "prepaid" not in inv:
+            raise DraftError("fields", "invoice.prepaid")
+        inv["prepaid_ref"] = _text(inv["prepaid_ref"], "invoice.prepaid_ref", 500)
     _dates(inv, ("issue_date", "due_date"), "invoice")
     _dates(inv, ("service_start", "service_end"), "invoice")
     result["invoice"] = inv
@@ -126,10 +165,25 @@ def parse_draft(raw: bytes, *, units: set[str], treatments: set[str]) -> dict:
             raise DraftError("invalid", f"{path}.unit")
         if item["unit"] == "LS" and Decimal(item["quantity"]) != 1:
             raise DraftError("invalid", f"{path}.quantity")
+        _discount(item, "item_discount", path)
         _dates(item, ("item_start", "item_end"), path)
         items.append(item)
     result["items"] = items
     return result
+
+
+def validate_draft_amounts(draft: dict, computed: list[dict], line_total: Decimal,
+                          grand_total: Decimal) -> None:
+    """Reject clipping using totals from the app's shared calculation engine."""
+    for index, (item, calculated) in enumerate(zip(draft["items"], computed, strict=True)):
+        if (item.get("item_discount_type") == "abs"
+                and Decimal(item["item_discount"]) > calculated["gross"]):
+            raise DraftError("discount_limit", f"items[{index}].item_discount")
+    inv = draft["invoice"]
+    if inv.get("discount_type") == "abs" and Decimal(inv["discount"]) > line_total:
+        raise DraftError("discount_limit", "invoice.discount")
+    if Decimal(inv.get("prepaid", "0")) > grand_total:
+        raise DraftError("prepaid_limit", "invoice.prepaid")
 
 
 def draft_form_values(draft: dict, buyer: dict) -> dict[str, list[str]]:
@@ -144,5 +198,6 @@ def draft_form_values(draft: dict, buyer: dict) -> dict[str, list[str]]:
         fields[f"buyer_{key}"] = [str(buyer.get(key) or "")]
     fields["buyer_country"] = [buyer.get("country") or "DE"]
     for key in ITEM_FIELDS:
-        fields[key] = [item.get(key, "") for item in draft["items"]]
+        fallback = {"item_discount": "0", "item_discount_type": "pct"}.get(key, "")
+        fields[key] = [item.get(key, fallback) for item in draft["items"]]
     return fields

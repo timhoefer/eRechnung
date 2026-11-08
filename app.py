@@ -34,7 +34,7 @@ from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
 from invoice_draft import MAX_BYTES as DRAFT_MAX_BYTES
-from invoice_draft import DraftError, draft_form_values, parse_draft
+from invoice_draft import DraftError, draft_form_values, parse_draft, validate_draft_amounts
 from version import __version__ as APP_VERSION
 from whats_new import ANNOUNCEMENT
 from zugferd import (
@@ -1418,7 +1418,17 @@ def index(submitted_form=None, *, imported_draft=False):
 
 
 def _read_imported_draft(raw: bytes) -> dict:
-    return parse_draft(raw, units={unit[0] for unit in UNITS}, treatments=set(TAX_TREATMENTS))
+    draft = parse_draft(raw, units={unit[0] for unit in UNITS}, treatments=set(TAX_TREATMENTS))
+    inv = draft["invoice"]
+    # Positive prepayments require an explicit treatment in the portable format.
+    # Without prepayment, only net discount limits matter here (rate may be 0).
+    treatment = TAX_TREATMENTS.get(inv.get("tax_treatment"))
+    rate = cast(Decimal, treatment["rate"]) if treatment else Decimal("0")
+    computed, line, _, _, _, grand = compute_totals(
+        draft["items"], rate, Decimal(inv.get("discount", "0")), inv.get("discount_type", "abs"),
+    )
+    validate_draft_amounts(draft, computed, line, grand)
+    return draft
 
 
 def _draft_import_page(draft=None, *, error=None, status=200):

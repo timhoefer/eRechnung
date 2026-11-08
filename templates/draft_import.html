@@ -17,6 +17,10 @@
   </div>
   {% endif %}
   {% if draft %}
+  {% set currency = draft.invoice.currency or 'EUR' %}
+  {% macro discount_value(amount, kind, reason) -%}
+    {{ amount }} {{ '%' if kind == 'pct' else currency }}{% if reason %} · {{ reason }}{% endif %}
+  {%- endmacro %}
   <section class="card" aria-labelledby="draft-contents-title">
     <h2 id="draft-contents-title">{{ t.draft_contents }}</h2>
     <p>{{ t.customer }}: <strong>{{ draft.customer }}</strong></p>
@@ -25,10 +29,17 @@
       <table>
         <thead><tr><th>{{ t.description }}</th><th>{{ t.draft_quantity }}</th><th>{{ t.draft_unit_price }}</th></tr></thead>
         <tbody>{% for item in draft['items'] %}
-          <tr><td>{{ item.description }}</td><td>{{ item.quantity }} {{ item.unit }}</td><td>{{ item.unit_price }} {{ draft.invoice.currency or 'EUR' }}</td></tr>
+          <tr><td>{{ item.description }}{% if item.item_discount is defined %}<div class="hint">{{ t.discount }}: {{ discount_value(item.item_discount, item.item_discount_type, item.item_discount_reason) }}</div>{% endif %}</td><td>{{ item.quantity }} {{ item.unit }}</td><td>{{ item.unit_price }} {{ currency }}</td></tr>
         {% endfor %}</tbody>
       </table>
     </div>
+    {% if draft.invoice.discount is defined %}
+    <p>{{ t.draft_overall_discount }}: <strong>{{ discount_value(draft.invoice.discount, draft.invoice.discount_type, draft.invoice.discount_reason) }}</strong></p>
+    {% endif %}
+    {% if draft.invoice.prepaid is defined %}
+    <p>{{ t.prepaid }}: <strong>{{ draft.invoice.prepaid }} {{ currency }}</strong>{% if draft.invoice.prepaid_ref %} · {{ draft.invoice.prepaid_ref }}{% endif %}</p>
+    {% endif %}
+    {% if draft.invoice.discount is defined or draft.invoice.prepaid is defined %}<p class="hint">{{ t.draft_amounts_hint }}</p>{% endif %}
   </section>
   <form class="card" method="post" action="{{ url_for('draft_open', issuer=None) }}">
     <h2>{{ t.draft_assign }}</h2>

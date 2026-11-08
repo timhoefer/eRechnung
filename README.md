@@ -24,9 +24,11 @@ Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern 
 
 ## Entwürfe importieren (experimentell)
 
-Ein experimenteller **Entwurfsimport** übernimmt vorbereitete Rechnungspositionen
-aus einer JSON-Datei ins normale Rechnungsformular. Aussteller und Kunde werden
+Ein experimenteller **Entwurfsimport** übernimmt vorbereitete Rechnungspositionen,
+Rabatte und bereits geleistete Anzahlungen aus einer JSON-Datei ins normale
+Rechnungsformular. Aussteller und Kunde werden
 sichtbar zugeordnet; erstellt und archiviert wird erst nach Prüfung in der App.
+Die App kann dabei auch ein entsprechend beauftragter Agent bedienen.
 Die Funktion ist standardmäßig aus (`ERECHNUNG_DRAFT_IMPORT=1` zum Testen).
 [Anleitung, Agentenhinweise und Beispieldatei](docs/draft-import.md).
 
