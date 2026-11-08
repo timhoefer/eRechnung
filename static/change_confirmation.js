@@ -50,3 +50,37 @@ window.ChangeConfirmation = (() => {
   }
   return {fetch: confirmedFetch};
 })();
+
+// The full-page fallback uses a real POST even without JavaScript. With JS,
+// revoke first. Restore export fields explicitly: history alone does not reliably
+// retain dynamically filled customer and line-item controls across browsers.
+const changeCancelForm = document.getElementById("change-cancel-form");
+if (changeCancelForm) changeCancelForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  if (button?.disabled) return;
+  if (button) button.disabled = true;
+  const error = document.getElementById("change-cancel-error");
+  error.hidden = true;
+  try {
+    const response = await fetch(changeCancelForm.action, {
+      method: "POST", body: new FormData(changeCancelForm),
+      headers: {"X-Requested-With": "fetch"},
+    });
+    if (!response.ok) throw new Error("Cancellation failed");
+    if (changeCancelForm.dataset.draftKey) {
+      const draft = {};
+      for (const [key, value] of new FormData(document.getElementById("change-submit-form"))) {
+        if (key !== "_change_confirmation") (draft[key] ||= []).push(value);
+      }
+      sessionStorage.setItem(changeCancelForm.dataset.draftKey, JSON.stringify(draft));
+      window.location.assign(new FormData(changeCancelForm).get("back"));
+    } else {
+      history.back();
+    }
+  } catch (_) {
+    error.hidden = false;
+  } finally {
+    if (button) button.disabled = false;
+  }
+});

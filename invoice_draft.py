@@ -52,8 +52,9 @@ def _text(value, field: str, limit: int, *, multiline: bool = False) -> str:
 
 
 def _decimal(value, field: str, *, positive: bool = False) -> str:
-    # Decimal strings avoid locale ambiguity, float rounding and non-finite values.
-    if not isinstance(value, str) or not re.fullmatch(r"(?:0|[1-9]\d{0,8})(?:\.\d{1,6})?", value):
+    # ASCII only: Python Decimal accepts Unicode digits that browser number
+    # fields and JavaScript parseFloat reject or silently truncate.
+    if not isinstance(value, str) or not re.fullmatch(r"(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,6})?", value):
         raise DraftError("invalid", field)
     if positive and Decimal(value) == 0:
         raise DraftError("invalid", field)

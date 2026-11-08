@@ -8,9 +8,12 @@ kann, kann einen Vorschlag erzeugen.
 ## Ausprobieren
 
 Die Funktion ist standardmäßig unsichtbar und beide Import-Routen sind deaktiviert.
-Zum Testen aus diesem Quellstand: `ERECHNUNG_DRAFT_IMPORT=1 ./run.sh`.
+Zum Testen aus diesem Quellstand:
+`ERECHNUNG_TEST_MODE=1 ERECHNUNG_DRAFT_IMPORT=1 ./run.sh` (Port 5001).
 Die bestehende App-Version erhält die Funktion dadurch nicht.
-Für Tests einen separaten Datenordner mit Beispieldaten verwenden.
+Der Testmodus verwendet einen neuen temporären Datenordner, liest keine produktive
+Konfiguration und erlaubt keinen Wechsel in einen anderen Datenordner. Ausschließlich
+Beispieldaten verwenden; beim Beenden werden Testrechnungen und Testnummernlauf entfernt.
 
 1. Im Rechnungsfenster **Entwurf importieren** öffnen. Der Import öffnet einen
    neuen Tab; das bisherige Rechnungsformular bleibt erhalten. Alternativ direkt
@@ -79,6 +82,9 @@ Kundenänderungen, die beim Erzeugen einer Rechnung gespeichert würden.
 Änderungen an bestehenden Stammdaten/Kunden bleiben beim Tippen zunächst im
 Formular. Der Hinweis auf ungespeicherte Änderungen verweist auf den
 Speichern-Button; erst dort wird die Änderung zur Bestätigung vorgelegt.
+Vor einem Kundenwechsel warnt die App, wenn dabei ungespeicherte Kundendaten
+verloren gingen. Abbrechen erhält die Eingaben; „Verwerfen und wechseln“ verwirft
+sie ausdrücklich. Wer sie behalten möchte, kann vor dem Wechsel den Kunden speichern.
 Unveränderte Werte und neue Datensätze benötigen diese zusätzliche Rückfrage nicht.
 Ohne JavaScript liefert der Server für normale Formular-POSTs eine Bestätigungsseite.
 
@@ -86,8 +92,11 @@ Ein direkter Schreibaufruf ohne passende Bestätigung liefert HTTP 428 und nimmt
 die geschützte Änderung nicht vor. Die einmalige Bestätigung gilt fünf Minuten
 und ist an Browser-Sitzung, Datenordner, Aussteller, vollständige Anfrage und
 aktuellen Datenstand gebunden. Veraltete, abgelaufene oder bereits verwendete
-Bestätigungen erfordern eine neue Prüfung. Ein Abbruch im Dialog verwirft die
-Bestätigung. Ein Neustart verwirft alle offenen Bestätigungen. Die Prüfung und
+Bestätigungen erfordern eine neue Prüfung. Ein Abbruch im Dialog oder auf der
+separaten Bestätigungsseite widerruft die Bestätigung serverseitig, auch ohne
+JavaScript. Bei einem Verbindungsfehler bleibt die Seite mit einer Fehlermeldung
+geöffnet, statt einen erfolgreichen Abbruch vorzutäuschen.
+Ein Neustart verwirft alle offenen Bestätigungen. Die Prüfung und
 Änderung werden innerhalb derselben laufenden App gemeinsam gesperrt; dies ist
 keine Koordination zwischen mehreren Macs oder App-Prozessen.
 
@@ -128,7 +137,8 @@ daran nichts.
   `item_discount_reason`.
 - Einheiten: `HUR`, `DAY`, `WEE`, `MON`, `ANN`, `C62`, `LS`.
   Pauschalen (`LS`) müssen die Menge `"1"` haben.
-- Menge und **Netto-Einzelpreis** sind Dezimalzeichenketten mit Punkt:
+- Menge und **Netto-Einzelpreis** sind Dezimalzeichenketten mit Punkt und
+  ausschließlich Ziffern `0`–`9` (ebenso Rabatte und Anzahlungen):
   bis zu neun Vorkomma- und sechs Nachkommastellen, ohne Tausendertrenner oder
   Exponentialschreibweise. Menge > 0, Preis ≥ 0. Fehlende Preise werden abgelehnt.
 - Positionsrabatte: `item_discount` zusammen mit `item_discount_type` (`pct`

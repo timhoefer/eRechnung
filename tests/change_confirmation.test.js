@@ -99,3 +99,70 @@ test('an unrelated HTTP error is never treated as an approval request', async ()
   assert.equal(await h.api.fetch('/settings/autosave', {method: 'POST'}), response);
   assert.equal(h.calls.length, 1);
 });
+
+function cancellationPage(exportDraft = false) {
+  const button = {disabled: false}, error = {hidden: true};
+  let submit, finish, navigated = false;
+  const form = {action: '/changes/cancel', dataset: {draftKey: exportDraft ? 'erechnung:lang:scope:issuer' : ''},
+    addEventListener(type, handler) { submit = handler; }};
+  const original = {};
+  let stored, destination;
+  const context = vm.createContext({
+    window: {location: {assign(url) { destination = url; }}},
+    document: {getElementById: id => id === 'change-cancel-form' ? form : id === 'change-submit-form' ? original : error},
+    FormData: class extends URLSearchParams { constructor(source) { super(source === original
+      ? [['buyer_name', 'Customer'], ['description', 'First line'], ['description', 'Second line'], ['_change_confirmation', 'old-token']]
+      : [['token', 'pending-token'], ['back', '/?issuer=default']]); } },
+    sessionStorage: {setItem(key, value) { stored = {key, fields: JSON.parse(value)}; }},
+    history: {back() { navigated = true; }},
+    fetch: (url, options) => {
+      assert.equal(url, '/changes/cancel');
+      assert.equal(options.method, 'POST');
+      assert.equal(options.body.get('token'), 'pending-token');
+      assert.equal(options.headers['X-Requested-With'], 'fetch');
+      return new Promise(resolve => { finish = resolve; });
+    },
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../static/change_confirmation.js'), 'utf8'), context);
+  return {button, error, submit: () => submit({submitter: button, preventDefault() {}}),
+    finish: response => finish(response), navigated: () => navigated,
+    stored: () => stored, destination: () => destination};
+}
+
+test('fallback cancellation waits for server revocation before restoring the draft', async () => {
+  const h = cancellationPage();
+  const pending = h.submit();
+  assert.equal(h.button.disabled, true);
+  assert.equal(h.navigated(), false);
+  h.finish({ok: true});
+  await pending;
+  assert.equal(h.navigated(), true);
+  assert.equal(h.error.hidden, true);
+});
+
+test('failed fallback cancellation stays on the page and allows retry', async () => {
+  const h = cancellationPage();
+  const pending = h.submit();
+  h.finish({ok: false});
+  await pending;
+  assert.equal(h.navigated(), false);
+  assert.equal(h.button.disabled, false);
+  assert.equal(h.error.hidden, false);
+  const retry = h.submit();
+  h.finish({ok: true});
+  await retry;
+  assert.equal(h.navigated(), true);
+});
+
+test('cancelled export restores customer and every invoice line without retaining the approval token', async () => {
+  const h = cancellationPage(true);
+  const pending = h.submit();
+  assert.equal(h.stored(), undefined);
+  h.finish({ok: true});
+  await pending;
+  assert.deepEqual(h.stored(), {key: 'erechnung:lang:scope:issuer', fields: {
+    buyer_name: ['Customer'], description: ['First line', 'Second line'],
+  }});
+  assert.equal(h.destination(), '/?issuer=default');
+  assert.equal(h.navigated(), false);
+});

@@ -16,13 +16,18 @@
       <tbody>{% for row in confirmation.details %}<tr><th>{{ row.label }}</th><td>{{ row.before }}</td><td>{{ row.after }}</td></tr>{% endfor %}</tbody>
     </table>
   </div>
-  <form method="post" action="{{ action }}" class="modal-actions">
+  <form id="change-cancel-form" method="post" action="{{ confirmation.cancel_url }}" data-draft-key="{{ draft_key }}">
+    <input type="hidden" name="token" value="{{ confirmation.token }}">
+    <input type="hidden" name="back" value="{{ back }}">
+  </form>
+  <p id="change-cancel-error" class="callout" role="alert" hidden>{{ t.action_failed }}</p>
+  <form id="change-submit-form" method="post" action="{{ action }}" class="modal-actions">
     {% for name, values in fields %}{% if name != '_change_confirmation' %}{% for value in values %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}{% endif %}{% endfor %}
     <input type="hidden" name="_change_confirmation" value="{{ confirmation.token }}">
-    <button type="button" class="secondary" onclick="history.back()" autofocus>{{ t.cancel }}</button>
-    <noscript><a href="{{ back }}">{{ t.back_to_form }}</a></noscript>
+    <button type="submit" form="change-cancel-form" class="secondary" autofocus>{{ t.cancel }}</button>
     <button type="submit" class="danger">{{ t.change_confirm }}</button>
   </form>
 </main>
+<script src="{{ url_for('static', filename='change_confirmation.js') }}?v={{ asset_version('change_confirmation.js') }}"></script>
 </body>
 </html>

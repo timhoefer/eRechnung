@@ -146,10 +146,40 @@ def test_normal_form_confirmation_preserves_repeated_fields_and_escapes_text(cli
     assert response.status_code == 428
     page = html.fromstring(response.data)
     assert not page.xpath('//script[not(@src) and contains(text(), "alert(1)")]')
-    inputs = page.xpath('//form/input')
+    inputs = page.xpath('//form[@id="change-submit-form"]/input')
     restored = MultiDict((n.get('name'), n.get('value')) for n in inputs)
     assert restored.getlist('description') == ['New service', '<script>alert(1)</script>']
     assert client.post(path, data=restored).json['ok']
+
+
+@pytest.mark.parametrize('kind', ['customers/delete', 'customers/save', 'archive'])
+def test_fallback_cancel_revokes_form_without_javascript(client, kind):
+    path, fields = change_case(kind)
+    before = snapshot()
+    page = html.fromstring(client.post(path, data=fields).data)
+    cancel_button = page.xpath('//button[@form="change-cancel-form"]')[0]
+    assert cancel_button.get('type') == 'submit'
+    cancel = page.get_element_by_id(cancel_button.get('form'))
+    cancel_fields = {n.get('name'): n.get('value') for n in cancel.xpath('./input')}
+    response = client.post(cancel.get('action'), data=cancel_fields)
+    assert response.status_code == 303
+    assert response.headers['Location'] == '/?issuer=default'
+    assert snapshot() == before
+    original = MultiDict((n.get('name'), n.get('value'))
+                         for n in page.xpath('//form[@id="change-submit-form"]/input'))
+    # Replaying the cancelled page now requires a completely new confirmation.
+    assert client.post(path, data=original).status_code == 428
+    assert snapshot() == before
+
+
+@pytest.mark.parametrize('back', ['https://example.org/', '//example.org/', '/archive/delete'])
+def test_fallback_cancel_never_redirects_to_untrusted_target(client, back):
+    path, fields = change_case('customers/delete')
+    change = post(client, path, fields).json['confirmation']
+    response = client.post(change['cancel_url'], data={'token': change['token'], 'back': back})
+    assert response.status_code == 303
+    assert response.headers['Location'] == '/'
+    assert post(client, path, fields, change['token']).status_code == 428
 
 
 def test_generate_cannot_silently_overwrite_existing_customer(client):
@@ -168,6 +198,23 @@ def test_generate_cannot_silently_overwrite_existing_customer(client):
     assert approved.status_code == 200
     assert m.load_customers()[0]['city'] == 'Hamburg'
     assert (m.OUTPUT_DIR / 'Rechnung_TEST-1.pdf').is_file()
+
+
+def test_export_cancel_page_exposes_scoped_draft_for_restoration(client):
+    fields = submitted(open_draft(client))
+    fields.update(buyer_city=['Hamburg'], number=['TEST-1'],
+                  seller_revision=[m.seller_revision(m.load_seller())])
+    form = MultiDict((k, v) for k, values in fields.items() for v in values)
+    response = client.post('/generate?issuer=default', data=form)
+    assert response.status_code == 428
+    page = html.fromstring(response.data)
+    cancel = page.get_element_by_id('change-cancel-form')
+    assert cancel.get('data-draft-key') == f'erechnung:lang:{m.issuer_scope()}:default'
+    restored = MultiDict((n.get('name'), n.get('value'))
+                         for n in page.xpath('//form[@id="change-submit-form"]/input'))
+    assert restored.getlist('description') == fields['description']
+    assert restored['buyer_city'] == 'Hamburg'
+    assert not list(m.OUTPUT_DIR.iterdir())
 
 
 def test_flag_off_keeps_existing_app_behavior(client, monkeypatch):

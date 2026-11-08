@@ -68,7 +68,8 @@ else:
     BASE = Path(__file__).parent
 
 
-if "--selftest" in sys.argv:
+TEST_MODE = os.environ.get("ERECHNUNG_TEST_MODE") == "1"
+if TEST_MODE or "--selftest" in sys.argv:
     _SELFTEST_DIR = tempfile.TemporaryDirectory(prefix="erechnung-selftest-")
     BASE = Path(_SELFTEST_DIR.name)
 BASE.mkdir(parents=True, exist_ok=True)
@@ -141,6 +142,8 @@ def _load_app_config() -> dict:
 def _resolve_data_dir() -> Path:
     """Datenordner aus config.json (vom Nutzer wählbar, z. B. Dropbox);
     Fallback auf den App-Ordner. App bleibt offline – nur dieser Ordner zählt."""
+    if TEST_MODE:
+        return BASE
     raw = (_load_app_config().get("data_dir") or "").strip()
     if raw:
         p = Path(raw).expanduser()
@@ -228,6 +231,8 @@ def set_data_dir(raw: str):
 
     raw = (raw or "").strip()
     target = BASE if not raw else Path(raw).expanduser()
+    if TEST_MODE and target.resolve() != BASE.resolve():
+        return False, "test_data_dir_locked"
     try:
         target.mkdir(parents=True, exist_ok=True)
         # Never overwrite a pre-existing file just to check directory access.
@@ -398,6 +403,7 @@ def change_confirmation_required(error):
             "confirm_change.html", confirmation=error.confirmation,
             action=request.full_path.rstrip("?"), fields=request.form.lists(),
             back=url_for("index"),
+            draft_key=f"erechnung:lang:{issuer_scope()}:{current_issuer()}" if request.endpoint == "generate" else "",
         ), 428))
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -408,6 +414,12 @@ def change_confirmation_cancel():
     if not app.config["DRAFT_IMPORT_ENABLED"]:
         abort(404)
     CHANGE_CONFIRMATIONS.discard(request.form.get("token", ""), session.get("change_confirmation_owner", ""))
+    if request.headers.get("X-Requested-With") != "fetch" and "back" in request.form:
+        back = request.form["back"]
+        parsed = urlparse(back)
+        if parsed.scheme or parsed.netloc or parsed.path != "/":
+            back = url_for("index", issuer=None)
+        return redirect(back, code=303)
     return "", 204
 
 
@@ -1525,7 +1537,7 @@ def index(submitted_form=None, *, imported_draft=False):
     # Erststart: noch kein Datenordner gewählt UND keine Stammdaten -> beim ersten
     # Öffnen aktiv nach dem Speicherort fragen (Vorschlag: sichtbarer Dokumente-Ordner
     # statt des versteckten Application-Support-Standards).
-    first_run = "data_dir" not in _load_app_config() and not SELLER_FILE.exists()
+    first_run = not TEST_MODE and "data_dir" not in _load_app_config() and not SELLER_FILE.exists()
     return render_template(
         "form.html",
         seller=seller,
@@ -1665,7 +1677,7 @@ def customers_autosave():
     if not buyer["name"]:
         return ("", 204)
     upsert_customer(buyer, request.form.get("prev_name", "").strip())
-    return {"name": buyer["name"]}
+    return {"name": buyer["name"], "customer": buyer}
 
 
 @app.route("/customers/items/save", methods=["POST"])
@@ -2083,7 +2095,9 @@ def check_updates():
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
-    for p in sorted(output_dir().glob("*.pdf"), reverse=True):
+    # Match the displayed timestamp; filename ordering misplaces 07 vs 008.
+    files = [(p.stat().st_mtime, p) for p in output_dir().glob("*.pdf")]
+    for modified_at, p in sorted(files, reverse=True):
         # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
         number, buyer_name, amount, currency = None, None, None, "EUR"
         sidecar = output_dir() / f"{p.stem}.json"
@@ -2110,7 +2124,7 @@ def _settings_context() -> dict:
         archive.append(
             {
                 "filename": p.name,
-                "modified": datetime.fromtimestamp(p.stat().st_mtime).strftime(
+                "modified": datetime.fromtimestamp(modified_at).strftime(
                     "%Y-%m-%d %H:%M"
                 ),
                 "has_draft": sidecar.exists(),
@@ -2124,8 +2138,19 @@ def _settings_context() -> dict:
                 "currency": currency,
             }
         )
+    archive_sort = request.args.get("sort", request.cookies.get("archive_sort", "created"))
+    if archive_sort not in {"created", "number", "customer"}:
+        archive_sort = "created"
+    if archive_sort == "number":
+        def number_key(row):
+            parts = re.split(r"([0-9]+)", row["number"] or row["filename"])
+            return tuple((1, int(p)) if p.isascii() and p.isdigit() else (0, p.casefold()) for p in parts)
+        archive.sort(key=number_key, reverse=True)  # stable: timestamp breaks equal-number ties
+    elif archive_sort == "customer":
+        archive.sort(key=lambda row: _country_sortkey(str(row["buyer"] or "")))
     return {
         "archive": archive,
+        "archive_sort": archive_sort,
         "archive_issuers": issuer_profiles(include_deleted=True),
         "default_issuer_id": default_issuer(),
         "data_dir": str(DATA_DIR),
@@ -2134,6 +2159,15 @@ def _settings_context() -> dict:
         "conflicts": data_conflicts(),
         "app_version": APP_VERSION,
     }
+
+
+@app.after_request
+def remember_archive_sort(response):
+    sort = request.args.get("sort")
+    if (request.endpoint in {"settings_panel", "validate"} and response.status_code == 200
+            and sort is not None and sort in {"created", "number", "customer"}):
+        response.set_cookie("archive_sort", sort, max_age=365 * 86400, httponly=True, samesite="Lax")
+    return response
 
 
 def _localized_validation():
@@ -2366,4 +2400,6 @@ if __name__ == "__main__":
     # Exception Code-Ausführung und leakt Quellcode/Variablen (z. B. Bankdaten).
     # Nur bei Bedarf in der Entwicklung via FLASK_DEBUG=1 einschalten.
     debug = os.environ.get("FLASK_DEBUG") == "1"
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5000)), debug=debug)
+    if TEST_MODE:
+        print(f"Testmodus: separater Datenordner {BASE}; wird beim Beenden entfernt.")
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5001 if TEST_MODE else 5000)), debug=debug)

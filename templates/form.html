@@ -62,6 +62,16 @@
   </form>
 </dialog>{% endif %}
 
+{% if draft_import_enabled %}
+<dialog id="customer-switch-dialog" class="modal" aria-labelledby="customer-switch-title">
+  <h3 id="customer-switch-title">{{ t.customer_switch_title }}</h3>
+  <p>{{ t.customer_switch_warning }}</p>
+  <form method="dialog" class="modal-actions">
+    <button value="cancel" class="secondary" autofocus>{{ t.cancel }}</button>
+    <button value="discard" class="danger">{{ t.customer_switch_discard }}</button>
+  </form>
+</dialog>
+{% endif %}
 <dialog id="issuer-switch-dialog" class="modal" aria-labelledby="issuer-switch-title">
   <h3 id="issuer-switch-title">{{ t.issuer_switch_title }}</h3>
   <p>{{ t.issuer_switch_confirm }}</p>

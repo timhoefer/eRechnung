@@ -191,6 +191,8 @@ def test_script_text_remains_literal_and_hidden_json_roundtrips(client):
     (("items", 0, "unit_price"), "1,000"), (("items", 0, "quantity"), True),
     (("items", 0, "unit_price"), 800), (("items", 0, "unit_price"), "NaN"),
     (("items", 0, "unit_price"), "1e1000"), (("items", 0, "unit_price"), "-5"),
+    (("items", 0, "unit_price"), "1２0"), (("items", 0, "unit_price"), "1.٢"),
+    (("items", 0, "quantity"), "1٢"), (("items", 0, "quantity"), "0.５"),
     (("items", 0, "quantity"), "0"), (("items", 0, "unit"), "days"),
     (("items", 1, "quantity"), "2"), (("items", 0, "description"), ""),
     (("items",), []), (("items",), [PROPOSAL["items"][0]] * 101),
@@ -319,14 +321,17 @@ def test_discount_and_prepaid_visible_at_review_and_preserved_without_writes(cli
 
 @pytest.mark.parametrize("section,field,value", [
     ("invoice", "discount", "-1"), ("invoice", "discount", True),
+    ("invoice", "discount", "1２"), ("invoice", "discount", "0.５"),
     ("invoice", "discount_type", "eur"), ("invoice", "discount_type", []),
     ("invoice", "discount_reason", "x" * 501),
     ("invoice", "discount_reason", "\ud800"),
     ("invoice", "prepaid", "-1"), ("invoice", "prepaid", 100),
+    ("invoice", "prepaid", "1２0"), ("invoice", "prepaid", "1.٢"),
     ("invoice", "prepaid", "100,50"), ("invoice", "prepaid", "NaN"),
     ("invoice", "prepaid", "1.001"), ("invoice", "prepaid_ref", []),
     ("invoice", "prepaid_ref", "x" * 501),
     ("item", "item_discount", "NaN"), ("item", "item_discount", "-1"),
+    ("item", "item_discount", "1２"), ("item", "item_discount", "0.٥"),
     ("item", "item_discount_type", {}), ("item", "item_discount_type", "percent"),
     ("item", "item_discount_reason", "x" * 501),
 ])

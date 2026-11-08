@@ -212,6 +212,15 @@ bereits beim Laden der App einen temporären Datenordner.
 
 Für lokale Prüfungen:
 
+Interaktive Entwicklungstests starten mit `ERECHNUNG_TEST_MODE=1 ./run.sh` auf
+http://127.0.0.1:5001 (Port über `PORT` änderbar). Jeder Start verwendet einen
+frischen temporären Datenordner für Stammdaten, Kunden, Archiv und Nummernlauf.
+Produktive Konfiguration wird nicht gelesen; ein Wechsel in einen anderen
+Datenordner ist in diesem Modus gesperrt. Beim Beenden werden die Testdaten entfernt.
+Es gibt dafür keine zusätzliche Einstellung in der normalen App.
+Auch pytest isoliert den Datenordner bereits vor dem ersten Import der App.
+Für Tests nur fiktive Daten verwenden; niemals gegen eine laufende produktive Instanz testen.
+
 ```bash
 .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt pypdf==6.12.2
 ERECHNUNG_REQUIRE_INTEGRATION=1 .venv/bin/python -m pytest -q

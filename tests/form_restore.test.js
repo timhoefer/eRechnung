@@ -397,11 +397,13 @@ test("archive selection stays with visible invoices while loading and after a fa
   app.URLSearchParams = URLSearchParams;
   app.window.location = {href: "http://localhost/"};
   const select = {value: "other", options: [{value: "current", defaultSelected: true}, {value: "other"}]};
-  const form = {action: "/settings/panel", querySelector: () => select};
-  app.FormData = class { constructor() { return new URLSearchParams({issuer: select.value}); } };
+  const sort = {value: "number", options: [{value: "created", defaultSelected: true}, {value: "number"}]};
+  const form = {action: "/settings/panel", querySelectorAll: () => [select, sort]};
+  app.FormData = class { constructor() { return new URLSearchParams({issuer: select.value, sort: sort.value}); } };
   let finish;
   app.fetch = (url) => {
     assert.equal(new URL(url).searchParams.get("issuer"), "other");
+    assert.equal(new URL(url).searchParams.get("sort"), "number");
     return new Promise((resolve) => { finish = resolve; });
   };
   const switching = app.switchArchive(form);
@@ -784,4 +786,126 @@ test('customer autosave leaves an overwrite pending without showing a dialog', a
   };
   await app.autosaveCustomer();
   assert.equal(notice.hidden, false);
+});
+
+function customerSwitchForm() {
+  const app = loadApp();
+  const fields = Object.fromEntries(Object.entries({buyer_name: '', buyer_city: '',
+    buyer_country: 'DE', buyer_payment_term_days: '14'}).map(([name, initial]) => {
+      let value = initial;
+      return [name, {name, get value() { return value; }, set value(v) { value = String(v); }}];
+    }));
+  const notice = {hidden: true};
+  const form = {
+    querySelectorAll: () => Object.values(fields),
+    querySelector: selector => fields[selector.match(/name=["']([^"']+)["']/)?.[1]] || null,
+  };
+  const prompts = [], answers = [];
+  let close;
+  const dialog = {
+    returnValue: '',
+    addEventListener(event, handler) { close = handler; },
+    showModal() {
+      prompts.push({name: fields.buyer_name.value, city: fields.buyer_city.value});
+      this.returnValue = answers.shift() || 'cancel';
+      close();
+    },
+  };
+  app.document.getElementById = id => ({'invoice-form': form, 'customer-change-pending': notice,
+    'customer-switch-dialog': dialog}[id] || null);
+  app.document.querySelector = selector => form.querySelector(selector);
+  app.FormData = class extends Map { append(key, value) { this.set(key, value); } };
+  app.setTimeout = fn => { app.debounce = fn; return 1; };
+  app.clearTimeout = () => { app.debounce = null; };
+  app.window.CUSTOMERS = [{name: 'A', city: 'Berlin', country: 'DE', items: [{description: 'Saved item'}]},
+    {name: 'B', city: 'Leipzig', country: 'DE'}];
+  app.window.ChangeConfirmation = {};
+  app.window.CUSTOMER_AUTOSAVE_URL = '/customers/autosave';
+  for (const fn of ['updateStateField', 'setDueDateFromTerm', 'autoSelectTreatment',
+    'refreshSavedItems', 'recalc', 'schedulePreview']) app[fn] = () => {};
+  app.fillCustomer(0);
+  app.changeFetch = async () => ({status: 428, json: async () => ({ok: false})});
+  return {app, fields, notice, prompts, answers};
+}
+
+for (const autosaved of [false, true]) {
+  test(`cancelling customer switch preserves edits ${autosaved ? 'after' : 'before'} autosave`, async () => {
+    const {app, fields, prompts} = customerSwitchForm();
+    fields.buyer_city.value = 'Hamburg';
+    if (autosaved) await app.autosaveCustomer();
+    else app.scheduleCustomerSave();
+    await app.chooseCust(1);
+    assert.equal(fields.buyer_name.value, 'A');
+    assert.equal(fields.buyer_city.value, 'Hamburg');
+    assert.equal(app.window.CUSTOMERS[0].city, 'Berlin');
+    assert.equal(prompts.length, 1);
+  });
+}
+
+test('discarding customer edits switches only after a warning and leaves saved data intact', async () => {
+  const {app, fields, notice, prompts, answers} = customerSwitchForm();
+  fields.buyer_city.value = 'Hamburg';
+  await app.autosaveCustomer();
+  answers.push('discard');
+  await app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(fields.buyer_city.value, 'Leipzig');
+  assert.equal(notice.hidden, true);
+  await app.chooseCust(0);
+  assert.equal(fields.buyer_city.value, 'Berlin');
+  assert.equal(prompts.length, 1);
+});
+
+test('customer search text and unchanged legacy defaults do not trigger discard warnings', async () => {
+  const {app, fields, prompts} = customerSwitchForm();
+  app.window.CUSTOMERS[0].payment_term_days = '';
+  fields.buyer_name.value = 'B';
+  await app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(fields.buyer_city.value, 'Leipzig');
+  assert.equal(prompts.length, 0);
+});
+
+test('switch waits for in-flight save and uses the saved data when returning', async () => {
+  const {app, fields, prompts} = customerSwitchForm();
+  fields.buyer_city.value = 'Hamburg';
+  let finish;
+  app.changeFetch = () => new Promise(resolve => { finish = resolve; });
+  const saving = app.autosaveCustomer();
+  await Promise.resolve();
+  const switching = app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'A');
+  finish({status: 200, json: async () => ({name: 'A', customer: {name: 'A', city: 'Hamburg', country: 'DE', payment_term_days: '14'}})});
+  await saving;
+  await switching;
+  await app.chooseCust(0);
+  assert.equal(fields.buyer_city.value, 'Hamburg');
+  assert.equal(app.window.CUSTOMERS[0].items[0].description, 'Saved item');
+  assert.equal(prompts.length, 0);
+});
+
+test('customer switch suppresses queued autosaves of discarded fields', async () => {
+  const {app, fields, answers} = customerSwitchForm();
+  fields.buyer_city.value = 'Hamburg';
+  let finish;
+  app.previous = new Promise(resolve => { finish = resolve; });
+  vm.runInContext('pendingCustomerSave = previous', app);
+  app.changeFetch = () => { throw new Error('must not save discarded fields'); };
+  const queued = app.autosaveCustomer();
+  answers.push('discard');
+  const switching = app.chooseCust(1);
+  finish();
+  await queued;
+  await switching;
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(app.window.CUSTOMERS[0].city, 'Berlin');
+});
+
+test('customer switch keeps existing behavior when the experimental flag is off', async () => {
+  const {app, fields, prompts} = customerSwitchForm();
+  delete app.window.ChangeConfirmation;
+  fields.buyer_city.value = 'Hamburg';
+  await app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(prompts.length, 0);
 });

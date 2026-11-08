@@ -844,13 +844,60 @@ function openCustMenu(input) {
   menu.hidden = false;
   input.setAttribute("aria-expanded", "true");
 }
-function chooseCust(idx) {
-  fillCustomer(idx);
+function customerHasUnsavedChanges() {
+  const form = document.getElementById("invoice-form");
+  if (!form) return false;
+  const saved = (window.CUSTOMERS || []).find(c =>
+    c.name.toLowerCase() === lastSavedCustomerName.toLowerCase()) || {};
+  return [...form.querySelectorAll('[name^="buyer_"]')].some(el => {
+    // The name input also filters the customer picker. Choosing a result is
+    // intentional replacement of that search text, not a customer rename.
+    if (el.name === "buyer_name") return false;
+    const key = el.name.slice(6);
+    let value = saved[key] || "";
+    if (key === "country") value ||= "DE";
+    if (key === "payment_term_days") {
+      const days = parseInt(saved[key], 10);
+      value = days >= 0 ? days : 14;
+    }
+    return el.value.trim() !== String(value).trim();
+  });
+}
+function confirmCustomerSwitch() {
+  const dialog = document.getElementById("customer-switch-dialog");
+  return new Promise(resolve => {
+    dialog.returnValue = "cancel";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "discard"), {once: true});
+    dialog.showModal();
+  });
+}
+async function chooseCust(idx) {
+  if (customerSwitchPending || customerDeletionPending) return;
+  const target = (window.CUSTOMERS || [])[idx];
+  if (!target) return;
   closeCustMenu();
-  autoSelectTreatment();
-  refreshSavedItems();
-  recalc();
-  schedulePreview();
+  customerSwitchPending = true;
+  let switched = false;
+  try {
+    if (window.ChangeConfirmation) {
+      clearTimeout(customerSaveTimer);
+      // Finish in-flight saves and suppress queued ones before comparing fields.
+      await pendingCustomerSave;
+      if (customerHasUnsavedChanges() && !(await confirmCustomerSwitch())) return;
+    }
+    const index = window.CUSTOMERS.findIndex(c => c.name === target.name);
+    if (index < 0) return;
+    fillCustomer(index);
+    showPendingChange("customer", false);
+    autoSelectTreatment();
+    refreshSavedItems();
+    recalc();
+    schedulePreview();
+    switched = true;
+  } finally {
+    customerSwitchPending = false;
+    if (!switched) scheduleCustomerSave();
+  }
 }
 function highlightCust(delta) {
   if (!custMenu || custMenu.hidden) return;
@@ -1318,9 +1365,10 @@ async function flushSellerSaves() {
 
 let customerSaveTimer;
 let customerDeletionPending = false;
+let customerSwitchPending = false;
 let pendingCustomerSave = Promise.resolve();
 function autosaveCustomer() {
-  if (customerDeletionPending) return pendingCustomerSave;
+  if (customerDeletionPending || customerSwitchPending) return pendingCustomerSave;
   const form = document.getElementById("invoice-form");
   if (!form || !window.CUSTOMER_AUTOSAVE_URL) return;
   const nameEl = form.querySelector('[name="buyer_name"]');
@@ -1329,18 +1377,28 @@ function autosaveCustomer() {
   form.querySelectorAll('[name^="buyer_"]').forEach((el) => fd.append(el.name, el.value));
   fd.append("prev_name", lastSavedCustomerName);
   pendingCustomerSave = pendingCustomerSave.then(() => {
-    if (customerDeletionPending) return null;
+    if (customerDeletionPending || customerSwitchPending) return null;
     return changeFetch(window.CUSTOMER_AUTOSAVE_URL, { method: "POST", body: fd }, false)
     .then((r) => { showPendingChange("customer", r.status === 428); return r.json(); })
     .then((d) => {
-      if (d && d.name) lastSavedCustomerName = d.name;
+      if (d && d.name) {
+        lastSavedCustomerName = d.name;
+        if (d.customer) {
+          const list = window.CUSTOMERS || (window.CUSTOMERS = []);
+          const oldName = fd.get("prev_name") || d.name;
+          const saved = list.find(c => c.name.toLowerCase() === oldName.toLowerCase())
+            || list.find(c => c.name.toLowerCase() === d.name.toLowerCase());
+          if (saved) Object.assign(saved, d.customer);
+          else list.push(d.customer);
+        }
+      }
     })
     .catch(() => {});
   });
   return pendingCustomerSave;
 }
 function scheduleCustomerSave() {
-  if (customerDeletionPending) return;
+  if (customerDeletionPending || customerSwitchPending) return;
   clearTimeout(customerSaveTimer);
   customerSaveTimer = setTimeout(autosaveCustomer, 700);
 }
@@ -1572,6 +1630,7 @@ document.addEventListener("click", (e) => {
   // Toast; die Combobox-Datenbasis (window.CUSTOMERS) wird aus der Antwort erneuert.
   if (e.target.id === "cust-save-btn") {
     e.preventDefault();
+    if (customerSwitchPending) return;
     const form = document.getElementById("invoice-form");
     const btn = e.target;
     btn.disabled = true;
@@ -1599,6 +1658,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (e.target.id === "cust-delete-btn") {
+    if (customerSwitchPending) return;
     const nameEl = document.querySelector("[name='buyer_name']");
     const name = nameEl ? nameEl.value.trim() : "";
     if (!name) return;
@@ -1989,6 +2049,7 @@ let restoredFromLang = false;
   try {
     const parsed = window.SUBMITTED_FORM || JSON.parse(raw);
     restoreForm(document.getElementById("invoice-form"), parsed);
+    lastSavedCustomerName = (parsed.buyer_name || [""])[0];
     updateStateField((parsed.buyer_state || [])[0]); // Staat-Auswahl nach Sprachwechsel wiederherstellen
     restoredFromLang = true;
   } catch (e) {
@@ -1998,7 +2059,6 @@ let restoredFromLang = false;
 
 if (!restoredFromLang) applyDraft();
 if (window.IMPORTED_DRAFT && restoredFromLang) {
-  lastSavedCustomerName = (window.SUBMITTED_FORM.buyer_name || [""])[0];
   if (!window.SUBMITTED_FORM.tax_treatment) autoSelectTreatment();
   document.getElementById("generate-btn").disabled = false;
 }
@@ -2308,9 +2368,11 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
 async function switchArchive(form) {
   const url = new URL(form.action, window.location.href);
   url.search = new URLSearchParams(new FormData(form)).toString();
-  const select = form.querySelector("select");
+  const selects = form.querySelectorAll("select");
   // Until loading succeeds, the label must still describe the visible invoices.
-  select.value = [...select.options].find((option) => option.defaultSelected).value;
+  selects.forEach(select => {
+    select.value = [...select.options].find(option => option.defaultSelected).value;
+  });
   if (await loadSettingsPanel(url.toString())) {
     lastPreviewUrl = null;
     showNoPreview(window.MSG_LIVE_PREVIEW);
@@ -2383,7 +2445,7 @@ function closeSettings() {
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
   pane.addEventListener("change", (e) => {
-    if (e.target.id === "archive-issuer-select") e.target.form.requestSubmit();
+    if (["archive-issuer-select", "archive-sort-select"].includes(e.target.id)) e.target.form.requestSubmit();
   });
 
   // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.
