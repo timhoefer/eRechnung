@@ -23,12 +23,16 @@ jobs:
   verify:
     runs-on: macos-15
     timeout-minutes: 15
+    permissions:
+      # GitHub exposes draft releases only to tokens with push access.
+      contents: write
     outputs:
       digest: ${{ steps.archive.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -66,6 +70,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           gh release download "$RELEASE_TAG" --pattern eRechnung.app.zip --dir release-download
+          unset GH_TOKEN
           python scripts/check_macos_release.py --version "${RELEASE_TAG#v}" --archive release-download/eRechnung.app.zip
           DIGEST=$(shasum -a 256 release-download/eRechnung.app.zip | cut -d ' ' -f 1)
           echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
