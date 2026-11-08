@@ -1853,7 +1853,9 @@ def check_updates():
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
-    for p in sorted(output_dir().glob("*.pdf"), reverse=True):
+    # Match the displayed timestamp; filename ordering misplaces 07 vs 008.
+    files = [(p.stat().st_mtime, p) for p in output_dir().glob("*.pdf")]
+    for modified_at, p in sorted(files, reverse=True):
         # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
         number, buyer_name, amount, currency = None, None, None, "EUR"
         sidecar = output_dir() / f"{p.stem}.json"
@@ -1880,7 +1882,7 @@ def _settings_context() -> dict:
         archive.append(
             {
                 "filename": p.name,
-                "modified": datetime.fromtimestamp(p.stat().st_mtime).strftime(
+                "modified": datetime.fromtimestamp(modified_at).strftime(
                     "%Y-%m-%d %H:%M"
                 ),
                 "has_draft": sidecar.exists(),
@@ -1894,8 +1896,19 @@ def _settings_context() -> dict:
                 "currency": currency,
             }
         )
+    archive_sort = request.args.get("sort", request.cookies.get("archive_sort", "created"))
+    if archive_sort not in {"created", "number", "customer"}:
+        archive_sort = "created"
+    if archive_sort == "number":
+        def number_key(row):
+            parts = re.split(r"([0-9]+)", row["number"] or row["filename"])
+            return tuple((1, int(p)) if p.isascii() and p.isdigit() else (0, p.casefold()) for p in parts)
+        archive.sort(key=number_key, reverse=True)  # stable: timestamp breaks equal-number ties
+    elif archive_sort == "customer":
+        archive.sort(key=lambda row: _country_sortkey(str(row["buyer"] or "")))
     return {
         "archive": archive,
+        "archive_sort": archive_sort,
         "archive_issuers": issuer_profiles(include_deleted=True),
         "default_issuer_id": default_issuer(),
         "data_dir": str(DATA_DIR),
@@ -1904,6 +1917,15 @@ def _settings_context() -> dict:
         "conflicts": data_conflicts(),
         "app_version": APP_VERSION,
     }
+
+
+@app.after_request
+def remember_archive_sort(response):
+    sort = request.args.get("sort")
+    if (request.endpoint in {"settings_panel", "validate"} and response.status_code == 200
+            and sort is not None and sort in {"created", "number", "customer"}):
+        response.set_cookie("archive_sort", sort, max_age=365 * 86400, httponly=True, samesite="Lax")
+    return response
 
 
 def _localized_validation():
