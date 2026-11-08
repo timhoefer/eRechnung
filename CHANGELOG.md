@@ -1,5 +1,10 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- macOS-Downloads als gestaltetes DMG mit App und Programme-Verknüpfung; das ZIP bleibt als Alternative verfügbar. Der helle Hintergrund enthält dezente Rechnungsmotive und Installationshinweise auf Deutsch und Englisch.
+- Build- und Release-Prüfungen kontrollieren beide Downloads, einschließlich Signierung, Notarisierung und Selbsttest der aus dem DMG kopierten App. Die Verpackung erfolgt außerhalb synchronisierter Projektordner.
+
 ## 1.2.1
 
 - Das Archiv zeigt standardmäßig die neuesten Dateien zuerst. Alternativ lässt es sich nach Rechnungsnummer oder Kunde sortieren. Unterschiedlich lange Nummern wie „2026-07“ und „2026-008“ werden numerisch korrekt eingeordnet.

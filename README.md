@@ -6,7 +6,12 @@ Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler.
 
 ## Download (macOS)
 
-Eine fertige, **signierte und notarisierte** macOS-App gibt es unter [Releases](../../releases) — herunterladen, entpacken, in den Programme-Ordner ziehen, fertig. Sie öffnet sich ohne Gatekeeper-Warnung (Apple Silicon). Wer lieber aus dem Quellcode startet oder selbst baut: siehe unten.
+Eine fertige, **signierte und notarisierte** macOS-App für Apple Silicon gibt es unter [Releases](../../releases).
+
+- **Empfohlen: `eRechnung.dmg`** öffnen und eRechnung auf den Programme-Ordner im Fenster ziehen. Danach das Image auswerfen und die App aus Programme starten.
+- **Alternativ: `eRechnung.app.zip`** herunterladen, entpacken und die App in den Programme-Ordner ziehen. Ältere Releases bieten ausschließlich das ZIP an.
+
+Wer lieber aus dem Quellcode startet oder selbst baut: siehe unten.
 
 ## Voraussetzungen
 
@@ -146,18 +151,31 @@ Für eine Doppelklick-App ohne Terminal/Browser (eigenes Fenster via pywebview) 
 ```bash
 brew install pango
 .venv/bin/pip install -r requirements-build.txt
-./build_macos.sh        # -> dist/eRechnung.app
+./build_macos.sh        # -> dist/eRechnung.dmg + dist/eRechnung.app.zip
 ```
 
-Die App ist self-contained (Pango-Stack + SaxonC sind eingebettet) und legt ihre Daten unter `~/Library/Application Support/eRechnung` ab. Ein headless-Selbsttest prüft die nativen Bibliotheken:
+Die App ist self-contained (Pango-Stack + SaxonC sind eingebettet) und legt ihre Daten unter `~/Library/Application Support/eRechnung` ab. Der Build prüft die nativen Bibliotheken automatisch, auch nach dem Entpacken des ZIPs und dem Kopieren aus dem DMG. Die fertigen Downloads lassen sich erneut prüfen:
 
 ```bash
-./dist/eRechnung.app/Contents/MacOS/eRechnung --selftest
+.venv/bin/python scripts/check_macos_release.py --version "$(.venv/bin/python -c 'from version import __version__; print(__version__)')" \
+  --archive dist/eRechnung.app.zip --dmg dist/eRechnung.dmg --unsigned
 ```
 
 So gebaut ist die App **unsigniert** — auf einem fremden Mac blockt Gatekeeper sie dann beim ersten Start (danach unter **Systemeinstellungen › Datenschutz & Sicherheit** auf **„Trotzdem öffnen"**; der frühere Rechtsklick-›-Öffnen-Weg ist ab macOS 15 Sequoia weg). Für den fertigen, ohne Warnung lauffähigen Download siehe [Releases](../../releases).
 
 Für einen **signierten + notarisierten** Build (wie in den Releases) unterstützt das Skript Code-Signing und Notarisierung über die Umgebungsvariablen `SIGN_IDENTITY` und `NOTARY_PROFILE` (Apple Developer Program nötig; Details im Kopf von `build_macos.sh`). Der klassische Start über `run.sh` / `start.command` bleibt unverändert nutzbar.
+
+Das Bundle wird in einem temporären lokalen Ordner gebaut, damit synchronisierte
+Projektordner keine zusätzlichen Finder-Metadaten in die Signatur einbringen.
+Erst nach erfolgreicher Prüfung werden die Downloads nach `dist/` kopiert.
+Das DMG verwendet ein festes Finder-Layout mit App und Programme-Verknüpfung.
+Der helle Hintergrund liegt als editierbare Vektordatei in
+[`assets/dmg-background.svg`](assets/dmg-background.svg); `scripts/build_dmg.py`
+rendert daraus einen Hintergrund für normale und Retina-Displays. Zum Anpassen
+der Symbolpositionen oder Fenstergröße dient die Konfiguration in diesem Skript.
+Der Build benötigt dafür keine Finder- oder AppleScript-Automation.
+
+![DMG-Fenster im Finder](docs/images/dmg-preview.jpg)
 
 ## Lizenz & Haftungsausschluss
 
@@ -194,7 +212,7 @@ Fehlende PDF-/SaxonC-Abhängigkeiten sind in CI ein Fehler.
 
 Ein zusätzlicher Apple-Silicon-Job auf `macos-15` baut die App. Der Build prüft die
 Versionsnummer und führt den Selbsttest sowohl im Bundle als auch nach dem
-Entpacken des ZIP-Archivs aus. Diese CI-Builds benötigen keine Apple-Zugangsdaten
+Entpacken des ZIP-Archivs und Kopieren aus dem DMG aus. Diese CI-Builds benötigen keine Apple-Zugangsdaten
 und gelten nicht als signierte Veröffentlichungen. Der Selbsttest verwendet
 bereits beim Laden der App einen temporären Datenordner.
 
@@ -209,13 +227,27 @@ ERECHNUNG_REQUIRE_INTEGRATION=1 .venv/bin/python -m pytest -q
 Bei einem Build mit `NOTARY_PROFILE` prüft das Skript den Apple-Zugriff vor dem
 Aufräumen und Bauen. Nach Signierung und Notarisierung werden zusätzlich die
 Developer-ID-Signatur, das angeheftete Notarisierungsticket und Gatekeeper geprüft,
-auch am entpackten Download-ZIP. Eine fehlende Notarisierung ist ein Fehler.
+auch am entpackten ZIP und der aus dem DMG kopierten App. Das DMG selbst wird
+ebenfalls signiert, notarisiert und geprüft. Eine fehlende Notarisierung ist ein Fehler.
 
 Der manuell startbare GitHub-Ablauf **Release verification** prüft ein bereits
-hochgeladenes Release-Archiv (auch aus einem Entwurf): Tag, Quellcode-Version,
+hochgeladene Release-Dateien (auch aus einem Entwurf): Tag, Quellcode-Version,
 Änderungsprotokoll, App-Version, Signatur, Notarisierung und Selbsttest. Dazu unter
 **Actions → Release verification → Run workflow** den Tag angeben. Mit der optionalen
 Auswahl **Nach erfolgreicher Prüfung veröffentlichen** wird der Entwurf erst nach
-allen Prüfungen veröffentlicht; vor der Veröffentlichung wird die Prüfsumme des
-hochgeladenen Archivs erneut verglichen. Ohne diese Auswahl wird nur geprüft.
+allen Prüfungen veröffentlicht; vor der Veröffentlichung werden die Prüfsummen
+beider Downloads erneut verglichen. Neue Releases müssen `eRechnung.dmg` und
+`eRechnung.app.zip` enthalten. Ältere Quellstände ohne DMG-Build bleiben mit ihrem
+ZIP allein prüfbar. In den Release-Notizen steht der DMG-Download vor der ZIP-Alternative.
+Ohne diese Auswahl wird nur geprüft.
 Apple-Zertifikate oder Apple-Passwörter müssen dafür nicht in GitHub gespeichert werden.
+
+Zum Vorbereiten eines Release-Entwurfs beide Dateien hochladen (Version und
+Release-Notizen zuvor aktualisieren):
+
+```bash
+TAG="v$(.venv/bin/python -c 'from version import __version__; print(__version__)')"
+gh release create "$TAG" --verify-tag --draft --notes-file release-notes.md \
+  'dist/eRechnung.dmg#macOS – DMG (empfohlen)' \
+  'dist/eRechnung.app.zip#macOS – ZIP (Alternative)'
+```

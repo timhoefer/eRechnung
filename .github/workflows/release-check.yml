@@ -27,7 +27,8 @@ jobs:
       # GitHub exposes draft releases only to tokens with push access.
       contents: write
     outputs:
-      digest: ${{ steps.archive.outputs.digest }}
+      digests: ${{ steps.archive.outputs.digests }}
+      dmg: ${{ steps.source.outputs.dmg }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -37,6 +38,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Verify release tag, source version and changelog
+        id: source
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
@@ -62,18 +64,37 @@ jobs:
           changelog = subprocess.check_output(['git', 'show', f'{ref}:CHANGELOG.md'], text=True)
           if f'## {version}' not in changelog.splitlines():
               raise SystemExit('Version missing from changelog')
+          # Older releases shipped only a ZIP. New sources require both downloads.
+          has_dmg = subprocess.run(['git', 'cat-file', '-e', f'{ref}:scripts/build_dmg.py'],
+                                   capture_output=True).returncode == 0
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              print(f'dmg={str(has_dmg).lower()}', file=output)
           PY
-      - name: Download and verify the actual release archive
+      - name: Download and verify the actual release files
         id: archive
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
+          HAS_DMG: ${{ steps.source.outputs.dmg }}
         run: |
           gh release download "$RELEASE_TAG" --pattern eRechnung.app.zip --dir release-download
+          EXTRA_ARGS=()
+          if [ "$HAS_DMG" = "true" ]; then
+            gh release download "$RELEASE_TAG" --pattern eRechnung.dmg --dir release-download
+            EXTRA_ARGS=(--dmg release-download/eRechnung.dmg)
+          fi
           unset GH_TOKEN
-          python scripts/check_macos_release.py --version "${RELEASE_TAG#v}" --archive release-download/eRechnung.app.zip
-          DIGEST=$(shasum -a 256 release-download/eRechnung.app.zip | cut -d ' ' -f 1)
-          echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
+          python scripts/check_macos_release.py --version "${RELEASE_TAG#v}" --archive release-download/eRechnung.app.zip "${EXTRA_ARGS[@]}"
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          digests = {}
+          for path in Path('release-download').iterdir():
+              with path.open('rb') as asset:
+                  digests[path.name] = 'sha256:' + hashlib.file_digest(asset, 'sha256').hexdigest()
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              print('digests=' + json.dumps(digests), file=output)
+          PY
 
   publish:
     if: ${{ inputs.publish }}
@@ -82,19 +103,27 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Ensure the checked asset is unchanged and publish
+      - name: Ensure both checked downloads are unchanged and publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
-          EXPECTED_DIGEST: ${{ needs.verify.outputs.digest }}
+          EXPECTED_DIGESTS: ${{ needs.verify.outputs.digests }}
+          HAS_DMG: ${{ needs.verify.outputs.dmg }}
         run: |
           python - <<'PY'
           import json, os, subprocess
           tag = os.environ['RELEASE_TAG']
           release = json.loads(subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'assets']))
-          assets = [a for a in release['assets'] if a['name'] == 'eRechnung.app.zip']
-          if len(assets) != 1 or assets[0].get('digest') != os.environ['EXPECTED_DIGEST']:
-              raise SystemExit('Release archive changed after verification')
+          expected = json.loads(os.environ['EXPECTED_DIGESTS'])
+          required = {'eRechnung.app.zip'}
+          if os.environ['HAS_DMG'] == 'true':
+              required.add('eRechnung.dmg')
+          if set(expected) != required:
+              raise SystemExit('Missing verification result for a release download')
+          for name, digest in expected.items():
+              assets = [a for a in release['assets'] if a['name'] == name]
+              if len(assets) != 1 or assets[0].get('digest') != digest:
+                  raise SystemExit(f'Release download changed after verification: {name}')
           subprocess.run(['gh', 'release', 'edit', tag, '--draft=false', '--latest'], check=True)
           PY
