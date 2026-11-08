@@ -472,7 +472,7 @@ def issuer_directory(issuer: str) -> Path:
     try:
         return issuer_store.issuer_directory(SELLER_FILE.parent, issuer)
     except issuer_store.IssuerError as exc:
-        abort(400 if exc.code == "invalid_issuer" else 404)
+        return abort(400 if exc.code == "invalid_issuer" else 404)
 
 
 def _issuer_deleted(path: Path) -> bool:
