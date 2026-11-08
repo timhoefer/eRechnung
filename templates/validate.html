@@ -53,9 +53,8 @@
 {% include "_change_confirmation.html" %}
 <script>
   (function () {
-    document.querySelectorAll("#archive-issuer-form select").forEach(select => {
-      select.addEventListener("change", () => select.form.requestSubmit());
-    });
+    const archiveSelect = document.getElementById("archive-issuer-select");
+    if (archiveSelect) archiveSelect.addEventListener("change", () => archiveSelect.form.requestSubmit());
     const csv = document.getElementById("export-csv");
     if (csv) csv.addEventListener("click", () => {
       const url = new URL(csv.dataset.url, window.location.href);

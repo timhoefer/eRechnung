@@ -2368,11 +2368,9 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
 async function switchArchive(form) {
   const url = new URL(form.action, window.location.href);
   url.search = new URLSearchParams(new FormData(form)).toString();
-  const selects = form.querySelectorAll("select");
+  const select = form.querySelector("select");
   // Until loading succeeds, the label must still describe the visible invoices.
-  selects.forEach(select => {
-    select.value = [...select.options].find(option => option.defaultSelected).value;
-  });
+  select.value = [...select.options].find((option) => option.defaultSelected).value;
   if (await loadSettingsPanel(url.toString())) {
     lastPreviewUrl = null;
     showNoPreview(window.MSG_LIVE_PREVIEW);
@@ -2445,7 +2443,7 @@ function closeSettings() {
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
   pane.addEventListener("change", (e) => {
-    if (["archive-issuer-select", "archive-sort-select"].includes(e.target.id)) e.target.form.requestSubmit();
+    if (e.target.id === "archive-issuer-select") e.target.form.requestSubmit();
   });
 
   // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.

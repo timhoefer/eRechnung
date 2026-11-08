@@ -397,13 +397,11 @@ test("archive selection stays with visible invoices while loading and after a fa
   app.URLSearchParams = URLSearchParams;
   app.window.location = {href: "http://localhost/"};
   const select = {value: "other", options: [{value: "current", defaultSelected: true}, {value: "other"}]};
-  const sort = {value: "number", options: [{value: "created", defaultSelected: true}, {value: "number"}]};
-  const form = {action: "/settings/panel", querySelectorAll: () => [select, sort]};
-  app.FormData = class { constructor() { return new URLSearchParams({issuer: select.value, sort: sort.value}); } };
+  const form = {action: "/settings/panel", querySelector: () => select};
+  app.FormData = class { constructor() { return new URLSearchParams({issuer: select.value}); } };
   let finish;
   app.fetch = (url) => {
     assert.equal(new URL(url).searchParams.get("issuer"), "other");
-    assert.equal(new URL(url).searchParams.get("sort"), "number");
     return new Promise((resolve) => { finish = resolve; });
   };
   const switching = app.switchArchive(form);
