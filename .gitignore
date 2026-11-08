@@ -38,3 +38,7 @@ assets/icon_master.png
 # Shared local app/assistant state
 .erechnung.lock
 .seller-*
+# Local check caches and process lock
+.mypy_cache/
+.pytest_cache/
+.erechnung.lock

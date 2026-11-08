@@ -8,6 +8,29 @@ Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler.
 
 Eine fertige, **signierte und notarisierte** macOS-App gibt es unter [Releases](../../releases) — herunterladen, entpacken, in den Programme-Ordner ziehen, fertig. Sie öffnet sich ohne Gatekeeper-Warnung (Apple Silicon). Wer lieber aus dem Quellcode startet oder selbst baut: siehe unten.
 
+## Robustere Rechnungsablage
+
+PDF-Darstellung, Ausstellerverwaltung und Archivablage liegen in eigenständigen
+internen Modulen. Vorschau und Erzeugung der App verwenden dieselbe Darstellung.
+Es wird keine externe Agentenschnittstelle aktiviert.
+
+Ein Beleg wird nur nach erfolgreicher XSD- und Schematron-Prüfung archiviert.
+Fehlt die Prüfung oder schlägt sie fehl, zeigt die App die Fehler; Belegdateien,
+Kundendaten und Rechnungsnummernstand bleiben unverändert.
+
+Die Nummer gehört weiterhin zu einem Aussteller. Eine identische Wiederholung
+verwendet die ursprünglichen Dateien. Abweichende Inhalte mit derselben Nummer
+werden abgewiesen; vorhandene Altbelege bleiben bestehen. Das Archiv wird nicht
+umbenannt oder nachträglich bereinigt.
+
+Vor der Veröffentlichung werden die Dateien vollständig vorbereitet; das PDF wird
+zuletzt sichtbar. Ein unterbrochener Schreibvorgang bleibt für die Wiederherstellung
+vorgemerkt und wird beim nächsten schreibenden Zugriff abgeschlossen. Konflikte
+mit zwischenzeitlich geänderten Dateien werden gemeldet, nicht überschrieben.
+Die Sperre koordiniert Prozesse dieser App-Version auf demselben Rechner. Sie
+koordiniert keine unterschiedlichen Macs über Dropbox oder andere Cloud-Synchronisation
+und macht das Arbeitsarchiv nicht revisionssicher.
+
 ## Voraussetzungen
 
 - **Python 3.12+**

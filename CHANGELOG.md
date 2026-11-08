@@ -1,16 +1,25 @@
 # Änderungen
 
-## Unveröffentlicht
+## Unreleased
 
 - Die lokale JSON-Schnittstelle ist unabhängig vom Agenten oder Modellanbieter verwendbar. Der Codex-Skill bleibt ein optionaler Adapter; Freigabe-Oberfläche und Berechtigungskonzept sind noch nicht enthalten.
 - Aussteller lassen sich über stabile IDs auswählen. Entwürfe im Format 2 behalten Aussteller, Datenordner und Stammdatenstand; ein geänderter Standard leitet sie nicht um. Vorlagen, Bankdaten, Nummernprüfung und Archivierung berücksichtigen das gewählte Profil. Bei mehreren aktiven Profilen ist eine ausdrückliche Auswahl erforderlich. Deaktivierte Profile können keine neuen Agenten-Rechnungen ausstellen.
 - App und Agent verwenden dieselbe Sperre auf dem gemeinsamen Datenordner. Unterbrochene Archivierungen weiterer Aussteller werden vor einem Datenordnerwechsel abgeschlossen; getrennte Exporte liegen in eigenen Unterordnern pro Aussteller.
 - Der optionale Skill kann geprüfte Rechnungen auf ausdrücklichen Auftrag ins App-Archiv übernehmen. App und Skill teilen Speicherweg und lokale Dateisperre; ein Nummernvorschlag berücksichtigt vorhandene Belege.
-- Identische Archivierungswiederholungen liefern das Original zurück. Andere Rechnungen mit derselben Nummer werden abgewiesen. Unvollständige Schreibvorgänge werden wiederaufgenommen, und die letzte Rechnungsnummer wird ohne Rücksprung im normalen Nummernkreis aktualisiert.
-- Die App archiviert nur noch erfolgreich validierte Rechnungen. Bestehende Archivdateien bleiben unverändert.
 
 - Optionaler, separat entfernbarer eRechnung-Skill mit lokaler Schnittstelle für Kunden, Vorlagen, Entwürfe, PDF-Vorschauen und validierte Exporte. Entwürfe und separate Exporte bleiben außerhalb des App-Datenordners.
 - App und Assistent verwenden denselben Rechnungskern. Die App bleibt ohne Skill und ohne LLM-Abhängigkeit nutzbar.
+- Rechnungen werden erst nach erfolgreicher XSD-/Schematron-Prüfung archiviert. Fehlgeschlagene Prüfungen verändern weder Archiv, Kunden noch Nummernstand.
+- Gleiche Rechnungsnummern desselben Ausstellers werden bei abweichendem Inhalt abgewiesen. Identische Wiederholungen verwenden den vorhandenen Beleg; verschiedene Aussteller behalten getrennte Nummernfolgen.
+- Archivdateien werden vollständig vorbereitet, ohne vorhandene Dateien zu ersetzen. Unterbrochene Schreibvorgänge werden beim nächsten schreibenden Zugriff abgeschlossen. Eine gemeinsame lokale Prozesssperre schützt Stammdaten, Nummernstand und Datenordnerwechsel.
+
+## 1.2.1
+
+- Das Archiv zeigt standardmäßig die neuesten Dateien zuerst. Alternativ lässt es sich nach Rechnungsnummer oder Kunde sortieren. Unterschiedlich lange Nummern wie „2026-07“ und „2026-008“ werden numerisch korrekt eingeordnet.
+- Die Sortierauswahl steht neben der Archivüberschrift, wirkt sofort und wird lokal gemerkt. Aussteller-Auswahl und Belege bleiben bei einem Wechsel zusammengehörig; der CSV-Zeitraum bleibt auch beim Wechsel über ein leeres Archiv erhalten.
+- SaxonC auf 13.1.1 aktualisiert; die festgeschriebene Paketliste verwendet dieselbe Version. Die Testumgebung verwendet pytest 9.2.0.
+
+Bestehende Rechnungsdateien und Nummernfolgen bleiben unverändert.
 
 ## 1.2.0
 

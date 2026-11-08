@@ -7,6 +7,7 @@ DEFAULT_LANG = "de"
 
 LANG = {
     "de": {
+        "archive_xml_mismatch": "Das eingebettete XML stimmt nicht mit den erzeugten Rechnungsdaten überein.",
         "issuer_switch_title": "Rechnungsaussteller wechseln?",
         "issuer_setup": "Trage die Stammdaten für diesen Aussteller ein. Die bisherigen Profile bleiben unverändert.",
         "issuer_move_conflict": "Im Zielordner liegt eine abweichende Kopie eines Ausstellerprofils. Bitte die Kopien prüfen oder einen leeren Ordner wählen. Der aktive Datenordner wurde nicht geändert.",
@@ -252,6 +253,10 @@ LANG = {
         "check_file_hint": "ZUGFeRD-PDF oder XML auswählen — z. B. um nach Änderungen erneut zu validieren.",
         "check": "Prüfen",
         "archive": "Archiv",
+        "archive_sort": "Sortieren nach",
+        "archive_sort_created": "Erstellt · neueste zuerst",
+        "archive_sort_number": "Rechnungsnummer · absteigend",
+        "archive_sort_customer": "Kunde · A–Z",
         "file": "Datei",
         "created": "Erstellt",
         "act_view": "ansehen",
@@ -345,6 +350,7 @@ LANG = {
         "pdf_of": "von",
     },
     "en": {
+        "archive_xml_mismatch": "The embedded XML differs from the generated invoice data.",
         "issuer_switch_title": "Switch invoice issuer?",
         "issuer_setup": "Enter the details for this issuer. Your existing profiles remain unchanged.",
         "issuer_move_conflict": "The destination contains a conflicting copy of an issuer profile. Review the copies or choose an empty folder. The active data folder was not changed.",
@@ -581,6 +587,10 @@ LANG = {
         "check_file_hint": "Select a ZUGFeRD PDF or XML — e.g. to re-validate after changes.",
         "check": "Check",
         "archive": "Archive",
+        "archive_sort": "Sort by",
+        "archive_sort_created": "Created · newest first",
+        "archive_sort_number": "Invoice number · descending",
+        "archive_sort_customer": "Customer · A–Z",
         "file": "File",
         "created": "Created",
         "act_view": "view",

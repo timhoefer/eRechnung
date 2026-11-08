@@ -1,4 +1,4 @@
-"""Shared, side-effect-free invoice rendering for the app and optional adapters."""
+"""Shared, side-effect-free invoice rendering without application state."""
 from __future__ import annotations
 
 import re

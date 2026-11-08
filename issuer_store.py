@@ -13,7 +13,7 @@ class IssuerError(ValueError):
 
 def issuer_directory(root: Path, issuer: str) -> Path:
     if issuer != "default" and not re.fullmatch(r"[a-f0-9]{32}", issuer):
-        raise IssuerError("invalid_issuer", "Use an issuer ID returned by issuers.")
+        raise IssuerError("invalid_issuer", "Select an existing issuer profile.")
     directory = root if issuer == "default" else root / "issuers" / issuer
     if ((issuer != "default" and ((root / "issuers").is_symlink() or directory.is_symlink()))
             or (directory / "seller.json").is_symlink() or (directory / "output").is_symlink()):

@@ -1,4 +1,4 @@
-"""Shared local archive writer for the app and optional assistant.
+"""Transactional local invoice archive.
 
 The PDF is published last, so the archive only lists complete file sets. A durable
 pending transaction lets a retry finish after an interrupted write, including the
@@ -33,7 +33,7 @@ _held = threading.local()
 
 @contextmanager
 def data_lock(directory: Path, *, blocking: bool = True):
-    """Reentrant in a thread and exclusive across app/CLI processes."""
+    """Reentrant in a thread and exclusive across local app processes."""
     directory = directory.resolve()
     with _mutex:
         held: set[Path] = getattr(_held, "directories", set())
@@ -242,7 +242,7 @@ def archive_invoice(data: dict, pdf: bytes, xml: bytes, output: Path,
                         "files": [str(output / name) for name in [stem + ".json", *sorted(hashes)]]}
         if number in archived_numbers(output, strict=True) or any(
             (output / (stem + suffix)).exists() or (output / (stem + suffix)).is_symlink()
-            for suffix in (".pdf", ".json", ".xml")
+            for suffix in (".pdf", ".json", ".xml", ".csv")
         ):
             raise ArchiveError("number_conflict", "The archive already contains this number or filename. Nothing was overwritten.")
         payloads = {stem + ".pdf": pdf}
