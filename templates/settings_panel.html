@@ -58,7 +58,7 @@
 {% endif %}
 
 <div class="card">
-  <form method="get" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=None) }}" id="archive-issuer-form">
+  <form method="get" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=None) }}" id="archive-issuer-form" novalidate>
     <div class="archive-header">
       <h2>{{ t.archive }} ({{ archive|length }})</h2>
       <label class="archive-sort"><span>{{ t.archive_sort }}</span>
@@ -149,8 +149,8 @@
     <h3>{{ t.export_title }}</h3>
     <p class="hint">{{ t.export_hint }}</p>
     <div class="export-bar">
-      <label>{{ t.export_from }}<input type="date" id="export-from"></label>
-      <label>{{ t.export_to }}<input type="date" id="export-to"></label>
+      <label>{{ t.export_from }}<input type="date" id="export-from" name="export_from" form="archive-issuer-form" value="{{ request.args.get('export_from', '') }}"></label>
+      <label>{{ t.export_to }}<input type="date" id="export-to" name="export_to" form="archive-issuer-form" value="{{ request.args.get('export_to', '') }}"></label>
       <button type="button" class="secondary" id="export-csv" data-url="{{ url_for('export_csv') }}">{{ t.export_csv }}</button>
     </div>
     <div class="export-presets">

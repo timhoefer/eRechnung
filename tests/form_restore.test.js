@@ -408,10 +408,65 @@ test("archive selection stays with visible invoices while loading and after a fa
   };
   const switching = app.switchArchive(form);
   assert.equal(select.value, "current");
+  assert.equal(sort.value, "created");
+  assert.equal(select.disabled, true);
+  assert.equal(sort.disabled, true);
   finish({ok: false});
   await switching;
   assert.equal(select.value, "current");
+  assert.equal(sort.value, "created");
+  assert.equal(select.disabled, false);
+  assert.equal(sort.disabled, false);
   assert.equal(pane.innerHTML, "Current archive");
+});
+
+test("archive controls block overlapping switches until the chosen issuer is loaded", async () => {
+  const {app, pane} = settingsView();
+  app.URL = URL;
+  app.URLSearchParams = URLSearchParams;
+  app.window.location = {href: "http://localhost/"};
+  app.showNoPreview = () => {};
+  const issuer = {value: "other", options: [{value: "current", defaultSelected: true}, {value: "other"}]};
+  const sort = {value: "created", options: [{value: "created", defaultSelected: true}, {value: "number"}]};
+  const form = {action: "/settings/panel", querySelectorAll: () => [issuer, sort]};
+  app.FormData = class { constructor() { return new URLSearchParams({issuer: issuer.value, sort: sort.value}); } };
+  const requests = [];
+  app.fetch = url => new Promise(resolve => requests.push({url, resolve}));
+  const switching = app.switchArchive(form);
+  assert.equal(issuer.disabled, true);
+  assert.equal(sort.disabled, true);
+  await app.switchArchive(form);
+  assert.equal(requests.length, 1);
+  assert.equal(new URL(requests[0].url).searchParams.get("issuer"), "other");
+  requests[0].resolve({ok: true, text: async () => "Other issuer's archive"});
+  await switching;
+  assert.equal(pane.innerHTML, "Other issuer's archive");
+  assert.equal(issuer.disabled, false);
+  assert.equal(sort.disabled, false);
+});
+
+test("sorting preserves CSV dates, including edits made while the archive is loading", async () => {
+  const {app, pane} = settingsView();
+  let from = {value: "2026-07-01"};
+  let to = {value: "2026-09-30"};
+  const getElement = app.document.getElementById;
+  app.document.getElementById = id => ({"export-from": from, "export-to": to}[id] || getElement(id));
+  let html = pane.innerHTML;
+  Object.defineProperty(pane, "innerHTML", {
+    get() { return html; },
+    set(value) { html = value; from = {value: "2026-07-01"}; to = {value: "2026-09-30"}; },
+  });
+  let finish;
+  app.fetch = () => new Promise(resolve => { finish = resolve; });
+  const loading = app.loadSettingsPanel("/settings/panel?sort=number");
+  // The latest input, not the range captured by the request, must survive.
+  from.value = "2026-10-01";
+  to.value = "";
+  finish({ok: true, text: async () => "Sorted archive"});
+  await loading;
+  assert.equal(pane.innerHTML, "Sorted archive");
+  assert.equal(from.value, "2026-10-01");
+  assert.equal(to.value, "");
 });
 
 test("data folder conflicts are shown without reloading the archive or changing draft scope", async () => {

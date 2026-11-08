@@ -2244,8 +2244,14 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     if (!response.ok) throw new Error("archive load failed");
     const html = await response.text();
     if (loadId !== settingsPanelLoadId) return false;
+    // Read just before replacement, so edits made during loading also survive.
+    const csvDates = ["export-from", "export-to"].map(id => [id, document.getElementById(id)?.value]);
     settingsPanelUrl = url;
     pane.innerHTML = html;
+    for (const [id, value] of csvDates) {
+      const input = document.getElementById(id);
+      if (input && value !== undefined) input.value = value;
+    }
     loadDepsAsync();
     return true;
   } catch (error) {
@@ -2255,16 +2261,25 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
 }
 
 async function switchArchive(form) {
+  if (form.ariaBusy === "true") return;
   const url = new URL(form.action, window.location.href);
   url.search = new URLSearchParams(new FormData(form)).toString();
   const selects = form.querySelectorAll("select");
+  form.ariaBusy = "true";
   // Until loading succeeds, the label must still describe the visible invoices.
+  // Lock both controls so a second change cannot submit the rolled-back issuer.
   selects.forEach(select => {
     select.value = [...select.options].find(option => option.defaultSelected).value;
+    select.disabled = true;
   });
-  if (await loadSettingsPanel(url.toString())) {
-    lastPreviewUrl = null;
-    showNoPreview(window.MSG_LIVE_PREVIEW);
+  try {
+    if (await loadSettingsPanel(url.toString())) {
+      lastPreviewUrl = null;
+      showNoPreview(window.MSG_LIVE_PREVIEW);
+    }
+  } finally {
+    selects.forEach(select => { select.disabled = false; });
+    form.ariaBusy = "false";
   }
 }
 
