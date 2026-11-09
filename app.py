@@ -52,6 +52,8 @@ from invoice_core import (
 from invoice_core import safe_name as safe_name
 from invoice_core import seller_accounts as seller_accounts
 from issuer_store import seller_revision as seller_revision
+from mcp_app import publish_endpoint
+from mcp_app import register as register_mcp
 from version import __version__ as APP_VERSION
 from whats_new import ANNOUNCEMENT
 from zugferd import (
@@ -418,7 +420,18 @@ def confirm_change(title: str, message: str, before, after, details: list[dict])
     fields.pop("_change_confirmation", None)
     payload = [str(DATA_DIR.resolve()), current_issuer(), request.path,
                request.args.to_dict(flat=False), fields, before, after]
+    if g.get("mcp_connection"):
+        payload.append(g.mcp_connection)
     fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    if g.get("mcp_connection"):
+        # Only the app's approval handler can supply this fingerprint. It is never
+        # accepted from tool arguments, bearer headers or an agent response.
+        if g.get("mcp_approved") != fingerprint:
+            raise ChangeConfirmationRequired({
+                "fingerprint": fingerprint, "title": title, "message": message, "details": details,
+                "issuer": issuer_label(load_seller()),
+            })
+        return
     token = request.headers.get("X-Change-Confirmation") or request.form.get("_change_confirmation", "")
     fresh = CHANGE_CONFIRMATIONS.check(token, owner, fingerprint)
     if fresh:
@@ -603,7 +616,7 @@ CORRECTION_ENDPOINTS = {
 
 @app.before_request
 def _select_issuer():
-    if request.endpoint in {"static", "change_confirmation_cancel"}:
+    if request.endpoint in {"static", "change_confirmation_cancel"} or (request.endpoint or "").startswith("agents_"):
         return
     values = request.args.getlist("issuer") + request.form.getlist("issuer")
     if len(set(values)) > 1:
@@ -1483,7 +1496,23 @@ def generate():
     # Review implicit customer changes before publishing any invoice files.
     # The shared lock keeps this reviewed state stable until the final write.
     customers = prepare_customer_update(data["buyer"])
-    confirm_customer_changes(customers)
+    if g.get("mcp_connection"):
+        # One review covers both finalization and any implicit customer overwrite.
+        # Bind the current customer/issuer state as well as the exact invoice.
+        confirm_change(
+            "Rechnung erstellen / Create invoice", "Die Rechnung wird verbindlich im Archiv abgelegt. "
+            "Geänderte Kundendaten werden gespeichert. / This finalizes the invoice and saves changed customer data.",
+            {"seller": seller, "customers": load_customers()}, {"invoice": data, "customers": customers},
+            [{"label": "Rechnung / Invoice", "before": "—", "after": data["invoice"]["number"]},
+             {"label": "Kunde / Customer", "before": "—", "after": data["buyer"]["name"]},
+             {"label": "Brutto / Gross", "before": "—", "after": str(totals["grand_total"]) + " " + data["invoice"]["currency"]},
+             *[{"label": old.get("name", "") + " · " + d["label"], "before": d["before"], "after": d["after"]}
+               for old in load_customers() for new in customers
+               if old.get("name", "").lower() == new.get("name", "").lower()
+               for d in change_details(old, new)]],
+        )
+    else:
+        confirm_customer_changes(customers)
 
     is_xr = data["invoice"]["profile"] == "xrechnung"
     xml = build_xml(data)
@@ -1524,6 +1553,10 @@ def generate():
         # Only update customer data after a successful final archive operation.
         _write_json(CUSTOMERS_FILE, customers)
 
+    if g.get("mcp_connection"):
+        return {"ok": valid, "filename": filename, "xml_filename": xml_filename,
+                "reused": reused, "messages": messages, "schematron": sch,
+                "totals": {k: str(v) for k, v in totals.items()}}
     return render_template(
         "result.html",
         filename=filename,
@@ -2036,6 +2069,8 @@ def _validate_request():
     }
 
 
+register_mcp(sys.modules[__name__])
+
 if __name__ == "__main__":
     import os
 
@@ -2045,4 +2080,6 @@ if __name__ == "__main__":
     debug = os.environ.get("FLASK_DEBUG") == "1"
     if TEST_MODE:
         print(f"Testmodus: separater Datenordner {BASE}; wird beim Beenden entfernt.")
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5001 if TEST_MODE else 5000)), debug=debug)
+    port = int(os.environ.get("PORT", 5001 if TEST_MODE else 5000))
+    publish_endpoint(sys.modules[__name__], f"http://127.0.0.1:{port}")
+    app.run(host="127.0.0.1", port=port, debug=debug)

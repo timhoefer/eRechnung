@@ -24,7 +24,7 @@ binaries = []
 hiddenimports = ["cffi"]
 
 # Pakete mit eigenen Daten/Native-Libs vollständig einsammeln.
-for pkg in ("weasyprint", "saxonche", "webview"):
+for pkg in ("weasyprint", "saxonche", "webview", "mcp", "mcp_types"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -32,6 +32,7 @@ for pkg in ("weasyprint", "saxonche", "webview"):
 
 # drafthorse bringt die Factur-X-/EN16931-XSD mit (für die XML-Validierung).
 datas += collect_data_files("drafthorse")
+datas += collect_data_files("jsonschema_specifications")
 # dist-info-Metadaten mitnehmen, damit importlib.metadata.version("drafthorse")
 # auch im Bundle funktioniert (sonst zeigt der Software-Stand „—" statt Version).
 datas += copy_metadata("drafthorse")

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ 'Agentenzugriff' if lang == 'de' else 'Agent access' }} · eRechnung</title>
+  {% include "_theme_script.html" %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_version('style.css') }}">
+  <style>
+    .agent-page { max-width: 960px; margin: 28px auto; padding: 0 20px; }
+    .agent-page .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
+    .agent-check input { width: auto; flex: none; margin-top: 4px; }
+    .agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+    .agent-page pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .agent-page td { vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .agent-page .agent-fields { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 8px 16px; }
+    .agent-fields dt { color: var(--muted); } .agent-fields dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  </style>
+</head>
+<body><main class="agent-page">
+{% set de = lang == 'de' %}
+{% block content %}{% endblock %}
+</main></body></html>

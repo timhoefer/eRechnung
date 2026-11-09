@@ -1,0 +1,74 @@
+{% extends "agent_base.html" %}
+{% block content %}
+<h1>{{ 'Agentenzugriff' if de else 'Agent access' }}</h1>
+<p class="hint">{{ 'Experimentell · Nur nach deiner Freigabe' if de else 'Experimental · Only with your permission' }}</p>
+{% if error %}<p class="flash err">{{ error }}</p>{% endif %}
+<section class="card">
+  {% if not state.enabled %}
+  <h2>{{ 'Agentenzugriff ist ausgeschaltet' if de else 'Agent access is off' }}</h2>
+  <p>{{ 'Verbinde einen kompatiblen Agenten mit eRechnung. Du wählst die Aussteller und kannst jeden Zugang jederzeit widerrufen.' if de else 'Connect a compatible agent to eRechnung. Choose the issuers and revoke any connection at any time.' }}</p>
+  <form method="post" action="{{ url_for('agents_update') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="enable">
+    <label class="agent-check"><input type="checkbox" name="consent" value="yes" required>
+      <span>{{ 'Ich möchte Agentenzugriff erlauben. Freigegebene Daten können vom Agenten an dessen Anbieter übertragen werden. eRechnung erstellt und prüft Rechnungen weiterhin lokal.' if de else 'I want to allow agent access. The agent may send granted data to its provider. eRechnung continues to create and validate invoices locally.' }}</span>
+    </label>
+    <button type="submit">{{ 'Zugriff aktivieren' if de else 'Enable access' }}</button>
+  </form>
+  {% else %}
+  <h2>{{ 'Agentenzugriff ist aktiviert' if de else 'Agent access is enabled' }}</h2>
+  <p>{{ 'Nur eingerichtete Verbindungen erhalten Zugriff. Ausschalten widerruft alle Zugänge und offenen Anfragen.' if de else 'Only configured connections have access. Turning this off revokes all connections and pending requests.' }}</p>
+  <form method="post" action="{{ url_for('agents_update') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="disable">
+    <button class="secondary" type="submit">{{ 'Zugriff ausschalten' if de else 'Turn access off' }}</button>
+  </form>
+  {% endif %}
+</section>
+{% if configuration %}
+<section class="card">
+  <h2>{{ 'Verbindung einrichten' if de else 'Set up the connection' }}</h2>
+  <p>{{ 'Kopiere diese Konfiguration in die MCP-Einstellungen deines Agenten. Der Zugangsschlüssel wird nur jetzt angezeigt. Behandle ihn wie ein Passwort. eRechnung muss geöffnet bleiben.' if de else 'Copy this configuration into your agent’s MCP settings. The credential is shown only now. Treat it like a password. Keep eRechnung open.' }}</p>
+  <pre id="mcp-configuration">{{ configuration|tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% if state.enabled %}
+<section class="card">
+  <h2>{{ 'Verbindungen' if de else 'Connections' }}</h2>
+  {% for id, connection in state.connections.items() %}
+  <div class="export-box">
+    <strong>{{ connection.name }}</strong>
+    <p class="hint">{{ ('Lesen und Änderungen anfragen' if connection.writable else 'Nur lesen') if de else ('Read and request changes' if connection.writable else 'Read only') }}</p>
+    <ul>{% for profile in profiles if profile.id in connection.issuers %}<li>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</li>{% endfor %}</ul>
+    <form method="post" action="{{ url_for('agents_update') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="connection" value="{{ id }}">
+      <button type="submit" class="secondary">{{ 'Zugang widerrufen' if de else 'Revoke access' }}</button>
+    </form>
+  </div>
+  {% else %}<p class="hint">{{ 'Noch keine Verbindung freigegeben.' if de else 'No connections granted yet.' }}</p>{% endfor %}
+</section>
+<section class="card">
+  <h2>{{ 'Neue Verbindung' if de else 'New connection' }}</h2>
+  <form method="post" action="{{ url_for('agents_update') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="connect">
+    <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
+    <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
+    {% for profile in profiles if profile.available %}
+    <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"><span>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</span></label>
+    {% endfor %}
+    <p class="hint">{{ 'Der Zugang umfasst Stammdaten und Archiv der ausgewählten Aussteller sowie die gemeinsame Kunden- und Positionsliste. Neue Aussteller sind nicht automatisch freigegeben. Die Freigabe gilt nur für den aktuellen Datenordner.' if de else 'Access includes issuer details and archives for the selected profiles, plus the shared customer and saved-item list. New issuers are not automatically granted. Permission applies only to the current data folder.' }}</p>
+    <label class="agent-check"><input type="checkbox" name="write" value="yes"><span>{{ 'Rechnungen erstellen und Datenänderungen anfragen' if de else 'Create invoices and request data changes' }}</span></label>
+    <p class="hint">{{ 'Endgültige Rechnungen, Löschungen und Änderungen an vorhandenen Daten warten auf deine ausdrückliche Bestätigung in eRechnung.' if de else 'Final invoices, deletions and changes to existing data wait for your explicit approval in eRechnung.' }}</p>
+    <button type="submit">{{ 'Verbindung freigeben' if de else 'Grant connection' }}</button>
+  </form>
+</section>
+{% endif %}
+<section class="card">
+  <h2>{{ 'Anfragen' if de else 'Requests' }}</h2>
+  <p class="hint">{{ 'Eine Freigabe gilt nur für die gezeigte Aktion und verfällt nach fünf Minuten. Geänderte Daten erfordern eine neue Prüfung.' if de else 'Approval applies only to the displayed operation and expires after five minutes. Changed data requires another review.' }}</p>
+  {% for id, entry in requests.items() %}
+    <p><strong>{{ entry.connection.name }}</strong> · {{ entry.confirmation.title if entry.confirmation else entry.operation }} — {{ entry.status }}
+    <a href="{{ url_for('agents_review', identifier=id) }}">{{ 'Prüfen' if de else 'Review' }}</a></p>
+  {% else %}<p>{{ 'Keine offenen Anfragen.' if de else 'No pending requests.' }}</p>{% endfor %}
+  <a href="{{ url_for('agents_settings') }}">{{ 'Aktualisieren' if de else 'Refresh' }}</a>
+</section>
+<p><a href="{{ url_for('index') }}">{{ 'Zurück zur Rechnung' if de else 'Back to invoice' }}</a></p>
+{% endblock %}

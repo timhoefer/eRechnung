@@ -1,0 +1,122 @@
+"""Run a real SDK client against the stdio process and the isolated app."""
+import asyncio
+import json
+import sys
+import threading
+
+import pytest
+from mcp import Client
+from mcp.client.stdio import StdioServerParameters
+from test_mcp_access import BUYER, call, configure, decide, grant
+from test_mcp_access import client as client
+from test_mcp_access import fresh_access as fresh_access
+from werkzeug.serving import make_server
+
+import app as m
+import mcp_server
+from mcp_app import publish_endpoint
+from mcp_contract import TOOLS
+
+
+@pytest.mark.parametrize("entrypoint", ["mcp_server.py", "desktop.py"])
+def test_real_stdio_client_discovery_scopes_approval_and_revocation(client, entrypoint):
+    credential = grant(client)
+    server = make_server("127.0.0.1", 0, m.app, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    publish_endpoint(m, f"http://127.0.0.1:{server.server_port}")
+    params = StdioServerParameters(command=sys.executable,
+        args=[str(m.RESOURCE_BASE / entrypoint), *(["--mcp"] if entrypoint == "desktop.py" else [])],
+        env={"ERECHNUNG_MCP_TOKEN": credential, "ERECHNUNG_MCP_ENDPOINT_FILE": str(m.BASE / "mcp-endpoint.json")})
+
+    async def scenario():
+        async with Client(params, read_timeout_seconds=20) as agent:
+            tools = (await agent.list_tools()).tools
+            assert {t.name for t in tools} == set(TOOLS)
+            assert not any("approve" in t.name for t in tools)
+            result = await agent.call_tool("list_issuers", {})
+            assert result.structured_content["issuers"][0]["id"] == "default"
+            pending = await agent.call_tool("delete_customer", {"issuer": "default", "name": BUYER["name"]})
+            data = pending.structured_content
+            assert not pending.is_error and data["status"] == "approval_required"
+            assert json.loads(m.CUSTOMERS_FILE.read_text())[0] == BUYER
+            assert decide(client, data["request_id"]).status_code == 303
+            status = await agent.call_tool("request_status", {"request_id": data["request_id"]})
+            assert status.structured_content["status"] == "completed"
+            configure(client, "disable")
+            refused = await agent.call_tool("list_customers", {})
+            assert refused.is_error and not refused.structured_content["ok"]
+    try:
+        asyncio.run(scenario())
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+@pytest.mark.parametrize("url", ["https://example.org", "http://example.org", "http://localhost:5000",
+                                 "http://127.0.0.1:5000@evil.example", "http://127.0.0.1:5000/other",
+                                 "file:///tmp/invoices", "http://127.0.0.1:5000?redirect=1"])
+def test_bridge_rejects_nonlocal_or_ambiguous_endpoints(monkeypatch, url):
+    monkeypatch.delenv("ERECHNUNG_MCP_ENDPOINT_FILE", raising=False)
+    monkeypatch.setenv("ERECHNUNG_MCP_URL", url)
+    monkeypatch.setenv("ERECHNUNG_MCP_TOKEN", "secret")
+    def forbidden(*args, **kwargs):
+        pytest.fail("Untrusted URL must not reach the network")
+    monkeypatch.setattr(mcp_server, "build_opener", forbidden)
+    assert not mcp_server.app_call("list_customers", {})["ok"]
+
+
+def test_app_origin_cookie_and_missing_credential_are_rejected(client):
+    credential = grant(client)
+    for extra in [{"Origin": "http://127.0.0.1:5001"}, {"Cookie": "session=fake"}]:
+        with m.app.test_client(use_cookies=False) as api:
+            result = api.post("/agents/call", json={"tool": "list_customers", "arguments": {}},
+                              headers={"Authorization": "Bearer " + credential, **extra})
+            assert result.status_code == 403
+    assert client.post("/agents/call", json={}).status_code in (401, 403)
+
+
+def test_bridge_only_loads_endpoint_file_and_protocol_code(tmp_path, monkeypatch):
+    # Even a source desktop launch in bridge mode must not initialize app storage.
+    async def discover():
+        params = StdioServerParameters(command=sys.executable, args=[str(m.RESOURCE_BASE / "desktop.py"), "--mcp"],
+                                      env={"ERECHNUNG_TEST_MODE": "1", "TMPDIR": str(tmp_path)})
+        async with Client(params, read_timeout_seconds=20) as agent:
+            assert (await agent.list_tools()).tools
+    asyncio.run(discover())
+    assert not list(tmp_path.glob("erechnung-*"))
+
+
+@pytest.mark.parametrize("path", ["../secret.pdf", "/tmp/secret.pdf", "..\\secret.pdf"])
+def test_file_tools_do_not_accept_paths(client, path):
+    credential = grant(client)
+    for tool in ["get_invoice", "delete_invoice"]:
+        assert not call(credential, tool, issuer="default", filename=path)["ok"]
+
+
+def test_no_redirect_and_proxy_use(monkeypatch):
+    # The bridge must not forward a bearer credential to a redirect target.
+    assert mcp_server.NoRedirect().redirect_request(None, None, 302, "", {}, "http://evil.example") is None
+    monkeypatch.delenv("ERECHNUNG_MCP_ENDPOINT_FILE", raising=False)
+    monkeypatch.setenv("ERECHNUNG_MCP_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("ERECHNUNG_MCP_TOKEN", "test")
+    recorded = []
+    def opener(*handlers):
+        recorded.extend(handlers)
+        raise OSError()
+    monkeypatch.setattr(mcp_server, "build_opener", opener)
+    assert not mcp_server.app_call("list_issuers", {})["ok"]
+    assert recorded[0].proxies == {}
+
+
+def test_permission_settings_live_outside_invoice_folder(client):
+    grant(client)
+    assert (m.BASE / "agent_access.json").exists()
+    assert not (m.DATA_DIR / "agent_access.json").exists()
+
+
+def test_configuration_does_not_include_process_environment_secrets(client, monkeypatch):
+    monkeypatch.setenv("UNRELATED_SECRET", "must-not-appear")
+    grant(client)
+    assert "must-not-appear" not in client.get("/agents").text

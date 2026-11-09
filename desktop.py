@@ -11,14 +11,13 @@ import threading
 
 from werkzeug.serving import make_server
 
-from app import app
-
 
 def _selftest() -> int:
     """Native Libs ohne GUI prüfen: erzeugt eine Test-Rechnung (WeasyPrint/Pango)
     und validiert sie (lxml + saxonche). Nutzt eigene Testdaten und fasst die
     echten Nutzerdaten nicht an. Exit 0 = ok. Für den Build-Check."""
     import app as appmod
+    app = appmod.app
     from zugferd import (
         extract_xml_from_pdf,
         validate_schematron,
@@ -70,17 +69,27 @@ def _free_port() -> int:
 
 
 def main() -> None:
+    if "--mcp" in sys.argv:
+        # Starting the bridge must not import the app or read/create its data folder.
+        from mcp_server import main as mcp_main
+        mcp_main()
+        return
     if "--selftest" in sys.argv:
         sys.exit(_selftest())
 
     import webview
 
+    import app as appmod
+
+    app = appmod.app
     # Läuft im nativen Fenster (kein Browser): Downloads via WKWebView greifen
     # nicht, daher zeigen die Templates stattdessen „Im Finder zeigen".
     app.config["DESKTOP"] = True
 
     port = _free_port()
     server = make_server("127.0.0.1", port, app, threaded=True)
+    from mcp_app import publish_endpoint
+    publish_endpoint(appmod, f"http://127.0.0.1:{port}")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 

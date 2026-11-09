@@ -193,6 +193,14 @@
   <p class="hint" style="margin-top:10px">{{ t.datadir_current }} <code>{{ data_dir }}</code></p>
 </div>
 
+{% if config.MCP_FEATURE %}
+<div class="card">
+  <h2>{{ 'Agentenzugriff' if lang == 'de' else 'Agent access' }}</h2>
+  <p class="hint">{{ 'Verbindungen freigeben, widerrufen und Änderungsanfragen prüfen.' if lang == 'de' else 'Grant or revoke connections and review change requests.' }}</p>
+  <a class="button secondary" href="{{ url_for('agents_settings') }}">{{ 'Agentenzugriff verwalten' if lang == 'de' else 'Manage agent access' }}</a>
+</div>
+{% endif %}
+
 {% if lazy_deps %}
 <div id="deps-card"><div class="card"><p class="hint">{{ t.dep_checking }}</p></div></div>
 {% else %}

@@ -38,3 +38,5 @@ assets/icon_master.png
 .mypy_cache/
 .pytest_cache/
 .erechnung.lock
+agent_access.json
+mcp-endpoint.json

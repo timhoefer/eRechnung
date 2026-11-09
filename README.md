@@ -1,6 +1,6 @@
 # E-Rechnung (ZUGFeRD & XRechnung)
 
-Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler. Rechnungsexport als PDF/A-3 mit eingebettetem XML (**ZUGFeRD / Factur-X**) oder als XML mit PDF als Sichtexemplar (**XRechnung 3.0** nach EN 16931). Läuft komplett lokal, keine Daten verlassen den Rechner. Optional als macOS-Doppelklick-App.
+Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler. Rechnungsexport als PDF/A-3 mit eingebettetem XML (**ZUGFeRD / Factur-X**) oder als XML mit PDF als Sichtexemplar (**XRechnung 3.0** nach EN 16931). Erstellung und Validierung laufen lokal. Bei optional freigegebenem Agentenzugriff kann der Agent Daten an seinen Anbieter übertragen. Optional als macOS-Doppelklick-App.
 
 > **Status:** Persönliches Projekt, bereitgestellt **„wie besehen" (as is)**, ohne aktive Wartung oder Support. Der E-Rechnungs-Standard ändert sich jährlich. Bitte jede erzeugte Rechnung selbst prüfen (siehe Haftungsausschluss unten). Forks willkommen.
 
@@ -44,7 +44,7 @@ Einstellung für Endnutzer. Automatisierte Tests isolieren bereits den App-Start
 
 PDF-Darstellung, Ausstellerverwaltung und Archivablage liegen in eigenständigen
 internen Modulen. Vorschau und Erzeugung der App verwenden dieselbe Darstellung.
-Es wird keine externe Agentenschnittstelle aktiviert.
+Die optionale MCP-Anbindung ist standardmäßig ausgeschaltet und erfordert eine separate Freigabe.
 
 Ein Beleg wird nur nach erfolgreicher XSD- und Schematron-Prüfung archiviert.
 Fehlt die Prüfung oder schlägt sie fehl, zeigt die App die Fehler; Belegdateien,
@@ -62,6 +62,21 @@ mit zwischenzeitlich geänderten Dateien werden gemeldet, nicht überschrieben.
 Die Sperre koordiniert Prozesse dieser App-Version auf demselben Rechner. Sie
 koordiniert keine unterschiedlichen Macs über Dropbox oder andere Cloud-Synchronisation
 und macht das Arbeitsarchiv nicht revisionssicher.
+
+## Experimenteller Agentenzugriff (MCP)
+
+Kompatible lokale MCP-Clients können freigegebene Aussteller und Kunden lesen,
+Rechnungen prüfen, Vorschauen erzeugen und Änderungen anfragen. Die Funktion ist
+hinter `ERECHNUNG_MCP=1` verborgen und benötigt zusätzlich dein Opt-in in den
+Einstellungen. Jede Verbindung hat einen eigenen widerrufbaren Zugang und
+explizit ausgewählte Aussteller; standardmäßig erlaubt sie nur Lesen und Vorschauen.
+
+Löschen, Überschreiben bestehender Daten und das endgültige Erstellen von
+Rechnungen warten auf eine konkrete Bestätigung in der App. Über MCP selbst
+können Anfragen nicht bestätigt werden. Das ist keine menschliche Identitätsprüfung:
+Ein Programm mit zusätzlichem Bedien- oder Dateizugriff fällt außerhalb dieser Grenze.
+
+Einrichtung, Funktionsumfang und Sicherheitsgrenzen: [MCP-Anleitung](docs/mcp.md).
 
 ## Voraussetzungen
 

@@ -57,7 +57,7 @@ jobs:
         # ignore_missing_imports (mypy.ini) -> Dritt-Libs müssen nicht installiert sein.
         run: |
           pip install mypy==2.1.0
-          mypy app.py change_confirmation.py invoice_core.py invoice_archive.py issuer_store.py zugferd.py i18n.py countries.py desktop.py scripts/check_macos_release.py scripts/build_dmg.py
+          mypy app.py change_confirmation.py invoice_core.py invoice_archive.py issuer_store.py zugferd.py i18n.py countries.py desktop.py scripts/check_macos_release.py scripts/build_dmg.py mcp_app.py mcp_access.py mcp_contract.py mcp_server.py scripts/check_mcp_bundle.py
 
   js:
     runs-on: ubuntu-latest
@@ -87,3 +87,5 @@ jobs:
           .venv/bin/python -m pip install -r requirements.txt -r requirements-build.txt pypdf==6.12.2
       - name: Build and test Apple Silicon DMG and ZIP
         run: ./build_macos.sh
+      - name: Test bundled MCP bridge over stdio
+        run: .venv/bin/python scripts/check_mcp_bundle.py dist/eRechnung.app/Contents/MacOS/eRechnung
