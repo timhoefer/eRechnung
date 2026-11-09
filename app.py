@@ -1945,15 +1945,13 @@ def export_csv():
         if request.is_json:
             payload = request.get_json()
             entries = payload.get("entries") if isinstance(payload, dict) else None
-            if not isinstance(entries, list):
-                abort(400)
         else:
             try:
                 entries = [json.loads(entry) for entry in request.form.getlist("entry")]
             except (ValueError, TypeError):
-                abort(400)
-        if only or frm or to or not entries or len(entries) > 10000:
-            abort(400)
+                return abort(400)
+        if not isinstance(entries, list) or only or frm or to or not entries or len(entries) > 10000:
+            return abort(400)
         seen = set()
         for pair in entries:
             if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(v, str) for v in pair):
