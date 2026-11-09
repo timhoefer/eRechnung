@@ -46,9 +46,10 @@ Buchungsdaten bleibt eine Datei sichtbar, kann aber nicht als CSV ausgewählt we
 Die bisherigen CSV-Links je Rechnung und der Export per Datumsbereich bleiben
 technisch verfügbar.
 
-Quartale richten sich nach dem Rechnungsdatum; fehlt es bei einer älteren Datei,
-wird der angezeigte Erstellungszeitpunkt verwendet. Die gewählte Sortierung gilt
-innerhalb jedes Quartals. Ein Export aus der Ansicht **Alle Aussteller** enthält
+Die Liste bleibt durchgehend und wird insgesamt nach Erstellung, Nummer oder
+Kunde sortiert. Die Quartalsauswahl erscheint nur im Auswahlmodus. Quartale richten
+sich nach dem Rechnungsdatum; fehlt es bei einer älteren Datei, wird der angezeigte
+Erstellungszeitpunkt verwendet. Ein Export aus der Ansicht **Alle Aussteller** enthält
 eine zusätzliche Aussteller-Spalte. In der macOS-App werden solche Exporte im
 Unterordner `exports` des Datenordners gespeichert und im Finder angezeigt.
 

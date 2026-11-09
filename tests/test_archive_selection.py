@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+import os
 from datetime import date
 from urllib.parse import parse_qs, urlparse
 
@@ -52,7 +53,7 @@ def archive(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("endpoint", ["/settings/panel", "/validate"])
-def test_all_issuers_groups_years_and_retired_actions(archive, endpoint):
+def test_all_issuers_years_and_retired_actions(archive, endpoint):
     client, _ = archive
     page = html.fromstring(client.get(endpoint + "?issuer=all").data)
     assert page.get_element_by_id("archive-issuer-select").value == "all"
@@ -72,6 +73,31 @@ def test_all_issuers_groups_years_and_retired_actions(archive, endpoint):
     assert old.xpath('//span[@class="arch-id"]/text()') == ["OLD"]
     every = html.fromstring(client.get(endpoint + "?issuer=all&year=all").data)
     assert len(every.xpath('//tr[contains(@class,"arch-row")]')) == 5
+
+
+@pytest.mark.parametrize("sort,expected", [
+    ("created", ["default", RETIRED, COMPANY]),
+    ("number", [RETIRED, "default", COMPANY]),
+    ("customer", [COMPANY, RETIRED, "default"]),
+])
+def test_sort_spans_quarters_and_quarter_controls_stay_in_selection(archive, sort, expected):
+    client, folders = archive
+    for identity, number, modified in [("default", "010", 300), (COMPANY, "07", 100), (RETIRED, "011", 200)]:
+        pdf = folders[identity] / FILE
+        data = json.loads(pdf.with_suffix(".json").read_text())
+        data["invoice"]["number"] = f"{YEAR}-{number}"
+        pdf.with_suffix(".json").write_text(json.dumps(data))
+        os.utime(pdf, (modified, modified))
+    page = html.fromstring(client.get("/settings/panel", query_string={"issuer": "all", "sort": sort}).data)
+    rows = page.xpath('//tr[contains(@class,"arch-row")]')
+    actual = [json.loads(row.xpath('.//input[@data-archive-entry]/@value')[0])[0]
+              for row in rows if not row.xpath('.//input[@data-archive-entry and @disabled]')]
+    assert actual == expected
+    assert not page.xpath('//table[@class="archive"]/tbody/tr/th')
+    controls = page.xpath('//form[@id="archive-selection" and @hidden]//input[@data-archive-quarter]')
+    keys = {control.get("data-archive-quarter") for control in controls}
+    assert {f"{YEAR}-Q1", f"{YEAR}-Q3"} <= keys
+    assert all(row.xpath('.//input[@data-archive-entry]/@data-quarter')[0] in keys for row in rows)
 
 
 def selected(client, pairs, issuer="all"):

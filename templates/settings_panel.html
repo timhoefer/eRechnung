@@ -99,25 +99,30 @@
   {% endif %}
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
-  <p class="hint archive-period-hint">{{ t.archive_period_hint }}</p>
   <form method="post" action="{{ url_for('export_csv', issuer='all' if archive_all else issuer_id) }}" id="archive-selection" class="archive-selection-bar" hidden>
-    <label class="check"><input type="checkbox" data-archive-all>{{ t.archive_select_all }}</label>
-    <span class="hint" data-archive-count role="status" aria-live="polite"></span>
-    <button type="submit" class="secondary small" disabled>{{ t.export_csv }}</button>
-    <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
+    <div class="archive-selection-actions">
+      <label class="check"><input type="checkbox" data-archive-all>{{ t.archive_select_all }}</label>
+      <span class="hint" data-archive-count role="status" aria-live="polite"></span>
+      <button type="submit" class="secondary small" disabled>{{ t.export_csv }}</button>
+      <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
+    </div>
+    <div class="archive-quarter-selection" role="group" aria-label="{{ t.archive_select_quarters }}" title="{{ t.archive_period_hint }}">
+      <span class="hint">{{ t.archive_select_quarters }}</span>
+      {% for period in archive_quarters %}
+      <label class="check"><input type="checkbox" data-archive-quarter="{{ period.key }}">{% if archive_year == 'all' %}{{ period.year }} · {% endif %}{{ t.archive_quarter.format(n=period.quarter) }}</label>
+      {% endfor %}
+    </div>
   </form>
   <table class="archive">
     <thead><tr><th class="archive-selection-cell"><span class="sr-only">{{ t.archive_select }}</span></th><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
-      {% for group in archive_groups %}
-      <tr class="archive-quarter"><th colspan="4" data-archive-group-heading><label><input type="checkbox" class="archive-selection-control" data-archive-quarter="{{ group.key }}"><span>{{ group.year }} · {{ t.archive_quarter.format(n=group.quarter) }}</span></label></th></tr>
-      {% for a in group.rows %}
+      {% for a in archive %}
       <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if archive_all %}, {{ a.issuer_label }}{% endif %}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename, issuer=a.issuer_id) }}" data-preview-url="{{ url_for('archive_preview', filename=a.filename, issuer=a.issuer_id) }}">
-        <td class="archive-selection-cell"><input type="checkbox" name="entry" form="archive-selection" value="{{ [a.issuer_id, a.filename]|tojson|forceescape }}" data-archive-entry data-quarter="{{ group.key }}" aria-label="{{ t.archive_select_invoice }} {{ a.number or a.filename }} · {{ a.issuer_label }}" {% if not a.can_export %}disabled title="{{ t.archive_no_csv }}"{% endif %}></td>
+        <td class="archive-selection-cell"><input type="checkbox" name="entry" form="archive-selection" value="{{ [a.issuer_id, a.filename]|tojson|forceescape }}" data-archive-entry data-quarter="{{ a.year }}-Q{{ a.quarter }}" aria-label="{{ t.archive_select_invoice }} {{ a.number or a.filename }} · {{ a.issuer_label }}" {% if not a.can_export %}disabled title="{{ t.archive_no_csv }}"{% endif %}></td>
         {# Primär die Rechnungsnummer (der Dateiname ist Implementierungsdetail —
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
-        <td class="arch-file" title="{{ a.filename }}"><span class="arch-id">{{ a.number or a.filename }}</span>{% if archive_all %}<span class="arch-issuer">{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}</span>{% endif %}</td>
+        <td class="arch-file" title="{{ a.filename }}"><span class="arch-id">{{ a.number or a.filename }}</span>{% if archive_all %}<span class="arch-issuer" title="{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}">{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}</span>{% endif %}</td>
         <td class="arch-buyer">
           <div class="arch-line">
             <span class="arch-name">{{ a.buyer or "" }}</span>
@@ -159,7 +164,6 @@
           </details>
         </td>
       </tr>
-      {% endfor %}
       {% endfor %}
     </tbody>
   </table>

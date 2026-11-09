@@ -11,25 +11,23 @@ function element(data = {}) {
     setAttribute(name, value) { this[name] = value; }};
 }
 function fixture() {
-  const entries = [element({quarter: '2026-Q1'}), element({quarter: '2026-Q1'}), element({quarter: '2026-Q2'})];
+  const entries = [element({quarter: '2026-Q1'}), element({quarter: '2026-Q2'}), element({quarter: '2026-Q1'})];
   entries.forEach((entry, i) => { entry.value = JSON.stringify([i === 0 ? 'default' : 'company', `Rechnung_${i}.pdf`]); });
   const quarters = [element({archiveQuarter: '2026-Q1'}), element({archiveQuarter: '2026-Q2'}), element({archiveQuarter: '2026-Q3'})];
   const toggle = element(), all = element(), count = element(), status = element(), submit = element();
-  const headings = [{colSpan: 4}, {colSpan: 4}];
   const form = element();
   form.action = '/export/csv?issuer=all';
   form.querySelector = () => submit;
   const card = element({archiveSelectLabel: 'Select', archiveDoneLabel: 'Done', archiveCountLabel: '{n} selected', exportFailed: 'Failed', desktop: 'true'});
   card.querySelector = selector => ({'[data-archive-select]': toggle, '#archive-selection': form,
     '[data-archive-all]': all, '[data-archive-count]': count, '[data-archive-export-status]': status}[selector]);
-  card.querySelectorAll = selector => ({'[data-archive-entry]:not(:disabled)': entries, '[data-archive-quarter]': quarters,
-    '[data-archive-group-heading]': headings}[selector]);
+  card.querySelectorAll = selector => ({'[data-archive-entry]:not(:disabled)': entries, '[data-archive-quarter]': quarters}[selector]);
   const calls = [];
   const context = {window: {}, document: {querySelectorAll: () => [card]},
     FormData: class {constructor() { this.entries = entries.filter(e => e.checked).map(e => e.value); }},
     fetch: async (url, options) => { calls.push({url, options}); return {ok: true, json: async () => ({ok: true})}; }};
   vm.runInNewContext(source, context);
-  return {context, card, entries, quarters, toggle, all, count, status, submit, form, headings, calls};
+  return {context, card, entries, quarters, toggle, all, count, status, submit, form, calls};
 }
 
 test('select mode reveals controls; Done clears selection and restores the table', () => {
@@ -37,7 +35,7 @@ test('select mode reveals controls; Done clears selection and restores the table
   assert.equal(f.toggle.hidden, false);
   f.toggle.listeners.click();
   assert.equal(f.form.hidden, false);
-  assert.equal(f.headings[0].colSpan, 5);
+  assert.equal(f.card.dataset.selecting, 'true');
   f.all.checked = true;
   f.all.listeners.change();
   assert.ok(f.entries.every(e => e.checked));
@@ -45,15 +43,15 @@ test('select mode reveals controls; Done clears selection and restores the table
   f.toggle.listeners.click();
   assert.ok(f.entries.every(e => !e.checked));
   assert.equal(f.form.hidden, true);
-  assert.equal(f.headings[0].colSpan, 4);
+  assert.equal(f.card.dataset.selecting, 'false');
 });
 
-test('quarter selection and partial states stay consistent with individual invoices', () => {
+test('quarter selection finds non-adjacent invoices and preserves partial states', () => {
   const f = fixture();
   f.toggle.listeners.click();
   f.quarters[0].checked = true;
   f.quarters[0].listeners.change();
-  assert.deepEqual(f.entries.map(e => e.checked), [true, true, false]);
+  assert.deepEqual(f.entries.map(e => e.checked), [true, false, true]);
   assert.equal(f.all.indeterminate, true);
   assert.equal(f.quarters[2].disabled, true);
   f.entries[0].checked = false;

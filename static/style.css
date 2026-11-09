@@ -60,18 +60,16 @@
 #archive-issuer-form { margin-bottom: 12px; }
 .archive-header { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 12px; }
 .archive-header h2 { margin: 0 auto 0 0; }
-.archive-selection-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px; margin: 16px 0; background: var(--panel-2, var(--bg)); border-radius: 9px; }
+.archive-selection-bar { display: grid; gap: 12px; padding: 12px; margin: 16px 0; background: var(--panel-2, var(--bg)); border-radius: 9px; }
+.archive-selection-actions, .archive-quarter-selection { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.archive-quarter-selection { gap: 12px 20px; }
 .archive-selection-bar label.check { padding-bottom: 0; align-self: center; }
 .archive-selection-bar .hint { margin: 0; }
-.archive-selection-cell, .archive-selection-control { display: none; }
+.archive-selection-cell { display: none; }
 [data-selecting="true"] .archive-selection-cell { display: table-cell; width: 28px; }
-[data-selecting="true"] .archive-selection-control { display: inline-block; }
 .archive-card input[type="checkbox"] { width: auto; cursor: pointer; }
 .archive-card input[type="checkbox"]:disabled { cursor: default; }
-table.archive .archive-quarter th { padding-top: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.archive-quarter label { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; font-weight: 600; color: var(--ink); }
-.arch-issuer { display: block; white-space: normal; max-width: 190px; margin-top: 4px; font-size: var(--text-sm); color: var(--muted); }
-.archive-period-hint { font-size: var(--text-sm); }
+.arch-issuer { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; margin-top: 4px; font-size: var(--text-sm); color: var(--muted); }
 .archive-sort { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; max-width: 100%; }
 .archive-sort span { white-space: nowrap; }
 .archive-sort select { width: auto; max-width: 100%; font-size: var(--text-sm); }

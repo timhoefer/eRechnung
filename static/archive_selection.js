@@ -34,7 +34,6 @@
         toggle.textContent = active ? card.dataset.archiveDoneLabel : card.dataset.archiveSelectLabel;
         toggle.setAttribute('aria-pressed', String(active));
         form.hidden = !active;
-        card.querySelectorAll('[data-archive-group-heading]').forEach(heading => { heading.colSpan = active ? 5 : 4; });
         if (!active) entries.forEach(entry => { entry.checked = false; });
         status.textContent = '';
         update();

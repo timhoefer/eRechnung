@@ -1835,17 +1835,13 @@ def _settings_context() -> dict:
         archive.sort(key=number_key, reverse=True)  # stable: timestamp breaks equal-number ties
     elif archive_sort == "customer":
         archive.sort(key=lambda row: _country_sortkey(str(row["buyer"] or "")))
-    # Keep the requested sorting inside each calendar quarter.
-    archive.sort(key=lambda row: (row["year"], row["quarter"]), reverse=True)
-    groups: list[dict] = []
-    for row in archive:
-        key = f'{row["year"]}-Q{row["quarter"]}'
-        if not groups or groups[-1]["key"] != key:
-            groups.append({"key": key, "year": row["year"], "quarter": row["quarter"], "rows": []})
-        groups[-1]["rows"].append(row)
+    # Quarter shortcuts select rows without changing the list's sort order.
+    quarters = [{"key": f"{y}-Q{q}", "year": y, "quarter": q}
+                for y, q in sorted({(row["year"], row["quarter"]) for row in archive},
+                                   key=lambda period: (-period[0], period[1]))]
     return {
         "archive": archive,
-        "archive_groups": groups,
+        "archive_quarters": quarters,
         "archive_all": all_issuers,
         "archive_year": year,
         "archive_years": years,
