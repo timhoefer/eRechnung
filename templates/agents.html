@@ -68,7 +68,7 @@
   <h2>{{ 'Neue Verbindung' if de else 'New connection' }}</h2>
   <form method="post" action="{{ url_for('agents_update') }}">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="connect">
-    <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
+    <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" autocomplete="off" placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
     <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
     {% for profile in profiles if profile.available %}
     <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"><span>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</span></label>
