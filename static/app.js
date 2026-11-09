@@ -470,6 +470,20 @@ function snapshotForm(form) {
   });
   return data;
 }
+function revealInvoiceExtras(form) {
+  if (!form) return;
+  for (const [field, detail] of [["discount", "discount_reason"], ["prepaid", "prepaid_ref"]]) {
+    const row = document.getElementById(field + "-row");
+    const add = document.getElementById("add-" + field);
+    if (!row || !add) continue;
+    const amount = form.querySelector(`[name="${field}"]`);
+    const note = form.querySelector(`[name="${detail}"]`);
+    if (num(amount && amount.value) > 0 || (note && note.value.trim())) {
+      row.hidden = false;
+      add.hidden = true;
+    }
+  }
+}
 function restoreForm(form, data) {
   if (!form || !data) return;
   if (data.issuer && data.issuer[0] !== window.ISSUER_ID) return;
@@ -493,6 +507,7 @@ function restoreForm(form, data) {
     const el = form.querySelector(`[name="${name}"]`);
     if (el) el.value = data[name][0];
   });
+  revealInvoiceExtras(form);
 }
 
 let lastSavedCustomerName = "";
@@ -607,19 +622,10 @@ function applyDraft() {
   set("discount_reason", inv.discount_reason);
   const dt = form.querySelector('[name="discount_type"]');
   if (dt && inv.discount_type) { dt.value = inv.discount_type; syncUnitDisplay(dt); }
-  if (num(inv.discount) > 0 || (inv.discount_reason || "").trim()) {
-    const add = document.getElementById("add-discount");
-    const row = document.getElementById("discount-row");
-    if (add && row) { row.hidden = false; add.hidden = true; }
-  }
   // Anzahlung wiederherstellen und ggf. ausklappen.
   set("prepaid", inv.prepaid);
   set("prepaid_ref", inv.prepaid_ref);
-  if (num(inv.prepaid) > 0 || (inv.prepaid_ref || "").trim()) {
-    const add = document.getElementById("add-prepaid");
-    const row = document.getElementById("prepaid-row");
-    if (add && row) { row.hidden = false; add.hidden = true; }
-  }
+  revealInvoiceExtras(form);
 
   if (items.length) {
     // Share the complete line-field mapping with language/conflict restoration.

@@ -750,3 +750,39 @@ test("reactivation from the archive or dialog respects draft cancellation and pe
   await pending;
   assert.equal(submissions, 1);
 });
+
+for (const source of ["restoreForm", "applyDraft"]) {
+  for (const currency of ["EUR", "USD"]) {
+    test(source + " reveals and preserves imported discounts and prepayments in " + currency, () => {
+      const app = loadApp();
+      const fields = Object.fromEntries([
+        "currency", "discount", "discount_reason", "prepaid", "prepaid_ref",
+      ].map(name => [name, {value: ""}]));
+      fields.discount_type = bankSelect(["pct", "abs"]);
+      const elements = {
+        "discount-row": {hidden: true}, "prepaid-row": {hidden: true},
+        "add-discount": {hidden: false}, "add-prepaid": {hidden: false},
+      };
+      const form = {
+        querySelectorAll: () => [],
+        querySelector(selector) { return fields[selector.match(/name="([^"]+)"/)?.[1]] || null; },
+      };
+      app.document.getElementById = id => id === "invoice-form" ? form : elements[id] || null;
+      const invoice = {
+        currency, discount: "25", discount_type: "abs", discount_reason: "Project discount",
+        prepaid: "100", prepaid_ref: "Paid invoice EX-001",
+      };
+      if (source === "restoreForm") {
+        app.restoreForm(form, Object.fromEntries(Object.entries(invoice).map(([key, val]) => [key, [val]])));
+      } else {
+        app.window.DRAFT = {invoice};
+        app.applyDraft();
+      }
+      for (const [key, value] of Object.entries(invoice)) assert.equal(fields[key].value, value);
+      assert.equal(elements["discount-row"].hidden, false);
+      assert.equal(elements["prepaid-row"].hidden, false);
+      assert.equal(elements["add-discount"].hidden, true);
+      assert.equal(elements["add-prepaid"].hidden, true);
+    });
+  }
+}

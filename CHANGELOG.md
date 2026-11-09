@@ -1,5 +1,11 @@
 # Änderungen
 
+## Unreleased
+
+- Rechnungen werden erst nach erfolgreicher XSD-/Schematron-Prüfung archiviert. Fehlgeschlagene Prüfungen verändern weder Archiv, Kunden noch Nummernstand.
+- Gleiche Rechnungsnummern desselben Ausstellers werden bei abweichendem Inhalt abgewiesen. Identische Wiederholungen verwenden den vorhandenen Beleg; verschiedene Aussteller behalten getrennte Nummernfolgen.
+- Archivdateien werden vollständig vorbereitet, ohne vorhandene Dateien zu ersetzen. Unterbrochene Schreibvorgänge werden beim nächsten schreibenden Zugriff abgeschlossen. Eine gemeinsame lokale Prozesssperre schützt Stammdaten, Nummernstand und Datenordnerwechsel.
+
 ## 1.2.1
 
 - Das Archiv zeigt standardmäßig die neuesten Dateien zuerst. Alternativ lässt es sich nach Rechnungsnummer oder Kunde sortieren. Unterschiedlich lange Nummern wie „2026-07“ und „2026-008“ werden numerisch korrekt eingeordnet.
