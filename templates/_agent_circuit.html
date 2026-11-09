@@ -1,0 +1,31 @@
+{# Paths with a delay carry light pulses toward the chip; the others stay static. #}
+{% set traces = [
+  ('M19.5 40h50.5l32 32h48l22 22h28', '-1s'),
+  ('M0 110h200', '-4s'),
+  ('M39.5 188h52.5l38-38h44l24-24h2', '-2.5s'),
+  ('M114 0v22l30 30h52l20 20', none),
+  ('M172 0v22l40 40h28v10', '-3s'),
+  ('M264 0v44l-8 12v16', none),
+  ('M194 220v-22l30-30v-20', '-5s'),
+  ('M224 220v-22l16-16v-34', none),
+  ('M284 220v-26l-28-28v-18', '-.5s'),
+  ('M300 94h-20M300 126h-20', none),
+  ('M300 110h-20', '-2s'),
+  ('M273.5 26h4.5l22 22m-10.5 118h10.5', none),
+  ('M76 220v-24l35.525-35.525', none)
+] %}
+<svg class="agent-circuit" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 220" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+  <g class="agent-circuit-traces">
+    {% for path, delay in traces %}
+    <path d="{{ path }}"/>
+    {% if delay %}<path class="agent-circuit-flow" d="{{ path }}" pathLength="100" style="--delay: {{ delay }}"/>{% endif %}
+    {% endfor %}
+    <circle cx="16" cy="40" r="3.5"/>
+    <circle cx="36" cy="188" r="3.5"/>
+    <circle cx="114" cy="158" r="3.5"/>
+    <circle cx="270" cy="26" r="3.5"/>
+    <circle cx="286" cy="166" r="3.5"/>
+  </g>
+  <rect class="agent-circuit-chip" x="200" y="72" width="80" height="76" rx="12"/>
+</svg>

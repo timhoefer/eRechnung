@@ -10,17 +10,36 @@
     .agent-page .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
     .agent-check input { width: auto; flex: none; margin-top: 4px; }
     .agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
-    .agent-connection { position: relative; isolation: isolate; overflow: hidden; }
-    .agent-connection::before {
-      content: ""; position: absolute; inset: 0 0 0 auto; width: min(46%, 300px);
-      z-index: -1; pointer-events: none; background: var(--accent); opacity: .28;
-      -webkit-mask: url("{{ url_for('static', filename='agent-circuits.svg') }}?v={{ asset_version('agent-circuits.svg') }}") right center / auto 100% no-repeat;
-      mask: url("{{ url_for('static', filename='agent-circuits.svg') }}?v={{ asset_version('agent-circuits.svg') }}") right center / auto 100% no-repeat;
+    .agent-connection { position: relative; isolation: isolate; overflow: hidden; min-height: 220px; padding-right: 142px; overflow-wrap: anywhere; }
+    .agent-circuit {
+      position: absolute; right: 0; top: 50%; width: 300px; height: 220px; transform: translateY(-50%);
+      z-index: -1; pointer-events: none; color: var(--accent);
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 72%);
+      mask-image: linear-gradient(to right, transparent, #000 72%);
     }
-    @media (max-width: 600px) { .agent-connection::before { width: 38%; opacity: .18; } }
+    .agent-circuit-traces, .agent-circuit-chip { stroke-opacity: .28; }
+    .agent-circuit-flow { display: none; stroke-opacity: 1; stroke-dasharray: 4 110; stroke-dashoffset: 5; }
+    .is-active .agent-circuit-flow { display: initial; animation: agent-data-flow 6s linear infinite; animation-delay: var(--delay); filter: drop-shadow(0 0 3px var(--accent)); }
+    .is-active .agent-circuit-chip { animation: agent-chip-glow 5s ease-in-out infinite; filter: drop-shadow(0 0 4px var(--accent)); }
+    .agent-chip-control { position: absolute; right: 60px; top: 50%; transform: translate(50%, -50%); display: grid; justify-items: center; gap: 6px; }
+    .agent-chip-control .hint { margin: 0; font-size: 11px; line-height: 14px; }
+    @keyframes agent-data-flow {
+      0% { stroke-dashoffset: 5; opacity: 0; }
+      10%, 75% { opacity: .65; }
+      95%, 100% { stroke-dashoffset: -100; opacity: 0; }
+    }
+    @keyframes agent-chip-glow { 0%, 100% { stroke-opacity: .35; } 50% { stroke-opacity: .6; } }
+    @media (prefers-reduced-motion: reduce) {
+      .is-active .agent-circuit-flow { display: none; animation: none; }
+      .is-active .agent-circuit-chip { animation: none; stroke-opacity: .45; }
+    }
+    @media (max-width: 480px) {
+      .agent-connection { padding-right: 16px; padding-bottom: 164px; }
+      .agent-circuit { top: auto; bottom: -30px; transform: none; }
+      .agent-chip-control { top: auto; bottom: 80px; transform: translate(50%, 50%); }
+    }
     .agent-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .agent-toggle-row h2 { margin: 0; }
-    .agent-toggle-row strong { min-width: 0; overflow-wrap: anywhere; }
     .agent-toggle-control { display: flex; align-items: center; gap: 10px; flex: none; }
     .agent-toggle-control .hint { margin: 0; }
     .agent-toggle { display: inline-flex; align-items: center; width: 52px; height: 30px; padding: 4px; border-radius: 999px; background: var(--muted); }
