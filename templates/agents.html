@@ -68,10 +68,10 @@
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="connect">
     <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" autocomplete="off" placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
     <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
+    <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
     {% for profile in profiles if profile.available %}
     <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"><span>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</span></label>
     {% endfor %}
-    <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
     <h3>{{ 'Kundenzugriff' if de else 'Customer access' }}</h3>
     <label for="agent-customer-mode">{{ 'Freigegebene Kunden' if de else 'Permitted customers' }}</label>
     <select id="agent-customer-mode" name="customer_mode">
