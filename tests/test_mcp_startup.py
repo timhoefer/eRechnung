@@ -68,14 +68,14 @@ def test_start_preserves_issuer_scopes_and_approval(client, startup):
     assert len(servers) == 1
 
 
-@pytest.mark.parametrize("state", ["disabled", "revoked", "read_only", "feature_off"])
+@pytest.mark.parametrize("state", ["disabled", "paused", "revoked", "read_only", "feature_off"])
 def test_start_cannot_restore_or_expand_permissions(client, startup, monkeypatch, state):
     token, _, servers = startup
     if state == "disabled":
         configure(client, "disable")
-    elif state == "revoked":
+    elif state in {"revoked", "paused"}:
         identifier = m.app.extensions["mcp_access"].authenticate(token, m.DATA_DIR)["id"]
-        configure(client, "revoke", connection=identifier)
+        configure(client, "revoke" if state == "revoked" else "pause", connection=identifier, confirm="yes")
     elif state == "read_only":
         monkeypatch.setenv("ERECHNUNG_MCP_TOKEN", grant(client, writable=False))
     else:
@@ -178,14 +178,14 @@ def test_manual_and_automatic_start_share_one_window(client, monkeypatch, entryp
         running.result(timeout=5)
 
 
-@pytest.mark.parametrize("state", ["enabled", "disabled", "revoked", "read_only", "feature_off"])
+@pytest.mark.parametrize("state", ["enabled", "disabled", "paused", "revoked", "read_only", "feature_off"])
 def test_bridge_waits_for_manual_start_without_changing_permissions(client, startup, monkeypatch, state):
     token, _, servers = startup
     if state == "disabled":
         configure(client, "disable")
-    elif state == "revoked":
+    elif state in {"revoked", "paused"}:
         identifier = m.app.extensions["mcp_access"].authenticate(token, m.DATA_DIR)["id"]
-        configure(client, "revoke", connection=identifier)
+        configure(client, "revoke" if state == "revoked" else "pause", connection=identifier, confirm="yes")
     elif state == "read_only":
         monkeypatch.setenv("ERECHNUNG_MCP_TOKEN", grant(client, writable=False))
     elif state == "feature_off":

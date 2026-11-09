@@ -10,6 +10,7 @@ from confirmation_helpers import client as client
 from lxml import html
 
 import app as m
+from mcp_access import Access, AccessError
 
 
 @pytest.fixture(autouse=True)
@@ -91,7 +92,7 @@ def test_opt_in_switch_submits_consent_and_revokes_grants(client, language):
     def switch_form(response, enabled):
         assert response.status_code == 200
         page = html.fromstring(response.data)
-        switch, = page.xpath('//button[@role="switch"]')
+        switch, = page.xpath('//button[@role="switch" and @aria-labelledby="agent-access-label"]')
         assert switch.get("aria-checked") == ("true" if enabled else "false")
         for identifier in (switch.get("aria-labelledby") + " " + switch.get("aria-describedby")).split():
             assert page.get_element_by_id(identifier).text_content().strip()
@@ -124,6 +125,132 @@ def test_opt_in_switch_submits_consent_and_revokes_grants(client, language):
     assert client.post("/agents/requests/" + pending["request_id"],
                        data={"csrf": csrf(client), "decision": "approve"}).status_code == 403
     assert snapshot() == before
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_connection_switch_preserves_grant_but_discards_old_requests(client, language, legacy):
+    client.set_cookie("lang", language)
+    first, second = grant(client), grant(client, name="Second agent")
+    access = m.app.extensions["mcp_access"]
+    identifier = access.authenticate(first, m.DATA_DIR)["id"]
+    if legacy:
+        state = access.load()
+        del state["connections"][identifier]["active"]
+        access.save(state)
+    original = access.authenticate(first, m.DATA_DIR).copy()
+    first_request = call(first, "delete_customer", issuer="default", name=BUYER["name"])["request_id"]
+    second_request = call(second, "delete_customer", issuer="default", name=BUYER["name"])["request_id"]
+    before = snapshot()
+
+    def form_for(response, active):
+        page = html.fromstring(response.data)
+        form, = page.xpath('//form[input[@name="connection" and @value=$id]'
+                            ' and .//button[@role="switch"]]', id=identifier)
+        switch, = form.xpath('.//button[@role="switch"]')
+        assert switch.get("aria-checked") == str(active).lower()
+        assert original["name"] in switch.get("aria-label")
+        assert page.get_element_by_id(switch.get("aria-describedby")).text_content().strip()
+        return form
+
+    on = form_for(client.get("/agents"), True)
+    fields = dict(on.form_values())
+    off = form_for(client.post(on.action, data=fields), False)
+    form_for(client.post(on.action, data=fields), False)  # Retry must not reactivate.
+    assert access.load()["connections"][identifier] == {**original, "active": False}
+    reloaded = Access(access.path, access.write)
+    with pytest.raises(AccessError):
+        reloaded.authenticate(first, m.DATA_DIR)
+    assert not call(first, "list_customers")["ok"]
+    assert not call(first, "save_customer", issuer="default", buyer={**BUYER, "name": "New customer"})["ok"]
+    assert first_request not in access.pending
+    assert call(second, "request_status", request_id=second_request)["status"] == "pending"
+    assert call(second, "list_customers")["ok"]
+    assert client.post("/agents/requests/" + first_request,
+                       data={"csrf": csrf(client), "decision": "approve"}).status_code == 403
+
+    fields = dict(off.form_values())
+    form_for(client.post(off.action, data=fields), True)
+    form_for(client.post(off.action, data=fields), True)
+    assert access.authenticate(first, m.DATA_DIR) == {**original, "active": True}
+    assert reloaded.authenticate(first, m.DATA_DIR) == {**original, "active": True}
+    assert call(first, "list_customers")["ok"]
+    assert not call(first, "get_issuer", issuer=OTHER)["ok"]
+    assert not call(first, "request_status", request_id=first_request)["ok"]
+    assert client.post("/agents/requests/" + first_request,
+                       data={"csrf": csrf(client), "decision": "approve"}).status_code == 403
+    new_request = call(first, "delete_customer", issuer="default", name=BUYER["name"])
+    assert new_request["status"] == "approval_required" and new_request["request_id"] != first_request
+    assert snapshot() == before
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_connection_deletion_requires_confirmation_and_cannot_be_resumed(client, language):
+    client.set_cookie("lang", language)
+    credential, other = grant(client), grant(client, name="Other agent")
+    access = m.app.extensions["mcp_access"]
+    identifier = access.authenticate(credential, m.DATA_DIR)["id"]
+    pending = call(credential, "delete_customer", issuer="default", name=BUYER["name"])["request_id"]
+    before = snapshot()
+    state = access.load()
+    page = html.fromstring(client.get("/agents").data)
+    delete_form, = page.xpath('//form[input[@name="action" and @value="revoke"]'
+                              ' and input[@name="connection" and @value=$id]]', id=identifier)
+    review = client.post(delete_form.action, data=dict(delete_form.form_values()))
+    assert review.status_code == 200
+    assert access.load() == state
+    assert call(credential, "request_status", request_id=pending)["status"] == "pending"
+    confirmation = html.fromstring(review.data)
+    assert state["connections"][identifier]["name"] in confirmation.text_content()
+    cancel, = confirmation.xpath('//a/@href')
+    assert client.get(cancel).status_code == 200
+    assert access.load() == state
+    final_form, = confirmation.xpath('//form')
+    assert client.post(final_form.action, data=dict(final_form.form_values())).status_code == 200
+    assert identifier not in access.load()["connections"] and pending not in access.pending
+    assert not call(credential, "list_customers")["ok"]
+    assert call(other, "list_customers")["ok"]
+    assert configure(client, "resume", connection=identifier).status_code == 403
+    assert configure(client, "pause", connection=identifier).status_code == 403
+    assert client.post("/agents/requests/" + pending,
+                       data={"csrf": csrf(client), "decision": "approve"}).status_code == 403
+    assert snapshot() == before
+
+
+def test_resume_preserves_read_only_scope_and_cannot_restore_global_revocation(client, monkeypatch, tmp_path):
+    credential = grant(client, writable=False)
+    access = m.app.extensions["mcp_access"]
+    identifier = access.authenticate(credential, m.DATA_DIR)["id"]
+    assert configure(client, "pause", connection=identifier).status_code == 200
+    assert configure(client, "resume", connection=identifier).status_code == 200
+    assert not call(credential, "delete_customer", issuer="default", name=BUYER["name"])["ok"]
+    with monkeypatch.context() as changed:
+        changed.setattr(m, "DATA_DIR", tmp_path / "another")
+        m.DATA_DIR.mkdir()
+        assert configure(client, "pause", connection=identifier).status_code == 200
+        assert configure(client, "resume", connection=identifier).status_code == 200
+        assert not call(credential, "list_customers")["ok"]
+    assert configure(client, "pause", connection=identifier).status_code == 200
+    assert configure(client, "disable").status_code == 200
+    assert configure(client, "resume", connection=identifier).status_code == 403
+    assert configure(client, "enable", consent="yes").status_code == 200
+    assert configure(client, "resume", connection=identifier).status_code == 403
+    assert not call(credential, "list_customers")["ok"]
+
+
+@pytest.mark.parametrize("action", ["pause", "resume", "revoke"])
+def test_connection_controls_require_ui_session_and_reject_bearer(client, action):
+    credential = grant(client)
+    access = m.app.extensions["mcp_access"]
+    identifier = access.authenticate(credential, m.DATA_DIR)["id"]
+    state = access.load()
+    fields = {"action": action, "connection": identifier, "confirm": "yes"}
+    assert client.post("/agents/settings", data=fields).status_code == 403
+    fields["csrf"] = csrf(client)
+    for headers in [{"Origin": "https://example.org"}, {"Authorization": "Bearer " + credential}]:
+        assert client.post("/agents/settings", data=fields, headers=headers).status_code == 403
+    assert not call(credential, action, connection=identifier)["ok"]
+    assert access.load() == state
 
 
 def test_browser_forms_preserve_same_origin_and_reject_opaque_origins(client):
@@ -226,7 +353,7 @@ def test_cancelled_or_revoked_approvals_cannot_execute(client, monkeypatch, tmp_
     elif cause == "expire":
         access.pending[identifier]["expires"] = time.monotonic() - 1
     elif cause == "revoke":
-        configure(client, "revoke", connection=access.pending[identifier]["connection"]["id"])
+        configure(client, "revoke", connection=access.pending[identifier]["connection"]["id"], confirm="yes")
     elif cause == "disable":
         configure(client, "disable")
         configure(client, "enable", consent="yes")

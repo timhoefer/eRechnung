@@ -58,22 +58,37 @@ class Access:
         identifier, token = secrets.token_urlsafe(16), secrets.token_urlsafe(32)
         data["connections"][identifier] = {
             "id": identifier, "name": name, "issuers": sorted(set(issuers)),
-            "writable": writable, "scope": digest(str(directory.resolve())), "token_hash": digest(token),
+            "active": True, "writable": writable,
+            "scope": digest(str(directory.resolve())), "token_hash": digest(token),
         }
         self.save(data)
         return token
+
+    def set_active(self, identifier, active):
+        data = self.load()
+        connection = data["connections"].get(identifier)
+        if not data.get("enabled") or not connection:
+            raise AccessError("Access disabled or connection revoked.")
+        connection["active"] = active
+        self.save(data)
+        if not active:
+            self.clear_requests(identifier)
+
+    def clear_requests(self, identifier):
+        self.pending = {k: v for k, v in self.pending.items() if v["connection"]["id"] != identifier}
 
     def revoke(self, identifier):
         data = self.load()
         data["connections"].pop(identifier, None)
         self.save(data)
-        self.pending = {k: v for k, v in self.pending.items() if v["connection"]["id"] != identifier}
+        self.clear_requests(identifier)
 
     def connection(self, identifier, directory):
         data = self.load()
         connection = data["connections"].get(identifier) if data.get("enabled") else None
-        if not connection or connection.get("scope") != digest(str(directory.resolve())):
-            raise AccessError("Access disabled, revoked or bound to another data directory.")
+        if (not connection or connection.get("active", True) is not True
+                or connection.get("scope") != digest(str(directory.resolve()))):
+            raise AccessError("Access disabled, paused, revoked or bound to another data directory.")
         return connection
 
     def authenticate(self, token, directory):

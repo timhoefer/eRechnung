@@ -33,14 +33,28 @@
 {% if state.enabled %}
 <section class="card">
   <h2>{{ 'Verbindungen' if de else 'Connections' }}</h2>
+  <p class="hint" id="agent-connection-effect">{{ 'Ausschalten pausiert nur diesen Zugang und verwirft seine offenen Anfragen. Du kannst ihn jederzeit wieder einschalten.' if de else 'Turning a connection off pauses only that connection and discards its pending requests. You can turn it back on at any time.' }}</p>
   {% for id, connection in state.connections.items() %}
   <div class="export-box agent-connection">
-    <strong>{{ connection.name }}</strong>
+    {% set active = connection.get('active', true) %}
+    <form class="agent-toggle-row" method="post" action="{{ url_for('agents_update') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="action" value="{{ 'pause' if active else 'resume' }}">
+      <input type="hidden" name="connection" value="{{ id }}">
+      <strong>{{ connection.name }}</strong>
+      <span class="agent-toggle-control">
+        <span class="hint" aria-hidden="true">{{ ('Ein' if active else 'Aus') if de else ('On' if active else 'Off') }}</span>
+        <button class="agent-toggle" type="submit" role="switch" aria-checked="{{ 'true' if active else 'false' }}"
+                aria-label="{{ ('Zugang für ' if de else 'Access for ') ~ connection.name }}" aria-describedby="agent-connection-effect">
+          <span aria-hidden="true"></span>
+        </button>
+      </span>
+    </form>
     <p class="hint">{{ ('Lesen und Änderungen anfragen' if connection.writable else 'Nur lesen') if de else ('Read and request changes' if connection.writable else 'Read only') }}</p>
     <ul>{% for profile in profiles if profile.id in connection.issuers %}<li>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</li>{% endfor %}</ul>
     <form method="post" action="{{ url_for('agents_update') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="connection" value="{{ id }}">
-      <button type="submit" class="secondary">{{ 'Zugang widerrufen' if de else 'Revoke access' }}</button>
+      <button type="submit" class="secondary">{{ 'Zugang löschen' if de else 'Delete connection' }}</button>
     </form>
   </div>
   {% else %}<p class="hint">{{ 'Noch keine Verbindung freigegeben.' if de else 'No connections granted yet.' }}</p>{% endfor %}

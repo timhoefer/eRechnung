@@ -99,8 +99,16 @@ def register(m):
                 access.enable(True)
             elif action == "disable":
                 access.enable(False)
+            elif action in {"pause", "resume"}:
+                access.set_active(request.form.get("connection", ""), action == "resume")
             elif action == "revoke":
-                access.revoke(request.form.get("connection", ""))
+                identifier = request.form.get("connection", "")
+                connection = access.load()["connections"].get(identifier)
+                if not connection:
+                    abort(404)
+                if request.form.get("confirm") != "yes":
+                    return render_template("agent_revoke.html", connection=connection, csrf=csrf())
+                access.revoke(identifier)
             elif action == "connect":
                 name = request.form.get("name", "").strip()
                 issuers = request.form.getlist("issuers")

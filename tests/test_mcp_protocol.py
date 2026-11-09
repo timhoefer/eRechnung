@@ -58,6 +58,16 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             data = pending.structured_content
             assert not pending.is_error and data["status"] == "approval_required"
             assert json.loads(m.CUSTOMERS_FILE.read_text())[0] == BUYER
+            connection_id = m.app.extensions["mcp_access"].authenticate(credential, m.DATA_DIR)["id"]
+            assert configure(client, "pause", connection=connection_id).status_code == 200
+            refused = await agent.call_tool("list_customers", {})
+            assert refused.is_error and not refused.structured_content["ok"]
+            assert configure(client, "resume", connection=connection_id).status_code == 200
+            assert (await agent.call_tool("list_customers", {})).structured_content["ok"]
+            assert not (await agent.call_tool("request_status", {"request_id": data["request_id"]})).structured_content["ok"]
+            pending = await agent.call_tool("delete_customer", {"issuer": "default", "name": BUYER["name"]})
+            assert pending.structured_content["request_id"] != data["request_id"]
+            data = pending.structured_content
             assert decide(client, data["request_id"]).status_code == 303
             status = await agent.call_tool("request_status", {"request_id": data["request_id"]})
             assert status.structured_content["status"] == "completed"

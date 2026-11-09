@@ -37,8 +37,14 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 5. Die einmalig angezeigte Konfiguration in den MCP-Client übernehmen. Manche
    Clients benötigen statt des `mcpServers`-Blocks ein eigenes Konfigurationsformat;
    Befehl, Argumente und Umgebungsvariablen bleiben dieselben.
-6. In der App unter **Anfragen → Aktualisieren** offene Anfragen prüfen. Jede
-   Verbindung lässt sich einzeln widerrufen.
+6. In der App unter **Anfragen → Aktualisieren** offene Anfragen prüfen.
+7. Jede Verbindung lässt sich mit ihrem eigenen Schalter pausieren und wieder
+   einschalten. Schlüssel, Aussteller und Rechte bleiben erhalten. Beim Pausieren
+   werden alle Aufrufe sofort gesperrt und ihre offenen Anfragen verworfen; diese
+   leben beim Wiedereinschalten nicht wieder auf. Andere Verbindungen bleiben aktiv.
+   **Zugang löschen** zeigt zuerst eine Warnung und widerruft den Schlüssel nach
+   **Dauerhaft löschen** endgültig. Für einen späteren Zugriff ist dann eine neue
+   Verbindung nötig. Rechnungen und gespeicherte Daten bleiben erhalten.
 
 Der erzeugte Befehl startet entweder `mcp_server.py` mit dem Python-Interpreter
 der App oder die gebündelte macOS-Datei mit `--mcp`. Außerhalb des Testmodus enthält
@@ -128,7 +134,7 @@ Die Anzeige verwendet den geprüften Rechnungsstand einschließlich automatisch
 Die Freigabe gilt einmalig, höchstens fünf Minuten und nur für den zuvor geprüften
 Datenstand. Änderungen zwischen Anfrage und Bestätigung führen zu Ablehnung oder
 einer neuen, separat zu prüfenden Anfrage. Zusätzliche Felder im Bestätigungsaufruf
-können die gespeicherte Aktion nicht verändern. Abbrechen, Widerruf oder Neustart
+können die gespeicherte Aktion nicht verändern. Abbrechen, Pausieren, Widerruf oder Neustart
 verhindern ihre spätere Ausführung. Über MCP gibt es keinen Bestätigungsbefehl.
 
 Maximal 20 Verbindungen und 64 kurzlebige Anfragen werden gehalten. Identische
@@ -149,8 +155,10 @@ Aktivitätsprotokoll und kein allgemeines Rückgängig.
   Einschränkung auf einzelne Kunden und keine Feldmaskierung von Bank-/Steuerdaten.
 - Der Verbindungsname ist eine frei vergebene Bezeichnung, keine verifizierte
   Identität eines Anbieters. Wer den Schlüssel besitzt, kann diese Verbindung nutzen.
-- Ausschalten entfernt alle Zugänge dauerhaft. Wieder einschalten erfordert neue
-  Verbindungen. Ein gewöhnlicher App-Neustart erhält bestehende Zugänge.
+- Der globale Schalter **Agentenzugriff erlauben** entfernt beim Ausschalten alle
+  Zugänge dauerhaft. Wieder einschalten erfordert neue Verbindungen. Der Schalter
+  einer einzelnen Verbindung pausiert dagegen nur diesen Zugang. Ein gewöhnlicher
+  App-Neustart erhält bestehende Zugänge einschließlich ihres pausierten Zustands.
 - Die Verarbeitung in eRechnung bleibt lokal. Ein verbundener Agent kann gelesene
   Finanz- und Kontaktdaten an seinen Anbieter senden. Das Opt-in ersetzt keine
   Prüfung der Datenverarbeitung des gewählten Anbieters.
