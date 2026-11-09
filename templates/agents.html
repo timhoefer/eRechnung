@@ -57,7 +57,9 @@
     <p class="hint">{{ 'Der Zugang umfasst Stammdaten und Archiv der ausgewählten Aussteller sowie die gemeinsame Kunden- und Positionsliste. Neue Aussteller sind nicht automatisch freigegeben. Die Freigabe gilt nur für den aktuellen Datenordner.' if de else 'Access includes issuer details and archives for the selected profiles, plus the shared customer and saved-item list. New issuers are not automatically granted. Permission applies only to the current data folder.' }}</p>
     <label class="agent-check"><input type="checkbox" name="write" value="yes"><span>{{ 'Rechnungen erstellen und Datenänderungen anfragen' if de else 'Create invoices and request data changes' }}</span></label>
     <p class="hint">{{ 'Endgültige Rechnungen, Löschungen und Änderungen an vorhandenen Daten warten auf deine ausdrückliche Bestätigung in eRechnung.' if de else 'Final invoices, deletions and changes to existing data wait for your explicit approval in eRechnung.' }}</p>
-    <button type="submit">{{ 'Verbindung freigeben' if de else 'Grant connection' }}</button>
+    <div class="agent-actions">
+      <button type="submit">{{ 'Verbindung freigeben' if de else 'Grant connection' }}</button>
+    </div>
   </form>
 </section>
 {% endif %}
