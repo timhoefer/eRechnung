@@ -2,8 +2,12 @@
 window.ChangeConfirmation = (() => {
   let queue = Promise.resolve();
   function ask(change) {
-    const run = () => new Promise(resolve => {
+    const run = async () => {
       const dialog = document.getElementById("change-confirmation");
+      const error = document.getElementById("change-cancel-error");
+      const confirm = document.getElementById("change-confirm-button");
+      error.hidden = true;
+      confirm.disabled = false;
       document.getElementById("change-title").textContent = change.title;
       document.getElementById("change-message").textContent = change.message;
       const rows = document.getElementById("change-rows");
@@ -17,10 +21,28 @@ window.ChangeConfirmation = (() => {
         }
         rows.appendChild(row);
       }
-      dialog.returnValue = "cancel";
-      dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), {once: true});
-      dialog.showModal();
-    });
+      for (;;) {
+        const accepted = await new Promise(resolve => {
+          dialog.returnValue = "cancel";
+          dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), {once: true});
+          dialog.showModal();
+        });
+        if (accepted && !confirm.disabled) return true;
+        try {
+          const response = await fetch(change.cancel_url, {
+            method: "POST", body: new URLSearchParams({token: change.token}),
+            headers: {"X-Requested-With": "fetch"},
+          });
+          if (!response.ok) throw new Error("Cancellation failed");
+          return false;
+        } catch (_) {
+          // Keep this dialog's place in the queue until revocation succeeds.
+          // Once cancellation was requested, only retrying it is allowed.
+          error.hidden = false;
+          confirm.disabled = true;
+        }
+      }
+    };
     const answer = queue.then(run);
     queue = answer.catch(() => {});
     return answer;
@@ -33,11 +55,6 @@ window.ChangeConfirmation = (() => {
     while (response.status === 428 && interactive) {
       const data = await response.json();
       if (!data.confirmation || !await ask(data.confirmation)) {
-        if (data.confirmation) {
-          await fetch(data.confirmation.cancel_url, {
-            method: "POST", body: new URLSearchParams({token: data.confirmation.token}),
-          }).catch(() => {});
-        }
         const error = new Error("Change cancelled");
         error.name = "AbortError";
         throw error;

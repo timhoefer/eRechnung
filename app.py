@@ -974,10 +974,12 @@ def confirm_customer_changes(customers: list[dict]) -> None:
         details = []
         removed = False
         for old in before:
-            name = old.get("name", "").casefold()
-            if name == request.form.get("prev_name", "").strip().casefold():
-                name = request.form.get("buyer_name", "").strip().casefold()
-            new = next((c for c in customers if c.get("name", "").casefold() == name), {})
+            # Use the same identity comparison as prepare_customer_update/delete.
+            # casefold() would conflate distinct saved names such as Straße/Strasse.
+            name = old.get("name", "").lower()
+            if name == request.form.get("prev_name", "").strip().lower():
+                name = request.form.get("buyer_name", "").strip().lower()
+            new = next((c for c in customers if c.get("name", "").lower() == name), {})
             removed = removed or not new
             for detail in change_details(old, new):
                 detail["label"] = f'{old.get("name", "")} · {detail["label"]}'

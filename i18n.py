@@ -8,6 +8,7 @@ DEFAULT_LANG = "de"
 LANG = {
     "de": {
         "change_title": "Änderung bestätigen",
+        "change_cancel_failed": "Abbrechen ist fehlgeschlagen. Bitte klicke erneut auf „Abbrechen“. Die Änderung wird nicht ausgeführt.",
         "change_confirm": "Bestätigen und ausführen",
         "change_before": "Bisher",
         "change_after": "Danach",
@@ -372,6 +373,7 @@ LANG = {
     },
     "en": {
         "change_title": "Confirm change",
+        "change_cancel_failed": "Cancellation failed. Please click Cancel again. The change will not be carried out.",
         "change_confirm": "Confirm and proceed",
         "change_before": "Before",
         "change_after": "After",

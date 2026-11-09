@@ -1611,9 +1611,8 @@ document.addEventListener("change", (e) => {
 document.addEventListener("click", (e) => {
   const langLink = e.target.closest(".langswitch a");
   if (langLink) {
-    const form = document.getElementById("invoice-form");
-    if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
-    return; // Navigation zum Sprachwechsel zulassen
+    e.preventDefault();
+    return switchLanguage(langLink.href);
   }
   if (e.target.closest("#format-trigger")) {
     const m = document.getElementById("format-menu");
@@ -2027,6 +2026,24 @@ for (const id of ["issuer-switch-form", "issuer-create-form"]) {
 
 function languageDraftKey() {
   return "erechnung:lang:" + (window.ISSUER_SCOPE || "legacy") + ":" + (window.ISSUER_ID || "default");
+}
+
+let languageSwitchPending = false;
+async function switchLanguage(url) {
+  if (languageSwitchPending || issuerSwitchPending || issuerDeletionPending) return;
+  languageSwitchPending = true;
+  try {
+    // Existing master-data edits are only saved after explicit confirmation.
+    // Cancelling or a failed save leaves the current form open with all edits.
+    if (!(await flushSellerSaves())) return;
+    const form = document.getElementById("invoice-form");
+    if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
+    window.location.assign(url);
+  } catch (error) {
+    changeError(error);
+  } finally {
+    languageSwitchPending = false;
+  }
 }
 
 // Restoration from either the creation dialog or archive keeps the same identity.
