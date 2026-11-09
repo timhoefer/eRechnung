@@ -34,7 +34,7 @@
 <section class="card">
   <h2>{{ 'Verbindungen' if de else 'Connections' }}</h2>
   {% for id, connection in state.connections.items() %}
-  <div class="export-box">
+  <div class="export-box agent-connection">
     <strong>{{ connection.name }}</strong>
     <p class="hint">{{ ('Lesen und Änderungen anfragen' if connection.writable else 'Nur lesen') if de else ('Read and request changes' if connection.writable else 'Read only') }}</p>
     <ul>{% for profile in profiles if profile.id in connection.issuers %}<li>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</li>{% endfor %}</ul>

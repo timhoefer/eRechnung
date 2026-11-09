@@ -10,6 +10,14 @@
     .agent-page .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
     .agent-check input { width: auto; flex: none; margin-top: 4px; }
     .agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+    .agent-connection { position: relative; isolation: isolate; overflow: hidden; }
+    .agent-connection::before {
+      content: ""; position: absolute; inset: 0 0 0 auto; width: min(46%, 300px);
+      z-index: -1; pointer-events: none; background: var(--accent); opacity: .28;
+      -webkit-mask: url("{{ url_for('static', filename='agent-circuits.svg') }}?v={{ asset_version('agent-circuits.svg') }}") right center / auto 100% no-repeat;
+      mask: url("{{ url_for('static', filename='agent-circuits.svg') }}?v={{ asset_version('agent-circuits.svg') }}") right center / auto 100% no-repeat;
+    }
+    @media (max-width: 600px) { .agent-connection::before { width: 38%; opacity: .18; } }
     .agent-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .agent-toggle-row h2 { margin: 0; }
     .agent-toggle-control { display: flex; align-items: center; gap: 10px; flex: none; }
