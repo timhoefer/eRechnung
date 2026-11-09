@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS-Downloads als gestaltetes DMG mit App und Programme-Verknüpfung; das ZIP bleibt als Alternative verfügbar. Der helle Hintergrund enthält dezente Rechnungsmotive und Installationshinweise auf Deutsch und Englisch.
+- Build- und Release-Prüfungen kontrollieren beide Downloads, einschließlich Signierung, Notarisierung und Selbsttest der aus dem DMG kopierten App. Die Verpackung erfolgt außerhalb synchronisierter Projektordner.
 - Änderungen an bestehenden Stammdaten, Kunden und gespeicherten Positionen sowie Löschungen erhalten eine zusätzliche Bestätigung mit den betroffenen Daten. Unbestätigte Änderungen bleiben im Formular; beim Kundenwechsel wird vor ihrem Verlust gewarnt.
 - Bestätigungen sind einmalig, zeitlich begrenzt und an Sitzung, konkrete Anfrage und bisherigen Datenstand gebunden. Abbrechen widerruft die Bestätigung.
 - CSV-Exporte, Rechnungsbegleitdateien und Schreibproben ersetzen keine vorhandenen Dateien. Ein interner Testmodus verwendet ausschließlich temporäre Daten und einen eigenen Nummernlauf.

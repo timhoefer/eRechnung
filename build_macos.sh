@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Baut die macOS-Doppelklick-App (Option D)  ->  dist/eRechnung.app
+# Baut die macOS-App als dist/eRechnung.dmg und dist/eRechnung.app.zip.
 #
 # Voraussetzungen:
 #   - .venv mit Runtime-Deps (requirements.txt) + Build-Deps (requirements-build.txt)
@@ -18,14 +18,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if [ ! -x .venv/bin/pyinstaller ]; then
-  echo "PyInstaller/pywebview fehlen. Einmalig installieren mit:"
+if [ ! -x .venv/bin/pyinstaller ] || [ ! -x .venv/bin/dmgbuild ]; then
+  echo "Build-Abhängigkeiten fehlen. Einmalig installieren mit:"
   echo "  .venv/bin/pip install -r requirements-build.txt"
   exit 1
 fi
 
-# Apple-Zugriff vor dem Build prüfen; ein Vertrags-/Loginfehler darf den
-# vorhandenen Build nicht löschen und wird nicht erst nach dem Signieren sichtbar.
+# Apple-Zugriff vor dem Build prüfen; ein Vertrags-/Loginfehler wird so nicht
+# erst nach dem Signieren sichtbar.
 if [ -n "${NOTARY_PROFILE:-}" ]; then
   if [ -z "${SIGN_IDENTITY:-}" ]; then
     echo "NOTARY_PROFILE benötigt SIGN_IDENTITY." >&2
@@ -34,31 +34,15 @@ if [ -n "${NOTARY_PROFILE:-}" ]; then
   xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null
 fi
 
-# build/dist aufräumen. Eine laufende App hält dist/ offen ("rm: dist: Directory not
-# empty"); daher: erst normal versuchen, bei Misserfolg die laufende Instanz beenden
-# und erneut (mit kurzem Warten, falls Spotlight/Finder noch Dateien hält).
-APP_BIN="dist/eRechnung.app/Contents/MacOS/eRechnung"
-clean() { rm -rf build dist 2>/dev/null; [ ! -e dist ] && [ ! -e build ]; }
-if ! clean; then
-  if pgrep -f "$APP_BIN" >/dev/null 2>&1; then
-    echo "Beende laufende eRechnung-App (hält dist/ offen) ..."
-    pkill -f "$APP_BIN" || true
-  fi
-  for attempt in 1 2 3; do
-    sleep 1
-    clean && break
-    echo "Aufräumen von build/dist erneut versucht ($attempt) ..."
-  done
-fi
-if [ -e dist ] || [ -e build ]; then
-  echo "FEHLER: build/dist ließ sich nicht entfernen – läuft die App noch?" >&2
-  echo "        Bitte eRechnung beenden (Cmd+Q) und erneut bauen." >&2
-  exit 1
-fi
-
-.venv/bin/pyinstaller eRechnung.spec --noconfirm
-
-APP="dist/eRechnung.app"
+# Außerhalb synchronisierter Projektordner bauen: File Provider können sonst
+# Finder-Metadaten in das signierte Bundle schreiben. Vorhandene Downloads bleiben
+# bis zum erfolgreichen Abschluss erhalten; laufende Apps werden nicht beendet.
+BUILD_STAGE=$(mktemp -d /private/tmp/erechnung-build.XXXXXX)
+trap 'rm -rf "$BUILD_STAGE"' EXIT
+.venv/bin/pyinstaller eRechnung.spec --noconfirm \
+  --workpath "$BUILD_STAGE/build" --distpath "$BUILD_STAGE/dist"
+APP="$BUILD_STAGE/dist/eRechnung.app"
+xattr -cr "$APP"
 
 # --- Optional: Signieren (Hardened Runtime) -----------------------------------
 if [ -n "${SIGN_IDENTITY:-}" ]; then
@@ -86,14 +70,9 @@ fi
 
 # --- Optional: Notarisieren + Staple -------------------------------------------
 if [ -n "${NOTARY_PROFILE:-}" ]; then
-  if [ -z "${SIGN_IDENTITY:-}" ]; then
-    echo "FEHLER: NOTARY_PROFILE gesetzt, aber SIGN_IDENTITY fehlt (unsignierte Apps" >&2
-    echo "        kann Apple nicht notarisieren)." >&2
-    exit 1
-  fi
   echo
   echo "Notarisiere (Profil: $NOTARY_PROFILE) – dauert meist 1–5 Minuten ..."
-  ZIP="dist/eRechnung-notarize.zip"
+  ZIP="$BUILD_STAGE/eRechnung-notarize.zip"
   ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
   xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
   rm -f "$ZIP"
@@ -103,19 +82,35 @@ if [ -n "${NOTARY_PROFILE:-}" ]; then
 fi
 
 VERSION=$(.venv/bin/python -c 'from version import __version__; print(__version__)')
-RELEASE_ZIP="dist/eRechnung.app.zip"
+RELEASE_ZIP="$BUILD_STAGE/eRechnung.app.zip"
 # AppleDouble-Metadaten außerhalb des Bundles halten. Manche Entpacker lassen
 # sonst ._*-Dateien an Framework-Symlinks zurück; Gatekeeper lehnt das Bundle ab.
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$RELEASE_ZIP"
-CHECK_ARGS=(--version "$VERSION" --app "$APP" --archive "$RELEASE_ZIP")
+
+RELEASE_DMG="$BUILD_STAGE/eRechnung.dmg"
+# Nur der Hintergrund-Renderer braucht den Homebrew-Suchpfad, nicht die App.
+DYLD_FALLBACK_LIBRARY_PATH="${HOMEBREW_LIB:-/opt/homebrew/lib}${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}" \
+.venv/bin/python scripts/build_dmg.py --app "$APP" --output "$RELEASE_DMG"
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$RELEASE_DMG"
+fi
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  xcrun notarytool submit "$RELEASE_DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$RELEASE_DMG"
+fi
+
+CHECK_ARGS=(--version "$VERSION" --app "$APP" --archive "$RELEASE_ZIP" --dmg "$RELEASE_DMG")
 if [ -z "${NOTARY_PROFILE:-}" ]; then
   CHECK_ARGS+=(--unsigned)
 fi
 .venv/bin/python scripts/check_macos_release.py "${CHECK_ARGS[@]}"
+mkdir -p dist
+cp "$RELEASE_ZIP" dist/eRechnung.app.zip
+cp "$RELEASE_DMG" dist/eRechnung.dmg
 
 echo
-echo "Fertig: $APP"
-echo "Headless-Selbsttest: ./$APP/Contents/MacOS/eRechnung --selftest"
+echo "Fertig: dist/eRechnung.dmg (empfohlen) und dist/eRechnung.app.zip"
+echo "Zum Installieren das DMG öffnen und eRechnung auf den Programme-Ordner ziehen."
 echo
 if [ -z "${SIGN_IDENTITY:-}" ]; then
   echo "Hinweis: Die App ist unsigniert. Beim ersten Öffnen auf einem anderen Mac"

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="460" viewBox="0 0 720 460">
+  <rect width="720" height="460" fill="#ffffff"/>
+  <path d="M0 248C180 218 500 261 720 238V460H0Z" fill="#f0f4fa"/>
+  <g fill="none" stroke="#dce5f0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(604 20) rotate(12 42 54)">
+      <path d="M12 0H60L84 24V108H12Z" fill="#ffffff"/>
+      <path d="M60 0V24H84M28 44H67M28 56H67M28 68H52M46 88H67"/>
+    </g>
+    <g transform="translate(-23 344) rotate(-14 42 54)">
+      <path d="M12 0H60L84 24V108H12Z" fill="#ffffff"/>
+      <path d="M60 0V24H84M28 44H67M28 56H67M28 68H52M46 88H67"/>
+    </g>
+  </g>
+  <text x="360" y="61" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="29" font-weight="600" fill="#202d43">eRechnung</text>
+  <text x="360" y="92" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" fill="#54647c">Ziehe die App in den Programme-Ordner.</text>
+  <text x="360" y="116" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" fill="#62738c">Drag the app to Applications to install.</text>
+  <g fill="none" stroke="#8aa7d2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M327 240H391M380 229L391 240L380 251"/>
+  </g>
+</svg>

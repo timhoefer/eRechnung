@@ -1,3 +1,4 @@
 pyinstaller
 pywebview
-cairosvg  # nur für make_icon.py (Icon-Regenerierung); benötigt native libcairo
+cairosvg  # Icon und DMG-Hintergrund; benötigt native libcairo
+dmgbuild==1.6.7  # Finder-Layout ohne AppleScript oder GUI-Automation
