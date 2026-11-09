@@ -56,10 +56,7 @@ def register(m):
                     or not secrets.compare_digest(supplied.encode(), expected.encode())):
                 abort(403)
 
-    def settings_page(token=None, error=None):
-        state = access.load()
-        customers = customer_records()
-        access.prune()
+    def configuration_context(token=None):
         if m.FROZEN:
             command, args = sys.executable, ["--mcp"]
         else:
@@ -72,12 +69,17 @@ def register(m):
             "command": command, "args": args,
             "env": {**endpoint, **startup, "ERECHNUNG_MCP_TOKEN": token, "ERECHNUNG_MCP": "1"},
         }}} if token else None
+        return {"configuration": configuration, "autostart": "ERECHNUNG_MCP_AUTOSTART" in startup}
+
+    def settings_page(token=None, error=None):
+        state = access.load()
+        customers = customer_records()
+        access.prune()
         return render_template("agents.html", state=state, csrf=csrf(),
                                profiles=m.issuer_profiles(include_deleted=True),
                                customer_choices=customer_scope.choices(customers),
                                customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customers},
-                               requests=access.pending, configuration=configuration,
-                               autostart="ERECHNUNG_MCP_AUTOSTART" in startup, error=error)
+                               requests=access.pending, error=error, **configuration_context(token))
 
     def customer_records():
         if m.CUSTOMERS_FILE.is_symlink():
@@ -94,6 +96,30 @@ def register(m):
     def agents_status():
         # Readiness only: never expose grants, profile data or a CSRF session.
         return {"service": "eRechnung", "mcp_enabled": app.config["MCP_FEATURE"]}
+
+    @app.route("/agents/connections/<identifier>/setup", methods=["GET", "POST"])
+    def agents_setup(identifier):
+        ui_guard()
+        with m.DATA_LOCK, data_lock(m.BASE), data_lock(m.DATA_DIR):
+            state = access.load()
+            connection = state["connections"].get(identifier) if state.get("enabled") else None
+            # A paused connection can be reconfigured, but must remain paused.
+            if not connection or connection.get("scope") != digest(str(m.DATA_DIR.resolve())):
+                raise AccessError("Connection unavailable in this data folder.")
+            revision = digest(json.dumps(connection, sort_keys=True))
+            token = None
+            changed = False
+            if request.method == "POST":
+                if request.form.get("confirm") != "renew" or request.form.get("revision") != revision:
+                    # Also makes double submission/reload harmless: it cannot
+                    # invalidate a key that was just displayed by the first POST.
+                    changed = True
+                else:
+                    token = access.renew(identifier, connection)
+            return render_template("agent_setup.html", connection=connection, revision=revision,
+                                   profiles=m.issuer_profiles(include_deleted=True),
+                                   customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customer_records()},
+                                   changed=changed, csrf=csrf(), **configuration_context(token)), 409 if changed else 200
 
     @app.post("/agents/settings")
     def agents_update():

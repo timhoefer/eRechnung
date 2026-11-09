@@ -1,0 +1,29 @@
+{% extends "agent_base.html" %}
+{% block content %}
+<h1>{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</h1>
+<section class="card">
+  <h2>{{ connection.name }}</h2>
+  {% include '_agent_connection_permissions.html' %}
+  {% if not connection.get('active', true) %}<p class="hint">{{ 'Diese Verbindung ist pausiert und bleibt auch mit neuem Schlüssel ausgeschaltet.' if de else 'This connection is paused and remains off even with a new credential.' }}</p>{% endif %}
+  {% if configuration %}
+  <p>{{ 'Der neue Schlüssel ist erstellt. Der bisherige Schlüssel ist jetzt ungültig. Ersetze die Konfiguration in deinem Agenten durch diese neue Version.' if de else 'The new credential has been created. The previous credential is now invalid. Replace the configuration in your agent with this new version.' }}</p>
+  {% include '_agent_configuration.html' %}
+  {% else %}
+  {% if changed %}<p class="flash err" role="alert">{{ 'Die Verbindung wurde inzwischen geändert oder der Schlüssel bereits erneuert. Es wurde kein weiterer Schlüssel erstellt. Prüfe den aktuellen Stand, bevor du erneut bestätigst.' if de else 'The connection has changed or its credential has already been renewed. No further credential was created. Review its current state before confirming again.' }}</p>{% endif %}
+  <p>{{ 'Die vollständige Konfiguration wird nur direkt nach dem Anlegen oder Erneuern des Schlüssels angezeigt. eRechnung speichert den Schlüssel nicht wiederherstellbar.' if de else 'The complete configuration is shown only immediately after creating or renewing its credential. eRechnung does not store a recoverable copy of the credential.' }}</p>
+  <p>{{ 'Wenn dein Agent bereits verbunden ist, musst du nichts ändern. Falls dir die Konfiguration fehlt, kannst du einen neuen Schlüssel erzeugen.' if de else 'If your agent is already connected, no change is needed. If you have lost the configuration, you can generate a new credential.' }}</p>
+  <h3>{{ 'Schlüssel erneuern?' if de else 'Renew credential?' }}</h3>
+  <p>{{ 'Der bisherige Schlüssel wird sofort ungültig. Alle offenen Anfragen dieser Verbindung verfallen. Der Agent funktioniert erst wieder, wenn du die neue Konfiguration dort hinterlegt hast.' if de else 'The previous credential becomes invalid immediately. All pending requests for this connection are discarded. The agent will only work again after you update its configuration.' }}</p>
+  <p>{{ 'Aussteller, Kundenfreigaben, Rechte und der Ein-/Aus-Zustand bleiben erhalten. Andere Verbindungen bleiben unverändert.' if de else 'Permitted issuers, customer access, permissions and the on/off state are preserved. Other connections are unchanged.' }}</p>
+  <form method="post" action="{{ url_for('agents_setup', identifier=connection.id) }}" class="agent-actions">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="revision" value="{{ revision }}">
+    <input type="hidden" name="confirm" value="renew">
+    <a href="{{ url_for('agents_settings') }}">{{ 'Abbrechen' if de else 'Cancel' }}</a>
+    <button type="submit">{{ 'Neuen Schlüssel erzeugen' if de else 'Generate new credential' }}</button>
+  </form>
+  {% endif %}
+</section>
+{% if configuration %}<p><a href="{{ url_for('agents_settings') }}">{{ 'Zurück zu den Verbindungen' if de else 'Back to connections' }}</a></p>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='agent_settings.js') }}?v={{ asset_version('agent_settings.js') }}"></script>{% endblock %}

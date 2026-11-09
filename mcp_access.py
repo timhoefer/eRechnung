@@ -79,6 +79,18 @@ class Access:
     def clear_requests(self, identifier):
         self.pending = {k: v for k, v in self.pending.items() if v["connection"]["id"] != identifier}
 
+    def renew(self, identifier, expected):
+        """Replace only the credential after the UI has reviewed this exact grant."""
+        data = self.load()
+        connection = data["connections"].get(identifier)
+        if not data.get("enabled") or not connection or connection != expected:
+            raise AccessError("Connection changed or revoked. Review it again.")
+        token = secrets.token_urlsafe(32)
+        connection["token_hash"] = digest(token)
+        self.save(data)
+        self.clear_requests(identifier)
+        return token
+
     def revoke(self, identifier):
         data = self.load()
         data["connections"].pop(identifier, None)

@@ -50,6 +50,22 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    **Zugang löschen** zeigt zuerst eine Warnung und widerruft den Schlüssel nach
    **Dauerhaft löschen** endgültig. Für einen späteren Zugriff ist dann eine neue
    Verbindung nötig. Rechnungen und gespeicherte Daten bleiben erhalten.
+8. **Konfiguration einrichten** an einer bestehenden Verbindung öffnet die
+   Einrichtung erneut. Eine funktionierende Verbindung benötigt keinen neuen
+   Schlüssel. Bei verlorener Konfiguration zuerst die Warnung lesen und dann
+   **Neuen Schlüssel erzeugen** bestätigen. Erst dann wird der bisherige Schlüssel
+   ungültig und die vollständige neue Konfiguration einmalig angezeigt, mit einem
+   Button zum Kopieren. Diese Konfiguration im Agenten ersetzen.
+
+Beim Erneuern bleiben Aussteller, Kundenfreigaben, Lese-/Änderungsrechte und der
+pausierte/aktive Zustand exakt erhalten. Offene Anfragen dieser Verbindung werden
+verworfen; andere Verbindungen bleiben unverändert. Veraltete Bestätigungen und
+doppelte Übermittlung erzeugen keinen weiteren Schlüssel. Hat sich die Verbindung
+geändert, muss ihr aktueller Stand erneut geprüft werden. Ein deaktivierter oder
+gelöschter Zugang wird dadurch nicht wiederhergestellt. Die Schlüssel bleiben
+ausschließlich als Prüfwerte gespeichert; es gibt keine betriebssystemspezifische
+Schlüsselspeicherung. Nach Verlassen der einmaligen Anzeige lässt sich ein
+verlorener Schlüssel daher nur durch bewusstes Erneuern ersetzen.
 
 Der erzeugte Befehl startet entweder `mcp_server.py` mit dem Python-Interpreter
 der App oder die gebündelte macOS-Datei mit `--mcp`. Außerhalb des Testmodus enthält
@@ -218,6 +234,10 @@ stabile Kundenidentitäten, gesperrte Altbelege, Dateiabrufe und erneute Prüfun
 bei Bestätigung. `tests/test_mcp_protocol.py` verbindet einen SDK-Client über
 stdio mit einer isolierten App und prüft Widerruf sowie die fehlende Möglichkeit,
 über MCP zu bestätigen. Beide Tests verwenden ausschließlich temporäre Testdaten.
+`tests/test_mcp_key_rotation.py` prüft die bestätigte Schlüsselerneuerung,
+unveränderte Kundenfreigaben/Rechte/Pausen, gesperrte alte Schlüssel und veraltete
+oder parallele Bestätigungen. Ein echter SDK-Test prüft zusätzlich den nötigen
+Schlüsselwechsel im Client und die weiter geltenden Kunden- und Bestätigungsregeln.
 Die macOS-CI startet zusätzlich die gebündelte App mit `--mcp` und prüft
 Protokollinitialisierung, Werkzeugliste und Ablehnung ohne Freigabe.
 Sie prüft auch den tatsächlichen App-Start aus dem ZIP in einem neuen temporären

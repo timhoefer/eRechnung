@@ -12,6 +12,7 @@ from test_mcp_access import BUYER, call, configure, decide, disable, grant
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
 from test_mcp_customer_scope import PRIVATE, scoped_grant
+from test_mcp_key_rotation import configured_token, setup_form
 from werkzeug.serving import make_server
 
 import app as m
@@ -88,6 +89,43 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             disable(client)
             refused = await agent.call_tool("list_customers", {})
             assert refused.is_error and not refused.structured_content["ok"]
+    try:
+        asyncio.run(scenario())
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+def test_real_stdio_clients_must_replace_renewed_key_and_keep_customer_scope(client):
+    credential = scoped_grant(client)
+    m._write_json(m.CUSTOMERS_FILE, [*m.load_customers(), PRIVATE])
+    identifier = m.app.extensions["mcp_access"].authenticate(credential, m.DATA_DIR)["id"]
+    server = make_server("127.0.0.1", 0, m.app, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    params = StdioServerParameters(command=sys.executable, args=[str(m.RESOURCE_BASE / "mcp_server.py")],
+        env={"ERECHNUNG_MCP_TOKEN": credential, "ERECHNUNG_MCP_URL": f"http://127.0.0.1:{server.server_port}",
+             "ERECHNUNG_TEST_MODE": "1", "ERECHNUNG_MCP_AUTOSTART": "0"})
+
+    async def scenario():
+        async with Client(params, read_timeout_seconds=20) as old:
+            customers = (await old.call_tool("list_customers", {})).structured_content["customers"]
+            target, fields = setup_form(client, identifier)
+            token = configured_token(client.post(target, data=fields))
+            rejected = await old.call_tool("list_customers", {})
+            assert rejected.is_error and not rejected.structured_content["ok"]
+            updated = params.model_copy(update={"env": {**params.env, "ERECHNUNG_MCP_TOKEN": token}})
+            async with Client(updated, read_timeout_seconds=20) as new:
+                result = (await new.call_tool("list_customers", {})).structured_content
+                assert result["customers"] == customers and len(customers) == 1
+                refused = await new.call_tool("delete_customer", {"issuer": "default", "name": PRIVATE["name"],
+                                                                 "customer_id": customers[0]["customer_id"]})
+                assert not refused.structured_content["ok"]
+                pending = await new.call_tool("delete_customer", {"issuer": "default", "name": BUYER["name"],
+                                                                 "customer_id": customers[0]["customer_id"]})
+                assert pending.structured_content["status"] == "approval_required"
+                assert len(m.load_customers()) == 2
     try:
         asyncio.run(scenario())
     finally:
