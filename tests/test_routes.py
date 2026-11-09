@@ -135,6 +135,7 @@ def test_generate_creates_pdf_and_sidecar(client):
     pdfs = list(appmod.OUTPUT_DIR.glob("*.pdf"))
     assert len(pdfs) == 1
     assert (appmod.OUTPUT_DIR / "Rechnung_2026-001.json").exists()  # Sidecar
+    assert appmod.validation_status.read(pdfs[0], appmod.validation_ruleset())["state"] == "valid"
 
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
@@ -151,6 +152,8 @@ def test_xrechnung_writes_standalone_xml(client):
     xml = out / "Rechnung_2026-001.xml"
     assert xml.exists()  # einreichbare XRechnung
     assert b"xrechnung_3.0" in xml.read_bytes()  # korrekte CIUS-Spec-ID
+    assert appmod.validation_status.read(xml, appmod.validation_ruleset())["state"] == "valid"
+    assert appmod.validation_status.read(out / "Rechnung_2026-001.pdf", appmod.validation_ruleset()) is None
     d = client.get("/download/Rechnung_2026-001.xml")
     assert d.status_code == 200 and "xml" in d.headers["Content-Type"]
     assert "PDF + XML" in r.get_data(as_text=True)  # kombinierter Download angeboten
@@ -166,11 +169,18 @@ def test_xrechnung_writes_standalone_xml(client):
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
 def test_generate_retry_reuses_original_and_conflict_is_rejected(client):
     export_invoice(client, data=dict(_FORM))
-    original = (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").read_bytes()
+    path = appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf"
+    original = path.read_bytes()
+    receipt = appmod.validation_status.receipt_path(path)
+    record = json.loads(receipt.read_text())
+    record["ruleset"] = "old-rules"
+    receipt.write_text(json.dumps(record))
     retry = export_invoice(client, data=dict(_FORM))
     assert retry.status_code == 200
     assert len(list(appmod.OUTPUT_DIR.glob("*.pdf"))) == 1
     assert "bereits unverändert" in retry.get_data(as_text=True)
+    # Reuse returns the original file, not the newly rendered/checked bytes.
+    assert appmod.validation_status.read(path, appmod.validation_ruleset())["state"] == "rules_changed"
     conflict = export_invoice(client, data=dict(_FORM, unit_price="200"), follow_redirects=True)
     import re
     flashes = json.loads(re.search(r"window.FLASHES = (.*);", conflict.get_data(as_text=True)).group(1))
@@ -568,10 +578,11 @@ def test_archive_shows_buyer_and_amount(client):
     assert "Muster GmbH" in html
     assert "238,00" in html  # 2x100 netto + 19 %
     # Angezeigt wird die Rechnungsnummer (Datei nur als Tooltip) ...
-    import re as _re
-    assert _re.search(r'arch-file" title="Rechnung_2026-003\.pdf"><span class="arch-id">\s*2026-003\b', html)
+    from lxml.html import fromstring
+    page = fromstring(html)
+    assert page.xpath('//td[@title="Rechnung_2026-003.pdf"]//span[@class="arch-id"]/text()') == ["2026-003"]
     # ... ohne Sidecar wird die Nummer aus dem Tool-Namensschema abgeleitet.
-    assert _re.search(r'arch-file" title="Rechnung_2026-004\.pdf"><span class="arch-id">\s*2026-004\b', html)
+    assert page.xpath('//td[@title="Rechnung_2026-004.pdf"]//span[@class="arch-id"]/text()') == ["2026-004"]
 
 
 def test_check_updates_compares_version(client, monkeypatch):

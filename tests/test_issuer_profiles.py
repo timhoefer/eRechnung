@@ -232,6 +232,11 @@ def test_retired_issuer_archive_is_accessible_but_cannot_issue_or_edit(client, f
     monkeypatch.setattr(appmod, "reveal_in_finder", lambda path: path.parent == archive)
     assert confirmed_post(client, f"/reveal/{filename}?issuer={target}").json["ok"]
     assert confirmed_post(client, f"/settings/panel?issuer={target}", data={"filename": filename[:-4] + ".xml"}).status_code == 200
+    # Manual checks may refresh their disposable receipt, never the documents.
+    assert {p.name: p.read_bytes() for p in archive.iterdir() if p.suffix != ".validation"} == {
+        name: raw for name, raw in before.items() if not name.endswith(".validation")
+    }
+    before = {p.name: p.read_bytes() for p in archive.iterdir()}
     monkeypatch.setattr(appmod, "drafthorse_version_info", lambda: {})
     page = html.fromstring(client.get(f"/validate?issuer={target}").data)
     back = page.xpath('//p[@class="back-link"]/a/@href')[0]

@@ -132,7 +132,22 @@
         {# Primär die Rechnungsnummer (der Dateiname ist Implementierungsdetail —
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
-        <td class="arch-file" title="{{ a.filename }}"><span class="arch-id">{{ a.number or a.filename }}</span>{% if archive_all %}<span class="arch-issuer" title="{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}">{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}</span>{% endif %}</td>
+        <td class="arch-file" title="{{ a.filename }}">
+          <span class="arch-number">
+            <span class="arch-id">{{ a.number or a.filename }}</span>
+            {% if a.validation %}
+            {% set status_text = t['archive_validation_' ~ a.validation.state].format(date=a.validation.checked_at) ~ ' · ' ~ a.validation_file %}
+            <span class="arch-validation {{ a.validation.state }}" role="img" aria-label="{{ status_text }}" title="{{ status_text }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                {% if a.validation.state == 'valid' %}<path d="m5 12 4 4L19 6"/>
+                {% elif a.validation.state == 'invalid' %}<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>
+                {% else %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>{% endif %}
+              </svg>
+            </span>
+            {% endif %}
+          </span>
+          {% if archive_all %}<span class="arch-issuer" title="{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}">{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}</span>{% endif %}
+        </td>
         <td class="arch-buyer">
           <div class="arch-line">
             <span class="arch-name">{{ a.buyer or "" }}</span>
@@ -146,15 +161,13 @@
           {% else %}
           <a href="{{ url_for('download', filename=a.filename, issuer=a.issuer_id) }}" class="abtn">{{ t.act_download }}</a>
           {% endif %}
-          {# Prüfen: bei XRechnung die einreichbare .xml prüfen, nicht das Sicht-PDF
-             (das PDF ist dort nur Beilage und enthält kein eingebettetes XML). #}
-          <form method="post" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=a.issuer_id, archive='all' if archive_all else None, year=archive_year, sort=archive_sort) }}" class="check-file-form">
-            <input type="hidden" name="filename" value="{{ a.xml_filename or a.filename }}">
-            <button type="submit" class="secondary small" {% if a.xml_filename %}title="{{ t.check_xml_title }}"{% endif %}>{{ t.act_check }}</button>
-          </form>
           <details class="row-menu">
             <summary role="button" aria-haspopup="menu" aria-label="{{ t.act_more }}" title="{{ t.act_more }}">⋯</summary>
             <div class="row-menu-list" role="menu">
+              <form method="post" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=a.issuer_id, archive='all' if archive_all else None, year=archive_year, sort=archive_sort) }}" class="check-file-form">
+                <input type="hidden" name="filename" value="{{ a.validation_file }}">
+                <button type="submit" role="menuitem" {% if a.validation_file.endswith('.xml') %}title="{{ t.check_xml_title }}"{% endif %}>{{ t.archive_recheck if a.validation else t.check }}</button>
+              </form>
               <a href="{{ url_for('view', filename=a.filename, issuer=a.issuer_id) }}" target="_blank" role="menuitem">{{ t.act_view }}</a>
               {% if a.has_draft and not a.issuer_deleted %}<a href="{{ url_for('index', issuer=a.issuer_id, **{'from': a.filename}) }}" role="menuitem">{{ t.act_edit }}</a>{% endif %}
               {% if a.issuer_deleted and a.can_correct %}

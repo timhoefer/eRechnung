@@ -2569,7 +2569,7 @@ function closeSettings() {
       return;
     }
     // Klick auf die Zeile (nicht auf Links/Buttons) -> PDF im Tab öffnen.
-    if (e.target.closest("a, button, input, label")) return;
+    if (e.target.closest("a, button, input, label, summary, details")) return;
     const row = e.target.closest(".arch-row");
     if (row && row.dataset.viewUrl) window.open(row.dataset.viewUrl, "_blank");
   });

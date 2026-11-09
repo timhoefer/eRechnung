@@ -31,6 +31,7 @@ from flask import (
 )
 
 import issuer_store
+import validation_status
 from change_confirmation import Confirmations
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
@@ -65,6 +66,7 @@ from zugferd import (
     render_html_pdf,
     validate_schematron,
     validate_xml_bytes,
+    validation_ruleset,
 )
 
 logger = logging.getLogger("erechnung")
@@ -561,6 +563,7 @@ def _lock_data_changes():
         "customers_items_save", "customers_save", "customers_delete",
         "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create", "issuer_delete",
         "issuer_set_default", "issuer_restore",
+        "validate", "settings_panel",
     }) or (request.method in {"GET", "HEAD", "POST"} and request.endpoint == "export_csv"
            and app.config.get("DESKTOP") and sys.platform == "darwin"):
         DATA_LOCK.acquire()
@@ -1531,6 +1534,7 @@ def generate():
 
     # Validierung: XSD-Struktur + EN16931/BR-DE-Geschäftsregeln (Schematron).
     # XRechnung direkt aus der standalone-XML, ZUGFeRD aus dem eingebetteten XML.
+    ruleset = validation_ruleset()
     sch: dict | None
     if is_xr:
         ok, messages = validate_xml_bytes(xml)
@@ -1559,6 +1563,8 @@ def generate():
         filename = archived["filename"]
         reused = archived["reused"]
         xml_filename = str(Path(filename).with_suffix(".xml")) if is_xr else None
+        if not reused:
+            _remember_validation(output_dir() / (xml_filename or filename), xml if is_xr else pdf, ruleset, "valid")
         # Only update customer data after a successful final archive operation.
         _write_json(CUSTOMERS_FILE, customers)
 
@@ -1676,6 +1682,8 @@ def archive_delete():
             p = output_dir() / sib
             if p.exists():
                 p.unlink()
+        for document in (path, path.with_suffix(".xml")):
+            validation_status.receipt_path(document).unlink(missing_ok=True)
         flash(translate(get_ui_lang(request))["invoice_deleted"], "ok")
     return redirect(url_for("validate"))
 
@@ -1776,6 +1784,7 @@ def check_updates():
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
+    ruleset = validation_ruleset()
     profiles = issuer_profiles(include_deleted=True)
     all_issuers = g.get("archive_all", False)
     selected = [p for p in profiles if p["available"] and (all_issuers or p["id"] == current_issuer())]
@@ -1788,10 +1797,12 @@ def _settings_context() -> dict:
         sidecar = p.with_suffix(".json")
         issue_date = datetime.fromtimestamp(modified_at).date()
         exportable = False
+        profile_kind = None
         if sidecar.is_file() and not sidecar.is_symlink():
             try:
                 d = json.loads(sidecar.read_text(encoding="utf-8"))
                 inv = d.get("invoice") or {}
+                profile_kind = inv.get("profile")
                 number = (inv.get("number") or "").strip() or None
                 buyer_name = (d.get("buyer") or {}).get("name")
                 treatment = TAX_TREATMENTS.get(
@@ -1814,6 +1825,10 @@ def _settings_context() -> dict:
             # Ohne Sidecar: Nummer aus dem Tool-Namensschema ableiten (wie
             # used_invoice_numbers); fremde Dateien zeigen den Dateinamen.
             number = p.stem[len("Rechnung_"):]
+        # A known XRechnung always checks its XML, even if it went missing.
+        # A stray XML beside a known ZUGFeRD PDF must not replace the checked PDF.
+        check_xml = profile_kind == "xrechnung" or (not profile_kind and p.with_suffix(".xml").exists())
+        checked_file = p.with_suffix(".xml") if check_xml else p
         archive.append(
             {
                 "filename": p.name,
@@ -1822,6 +1837,8 @@ def _settings_context() -> dict:
                 ),
                 "has_draft": sidecar.is_file() and not sidecar.is_symlink(),
                 "can_export": exportable,
+                "validation": validation_status.read(checked_file, ruleset),
+                "validation_file": checked_file.name,
                 "issuer_id": identity,
                 "issuer_label": profile["label"],
                 "issuer_deleted": profile["deleted"],
@@ -2122,20 +2139,44 @@ def data_dir_browse():
     return {"ok": True, "path": r.stdout.strip() or None}
 
 
+def _remember_validation(path: Path, raw: bytes, ruleset: str | None, state: str) -> None:
+    if not ruleset or ruleset != validation_ruleset():
+        return  # Rules changed during the check, or their version is unavailable.
+    try:
+        validation_status.save(path, raw, ruleset, state)
+    except OSError:
+        # A disposable receipt must not turn a successful invoice into a failure.
+        logger.warning("Could not save validation status for %s", path.name, exc_info=True)
+
+
 def _validate_request():
     upload = request.files.get("file")
     filename = request.form.get("filename")
+    archive_path = None
     if upload and upload.filename:
         raw = upload.read()
         label = upload.filename
     elif filename:
         path = output_dir() / filename
-        if path.name != filename or not path.exists():
-            return {"label": filename, "ok": False, "messages": ["Datei nicht gefunden."]}
+        if (path.name != filename or path.suffix.lower() not in {".pdf", ".xml"}
+                or path.is_symlink() or not path.is_file()):
+            return {"label": filename, "ok": False, "xsd_messages": ["Datei nicht gefunden."], "sch": None}
         raw = path.read_bytes()
         label = filename
+        archive_path = path
     else:
         return None
+
+    ruleset = validation_ruleset()
+
+    def finish(result):
+        if archive_path is not None:
+            state = "valid" if result["ok"] else "invalid"
+            sch = result.get("sch")
+            if result.get("xsd_ok") and sch and (not sch["available"] or sch.get("error")):
+                state = "unavailable"
+            _remember_validation(archive_path, raw, ruleset, state)
+        return result
 
     if raw.lstrip().startswith(b"<"):
         xml = raw
@@ -2146,17 +2187,17 @@ def _validate_request():
             logger.warning("extract_xml_from_pdf failed for upload %s", label, exc_info=True)
             xml = None
     if not xml:
-        return {"label": label, "ok": False, "xsd_messages": ["Kein eingebettetes XML gefunden."], "sch": None}
+        return finish({"label": label, "ok": False, "xsd_messages": ["Kein eingebettetes XML gefunden."], "sch": None})
     xsd_ok, xsd_messages = validate_xml_bytes(xml)
     sch = validate_schematron(xml)
     overall = bool(xsd_ok and sch["available"] and sch["ok"] and not sch.get("error"))
-    return {
+    return finish({
         "label": label,
         "ok": overall,
         "xsd_ok": xsd_ok,
         "xsd_messages": xsd_messages,
         "sch": sch,
-    }
+    })
 
 
 if __name__ == "__main__":

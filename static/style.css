@@ -631,6 +631,10 @@ table.archive form { margin-left: 12px; }
    die Spalte nicht aufspannen — der volle Name steht im Tooltip. */
 table.archive td.arch-file { white-space: nowrap; width: 1%; padding-right: 18px; }
 .arch-id { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.arch-number { display: inline-flex; align-items: center; gap: 6px; }
+.arch-validation { display: inline-flex; flex: none; color: var(--muted); }
+.arch-validation.valid { color: var(--ok); }
+.arch-validation.invalid { color: var(--err); }
 /* Kunde in Volltonfarbe, Summe klein/gedämpft dahinter, Datum gedämpft.
    width:99% + max-width:0: die Kunden-Spalte bekommt den Restplatz und kann
    unter Druck schrumpfen — auch in WebKit (das sonst die Tabelle über die
@@ -643,9 +647,9 @@ table.archive td.arch-buyer { width: 99%; max-width: 0; }
   font-variant-numeric: tabular-nums; }
 table.archive td.arch-date { color: var(--muted); white-space: nowrap;
   font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
-/* Archiv-Aktionen: zwei sichtbare Buttons + Overflow-Menü (⋯) */
+/* Archiv-Aktionen: Datei öffnen/zeigen + Overflow-Menü (⋯) */
 .arch-actions > * + * { margin-left: 8px; }
-.arch-actions form.check-file-form { display: inline; margin-left: 8px; }
+.arch-actions .row-menu form.check-file-form { margin: 0; }
 .abtn { /* Link in Button-Optik (sekundär, klein) */
   display: inline-block; padding: 5px 11px; border-radius: 8px;
   background: var(--surface-2); color: var(--ink); font-size: var(--text-sm);

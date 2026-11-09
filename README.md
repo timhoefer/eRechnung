@@ -79,6 +79,16 @@ Ein Beleg wird nur nach erfolgreicher XSD- und Schematron-Prüfung archiviert.
 Fehlt die Prüfung oder schlägt sie fehl, zeigt die App die Fehler; Belegdateien,
 Kundendaten und Rechnungsnummernstand bleiben unverändert.
 
+Das Archiv zeigt einen grünen Haken, wenn die E-Rechnungsprüfung für die aktuelle
+Datei mit den aktuellen Prüfregeln bestanden wurde. Der Tooltip nennt den
+Prüfzeitpunkt und die geprüfte Datei (bei XRechnung die XML, sonst das PDF mit
+eingebettetem XML). Geänderte Dateien oder Prüfregeln erhalten einen neutralen
+Hinweis auf eine nötige Neuprüfung; fehlgeschlagene Prüfungen erscheinen rot.
+Über **⋯ → Prüfen / Erneut prüfen** ist die manuelle Prüfung jederzeit möglich.
+Altbelege ohne gespeichertes Prüfergebnis erhalten erst nach einer Prüfung einen
+Status. Ein gewöhnliches App-Update ohne geänderte Prüfregeln setzt ihn nicht zurück.
+Prüfergebnisse werden separat gespeichert; die Belegdateien bleiben unverändert.
+
 Die Nummer gehört weiterhin zu einem Aussteller. Eine identische Wiederholung
 verwendet die ursprünglichen Dateien. Abweichende Inhalte mit derselben Nummer
 werden abgewiesen; vorhandene Altbelege bleiben bestehen. Das Archiv wird nicht
