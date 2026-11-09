@@ -28,8 +28,13 @@
 {% endif %}
 
 {% if result %}
-<div class="card status {{ 'ok' if result.ok else 'err' }}">
-  <strong>{{ '✓' if result.ok else '✗' }} {{ result.label }}</strong>
+<div class="card status validation-result {{ 'ok' if result.ok else 'err' }}">
+  <div class="validation-result-header">
+    <strong>{{ '✓' if result.ok else '✗' }} {{ result.label }}</strong>
+    <button type="button" class="validation-result-close" data-dismiss-result aria-label="{{ t.dismiss_validation_result }}" title="{{ t.dismiss_validation_result }}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
   {% if result.ok %}<p>{{ t.validate_ok_text }}</p>{% endif %}
   {% if result.xsd_messages %}
     <p style="margin:10px 0 2px"><strong>{{ t.val_xsd }}: ✗</strong></p>

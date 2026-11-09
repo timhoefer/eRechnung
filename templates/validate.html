@@ -94,6 +94,7 @@
       });
     }
     document.addEventListener("click", (e) => {
+      e.target.closest("[data-dismiss-result]")?.closest(".validation-result").remove();
       if (e.target.closest(".row-menu-list")) closeRowMenus();
       else closeRowMenus(e.target.closest("details.row-menu"));
     });

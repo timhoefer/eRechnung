@@ -2493,6 +2493,11 @@ function closeSettings() {
   });
 
   pane.addEventListener("click", (e) => {
+    const dismissResult = e.target.closest("[data-dismiss-result]");
+    if (dismissResult) {
+      dismissResult.closest(".validation-result").remove();
+      return;
+    }
     // Aktion im Overflow-Menü (⋯) gewählt -> Menü schließen, Aktion läuft weiter.
     if (e.target.closest(".row-menu-list")) {
       const menu = e.target.closest("details.row-menu");

@@ -603,6 +603,10 @@ a.link:hover { text-decoration: underline; }
 .actions a { display: inline-flex; }
 
 .card.status { border-width: 1px; }
+.validation-result-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.validation-result-header strong { min-width: 0; overflow-wrap: anywhere; }
+.validation-result-close { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 30px; height: 30px; padding: 0; color: var(--ink); background: transparent; border: 1px solid currentColor; border-radius: 8px; opacity: .7; }
+.validation-result-close:hover { background: transparent; opacity: 1; }
 .card.status.ok { border-color: var(--ok); background: var(--ok-bg); }
 .card.status.err { border-color: var(--err); background: var(--err-bg); }
 .card.status.warn { border-color: var(--warn-border); background: var(--warn-bg); }
