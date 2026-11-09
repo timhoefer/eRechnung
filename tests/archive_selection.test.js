@@ -15,6 +15,8 @@ function fixture() {
   entries.forEach((entry, i) => { entry.value = JSON.stringify([i === 0 ? 'default' : 'company', `Rechnung_${i}.pdf`]); });
   const quarters = [element({archiveQuarter: '2026-Q1'}), element({archiveQuarter: '2026-Q2'}), element({archiveQuarter: '2026-Q3'})];
   const toggle = element(), all = element(), count = element(), status = element(), submit = element();
+  const toggleText = element();
+  toggle.querySelector = selector => selector === '[data-archive-select-text]' ? toggleText : null;
   const form = element();
   form.action = '/export/csv?issuer=all';
   form.querySelector = () => submit;
@@ -27,7 +29,7 @@ function fixture() {
     FormData: class {constructor() { this.entries = entries.filter(e => e.checked).map(e => e.value); }},
     fetch: async (url, options) => { calls.push({url, options}); return {ok: true, json: async () => ({ok: true})}; }};
   vm.runInNewContext(source, context);
-  return {context, card, entries, quarters, toggle, all, count, status, submit, form, calls};
+  return {context, card, entries, quarters, toggle, toggleText, all, count, status, submit, form, calls};
 }
 
 test('select mode reveals controls; Done clears selection and restores the table', () => {
@@ -36,6 +38,7 @@ test('select mode reveals controls; Done clears selection and restores the table
   f.toggle.listeners.click();
   assert.equal(f.form.hidden, false);
   assert.equal(f.card.dataset.selecting, 'true');
+  assert.equal(f.toggleText.textContent, 'Done');
   f.all.checked = true;
   f.all.listeners.change();
   assert.ok(f.entries.every(e => e.checked));
@@ -44,6 +47,7 @@ test('select mode reveals controls; Done clears selection and restores the table
   assert.ok(f.entries.every(e => !e.checked));
   assert.equal(f.form.hidden, true);
   assert.equal(f.card.dataset.selecting, 'false');
+  assert.equal(f.toggleText.textContent, 'Select');
 });
 
 test('quarter selection finds non-adjacent invoices and preserves partial states', () => {

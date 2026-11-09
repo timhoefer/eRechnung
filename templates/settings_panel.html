@@ -74,7 +74,10 @@
           <option value="customer" {{ 'selected' if archive_sort == 'customer' else '' }}>{{ t.archive_sort_customer }}</option>
         </select>
       </label>
-      <button type="button" class="secondary small" data-archive-select hidden>{{ t.archive_select }}</button>
+      <button type="button" class="secondary small archive-select-toggle" data-archive-select aria-pressed="false" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect class="archive-select-box" x="3" y="3" width="18" height="18" rx="3"/><path d="m7 12 3.5 3.5L17 9"/></svg>
+        <span data-archive-select-text>{{ t.archive_select }}</span>
+      </button>
     </div>
     {% if archive_issuers|length > 1 %}
     <div class="archive-issuer-choice"><label>{{ t.issuer }}

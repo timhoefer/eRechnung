@@ -31,7 +31,7 @@
       toggle.addEventListener('click', () => {
         const active = card.dataset.selecting !== 'true';
         card.dataset.selecting = String(active);
-        toggle.textContent = active ? card.dataset.archiveDoneLabel : card.dataset.archiveSelectLabel;
+        toggle.querySelector('[data-archive-select-text]').textContent = active ? card.dataset.archiveDoneLabel : card.dataset.archiveSelectLabel;
         toggle.setAttribute('aria-pressed', String(active));
         form.hidden = !active;
         if (!active) entries.forEach(entry => { entry.checked = false; });
