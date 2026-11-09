@@ -8,6 +8,33 @@ Eine lokale Web-App zur einfachen Erstellung von E-Rechnungen für Freiberufler.
 
 Eine fertige, **signierte und notarisierte** macOS-App gibt es unter [Releases](../../releases) — herunterladen, entpacken, in den Programme-Ordner ziehen, fertig. Sie öffnet sich ohne Gatekeeper-Warnung (Apple Silicon). Wer lieber aus dem Quellcode startet oder selbst baut: siehe unten.
 
+## Änderungen bestätigen
+
+Die App zeigt vor Änderungen bestehender Stammdaten, Kunden und gespeicherter
+Positionen sowie vor Löschungen die betroffenen Daten und Folgen. Bestehende
+Datensätze werden beim Tippen nicht mehr still überschrieben: Änderungen bleiben
+bis zum ausdrücklichen Speichern im Formular. Neue Datensätze und unveränderte
+Werte benötigen keine zusätzliche Bestätigung. Auch Kundenänderungen während der
+Rechnungserzeugung werden vorher bestätigt.
+
+Beim Kundenwechsel warnt die App vor ungespeicherten Änderungen. Abbrechen erhält
+die Eingaben. Die Bestätigung gilt einmalig für fünf Minuten, für die aktuelle
+Sitzung, Anfrage und den geprüften Datenstand. Geänderte oder wiederholte Anfragen
+benötigen eine neue Bestätigung. Ohne JavaScript erscheint eine Bestätigungsseite.
+
+Diese Bestätigung ist kein Nachweis eines menschlichen Bedieners und keine
+Zugriffskontrolle gegen Programme mit direktem Datei- oder Bedienzugriff. Die
+Prüfung und Schreiben verwenden die gemeinsame lokale Prozesssperre. Bestätigungen
+sind an die laufende App gebunden; mehrere Macs bleiben unkoordiniert.
+
+## Sicherer Entwicklungs-Testmodus
+
+Für manuelle Tests ausschließlich `ERECHNUNG_TEST_MODE=1 ./run.sh` verwenden.
+Die App startet standardmäßig auf Port 5001 mit einem neuen temporären Datenordner
+und unabhängigem Nummernlauf. Die produktive Konfiguration wird nicht geladen,
+der Datenordner kann nicht umgestellt werden, und beim normalen Beenden werden
+die Testdaten entfernt. Nur fiktive Daten verwenden. Es gibt keine zusätzliche
+Einstellung für Endnutzer. Automatisierte Tests isolieren bereits den App-Start.
 ## Robustere Rechnungsablage
 
 PDF-Darstellung, Ausstellerverwaltung und Archivablage liegen in eigenständigen

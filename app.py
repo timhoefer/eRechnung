@@ -1,6 +1,7 @@
 """Lokale Web-App zur Erstellung von ZUGFeRD-E-Rechnungen."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -25,10 +26,12 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 
 import issuer_store
+from change_confirmation import Confirmations
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
@@ -78,7 +81,8 @@ else:
     BASE = Path(__file__).parent
 
 
-if "--selftest" in sys.argv:
+TEST_MODE = os.environ.get("ERECHNUNG_TEST_MODE") == "1"
+if TEST_MODE or "--selftest" in sys.argv:
     _SELFTEST_DIR = tempfile.TemporaryDirectory(prefix="erechnung-selftest-")
     BASE = Path(_SELFTEST_DIR.name)
 BASE.mkdir(parents=True, exist_ok=True)
@@ -151,6 +155,8 @@ def _load_app_config() -> dict:
 def _resolve_data_dir() -> Path:
     """Datenordner aus config.json (vom Nutzer wählbar, z. B. Dropbox);
     Fallback auf den App-Ordner. App bleibt offline – nur dieser Ordner zählt."""
+    if TEST_MODE:
+        return BASE
     raw = (_load_app_config().get("data_dir") or "").strip()
     if raw:
         p = Path(raw).expanduser()
@@ -234,6 +240,8 @@ _drop_identical(BASE, DATA_DIR)
 
 def set_data_dir(raw: str):
     target = BASE if not (raw or "").strip() else Path(raw.strip()).expanduser()
+    if TEST_MODE and target.resolve() != BASE.resolve():
+        return False, "test_data_dir_locked"
     try:
         target.mkdir(parents=True, exist_ok=True)
         # Keep profiles in place while another process finalizes an invoice.
@@ -261,11 +269,13 @@ def _set_data_dir(raw: str):
 
     raw = (raw or "").strip()
     target = BASE if not raw else Path(raw).expanduser()
+    if TEST_MODE and target.resolve() != BASE.resolve():
+        return False, "test_data_dir_locked"
     try:
         target.mkdir(parents=True, exist_ok=True)
-        probe = target / ".write_test"
-        probe.write_text("ok", encoding="utf-8")
-        probe.unlink()
+        # Never overwrite a pre-existing file just to check directory access.
+        with tempfile.TemporaryFile(dir=target) as probe:
+            probe.write(b"ok")
     except OSError:
         return False, "data_dir_err_write"
 
@@ -387,6 +397,108 @@ app.jinja_env.auto_reload = True
 # Die App ist ein rein lokales Tool (127.0.0.1). Hostnamen, die als „lokal"
 # gelten – schützt gegen DNS-Rebinding und Cross-Site-Zugriffe von Webseiten.
 DATA_LOCK = threading.RLock()
+CHANGE_CONFIRMATIONS = Confirmations()
+
+
+class ChangeConfirmationRequired(Exception):
+    def __init__(self, confirmation: dict):
+        self.confirmation = confirmation
+
+
+def confirm_change(title: str, message: str, before, after, details: list[dict]) -> None:
+    """Protect changes to saved data while DATA_LOCK is held.
+
+    All handlers check before their first persistent side effect. The signature
+    includes the complete request and current data, not a client 'confirmed' flag.
+    """
+    if not has_request_context():
+        return
+    owner = session.setdefault("change_confirmation_owner", secrets.token_urlsafe(24))
+    fields = request.form.to_dict(flat=False)
+    fields.pop("_change_confirmation", None)
+    payload = [str(DATA_DIR.resolve()), current_issuer(), request.path,
+               request.args.to_dict(flat=False), fields, before, after]
+    fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    token = request.headers.get("X-Change-Confirmation") or request.form.get("_change_confirmation", "")
+    fresh = CHANGE_CONFIRMATIONS.check(token, owner, fingerprint)
+    if fresh:
+        raise ChangeConfirmationRequired({
+            "token": fresh, "title": title, "message": message, "details": details,
+            "cancel_url": url_for("change_confirmation_cancel", issuer=None),
+        })
+
+
+@app.errorhandler(ChangeConfirmationRequired)
+def change_confirmation_required(error):
+    ui = translate(get_ui_lang(request))
+    if request.headers.get("X-Requested-With") == "fetch":
+        response = app.make_response(({
+            "ok": False, "message": ui["change_pending"], "confirmation": error.confirmation,
+        }, 428))
+    else:
+        response = app.make_response((render_template(
+            "confirm_change.html", confirmation=error.confirmation,
+            action=request.full_path.rstrip("?"), fields=request.form.lists(),
+            back=url_for("index"),
+            draft_key=f"erechnung:lang:{issuer_scope()}:{current_issuer()}" if request.endpoint == "generate" else "",
+        ), 428))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/changes/cancel", methods=["POST"])
+def change_confirmation_cancel():
+    CHANGE_CONFIRMATIONS.discard(request.form.get("token", ""), session.get("change_confirmation_owner", ""))
+    if request.headers.get("X-Requested-With") != "fetch" and "back" in request.form:
+        back = request.form["back"]
+        parsed = urlparse(back)
+        if parsed.scheme or parsed.netloc or parsed.path != "/":
+            back = url_for("index", issuer=None)
+        return redirect(back, code=303)
+    return "", 204
+
+
+def change_details(before: dict, after: dict) -> list[dict]:
+    ui = translate(get_ui_lang(request))
+    aliases = {"address_line": "street", "account_name": "account_holder",
+               "kind": "account_kind", "bank_kind": "account_kind", "contact": "attn",
+               "reference": "buyer_reference", "profile_label": "issuer_profile_label",
+               "payment_term_days": "buyer_term_days", "accounts": "sec_payment",
+               "unit": "unit", "unit_price": "unit_price", "quantity": "quantity"}
+
+    def display(value):
+        if value is None or value == "" or value == []:
+            return "—"
+        if isinstance(value, bool):
+            return ui["change_yes"] if value else ui["change_no"]
+        if isinstance(value, list):
+            return "\n\n".join(display(v) for v in value)
+        if isinstance(value, dict):
+            return "\n".join(f"{ui.get(aliases.get(k, k), k)}: {display(v)}" for k, v in value.items() if v)
+        return str(value)
+
+    def value(record, key):
+        if key == "show_tax_number":
+            return record.get(key, True)
+        if key == "bank_kind":
+            return record.get(key) or ("intl" if record.get("account_number") else "iban")
+        return record.get(key, "")
+
+    details = []
+    for key in sorted(before.keys() | after.keys()):
+        if key.startswith("_") or key == "last_invoice_number":
+            continue
+        old, new = value(before, key), value(after, key)
+        if old == new or (old in (None, "", []) and new in (None, "", [])):
+            continue
+        label = ui.get(aliases.get(key, key), key)
+        if key == "logo":
+            old = ui["change_old_logo"] if old else "—"
+            new = ui["change_new_logo"] if new else "—"
+        if key == "bank_kind":
+            old, new = (ui.get("kind_" + str(v), str(v)) for v in (old, new))
+        details.append({"label": label, "before": display(old), "after": display(new)})
+    return details
 
 LOCAL_HOSTNAMES = {"127.0.0.1", "localhost", "::1"}
 
@@ -491,7 +603,7 @@ CORRECTION_ENDPOINTS = {
 
 @app.before_request
 def _select_issuer():
-    if request.endpoint == "static":
+    if request.endpoint in {"static", "change_confirmation_cancel"}:
         return
     values = request.args.getlist("issuer") + request.form.getlist("issuer")
     if len(set(values)) > 1:
@@ -621,13 +733,17 @@ def issuer_delete():
     if request.form.get("issuer") != current_issuer() or request.form.get("confirm") != "delete":
         abort(400)
     t = translate(get_ui_lang(request))
+    seller = load_seller()
+    profiles = issuer_profiles()
+    confirm_change(t["issuer_delete_title"], t["issuer_delete_text"],
+                   [seller, profiles], {"retire": current_issuer()},
+                   [{"label": t["issuer"], "before": issuer_label(seller), "after": t["issuer_archived"]}])
     try:
-        remaining = [p for p in issuer_profiles() if p["id"] != current_issuer()]
+        remaining = [p for p in profiles if p["id"] != current_issuer()]
         # Use a fresh identity even when deleting the final profile. Old tabs
         # must not be able to autosave into the new, empty issuer.
         next_issuer = default_issuer(remaining) if remaining else _create_issuer({"country": "DE"})
         # Retire the identity without losing details needed for later corrections.
-        seller = load_seller()
         _write_json(seller_file(), dict(seller, _deleted=True, profile_label=issuer_label(seller)))
     except OSError:
         logger.warning("Could not delete issuer", exc_info=True)
@@ -770,6 +886,14 @@ def save_seller_form() -> tuple[dict, int]:
         return {"ok": False, "message": translate(get_ui_lang(request))["master_conflict"]}, 409
     # A repeated identical save is harmless, including normalization of old files.
     if updated_revision != current_revision:
+        existing_details = any(seller.get(key) for key in (*SELLER_FIELDS, "logo", "accounts")
+                               if key not in {"profile_label", "country", "bank_kind"})
+        if existing_details:
+            details = change_details(seller, updated)
+            if details:
+                ui = translate(get_ui_lang(request))
+                confirm_change(f'{ui["master"]}: {issuer_label(seller)}', ui["change_master_warning"],
+                               seller, updated, details)
         save_seller(updated)
     return {"ok": True, "revision": updated_revision,
             "message": translate(get_ui_lang(request))["master_saved"]}, 200
@@ -844,22 +968,54 @@ def load_customers() -> list[dict]:
     return []
 
 
+def confirm_customer_changes(customers: list[dict]) -> None:
+    if has_request_context():
+        before = load_customers()
+        details = []
+        removed = False
+        for old in before:
+            # Use the same identity comparison as prepare_customer_update/delete.
+            # casefold() would conflate distinct saved names such as Straße/Strasse.
+            name = old.get("name", "").lower()
+            if name == request.form.get("prev_name", "").strip().lower():
+                name = request.form.get("buyer_name", "").strip().lower()
+            new = next((c for c in customers if c.get("name", "").lower() == name), {})
+            removed = removed or not new
+            for detail in change_details(old, new):
+                detail["label"] = f'{old.get("name", "")} · {detail["label"]}'
+                details.append(detail)
+        if details:
+            ui = translate(get_ui_lang(request))
+            confirm_change(ui["customer"], ui["change_customer_delete" if removed else "change_customer_warning"],
+                           before, customers, details)
+
+
 def save_customers(customers: list[dict]) -> None:
+    confirm_customer_changes(customers)
     _write_json(CUSTOMERS_FILE, customers)
 
 
-def upsert_customer(buyer: dict) -> None:
+def prepare_customer_update(buyer: dict, previous_name: str = "") -> list[dict]:
     """Kunden anhand des Namens anlegen oder aktualisieren."""
-    if not buyer.get("name"):
-        return
     customers = load_customers()
-    for c in customers:
-        if c["name"].lower() == buyer["name"].lower():
-            c.update(buyer)
-            break
-    else:
+    if not buyer.get("name"):
+        return customers
+    target = next((c for c in customers if previous_name and c["name"].lower() == previous_name.lower()), None)
+    if target is not None and any(c is not target and c["name"].lower() == buyer["name"].lower() for c in customers):
+        abort(app.make_response(({
+            "ok": False, "message": translate(get_ui_lang(request))["customer_name_conflict"],
+        }, 409)))
+    if target is None:
+        target = next((c for c in customers if c["name"].lower() == buyer["name"].lower()), None)
+    if target is None:
         customers.append(buyer)
-    save_customers(customers)
+    else:
+        target.update(buyer)
+    return customers
+
+
+def upsert_customer(buyer: dict, previous_name: str = "") -> None:
+    save_customers(prepare_customer_update(buyer, previous_name))
 
 
 def save_customer_items(name: str, items: list, buyer: dict) -> list:
@@ -1112,7 +1268,7 @@ DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änd
 
 
 @app.route("/")
-def index(submitted_form=None):
+def index(submitted_form=None, master_conflict=False):
     seller = invoice_seller()
     numbers = used_invoice_numbers()
     profiles = issuer_profiles(include_deleted=True)
@@ -1131,7 +1287,7 @@ def index(submitted_form=None):
     # Erststart: noch kein Datenordner gewählt UND keine Stammdaten -> beim ersten
     # Öffnen aktiv nach dem Speicherort fragen (Vorschlag: sichtbarer Dokumente-Ordner
     # statt des versteckten Application-Support-Standards).
-    first_run = "data_dir" not in _load_app_config() and not SELLER_FILE.exists()
+    first_run = not TEST_MODE and "data_dir" not in _load_app_config() and not SELLER_FILE.exists()
     return render_template(
         "form.html",
         seller=seller,
@@ -1146,6 +1302,7 @@ def index(submitted_form=None):
         units=UNITS,
         draft=draft,
         submitted_form=submitted_form.to_dict(flat=False) if submitted_form is not None else None,
+        master_conflict=master_conflict,
         used_numbers=numbers,
         ref_invoices=archived_invoices(),
         first_run=first_run,
@@ -1180,21 +1337,8 @@ def customers_autosave():
     buyer = buyer_from_form(request.form)
     if not buyer["name"]:
         return ("", 204)
-    prev = (request.form.get("prev_name") or "").strip().lower()
-    customers = load_customers()
-    target = None
-    if prev:
-        target = next((c for c in customers if c["name"].lower() == prev), None)
-    if target is None:
-        target = next(
-            (c for c in customers if c["name"].lower() == buyer["name"].lower()), None
-        )
-    if target is None:
-        customers.append(buyer)
-    else:
-        target.update(buyer)
-    save_customers(customers)
-    return {"name": buyer["name"]}
+    upsert_customer(buyer, request.form.get("prev_name", "").strip())
+    return {"name": buyer["name"], "customer": buyer}
 
 
 @app.route("/customers/items/save", methods=["POST"])
@@ -1221,7 +1365,7 @@ def customers_save():
             return {"ok": False, "message": msg}
         flash(msg, "err")
         return redirect(url_for("index"))
-    upsert_customer(buyer)
+    upsert_customer(buyer, request.form.get("prev_name", "").strip())
     msg = ui["customer_saved"].replace("{name}", buyer["name"])
     # Per fetch (JS): kein Redirect/Reload -> Scrollposition bleibt, Toast statt Banner;
     # aktualisierte Kundenliste mitliefern, damit die Combobox frisch bleibt.
@@ -1318,7 +1462,7 @@ def generate():
     # DATA_LOCK covers this check through archiving: another window cannot change
     # the reviewed issuer between the comparison and PDF/XML creation.
     if request.form.get("seller_revision") != seller_revision(seller):
-        return index(submitted_form=request.form), 409
+        return index(submitted_form=request.form, master_conflict=True), 409
     if not data["items"]:
         flash(translate(get_ui_lang(request))["need_item"], "err")
         return redirect(url_for("index"))
@@ -1335,6 +1479,11 @@ def generate():
             ui = translate(get_ui_lang(request))
             flash(ui["need_xrechnung"] + " " + ", ".join(ui[k] for k in missing), "err")
             return redirect(url_for("index"))
+
+    # Review implicit customer changes before publishing any invoice files.
+    # The shared lock keeps this reviewed state stable until the final write.
+    customers = prepare_customer_update(data["buyer"])
+    confirm_customer_changes(customers)
 
     is_xr = data["invoice"]["profile"] == "xrechnung"
     xml = build_xml(data)
@@ -1373,7 +1522,7 @@ def generate():
         reused = archived["reused"]
         xml_filename = str(Path(filename).with_suffix(".xml")) if is_xr else None
         # Only update customer data after a successful final archive operation.
-        upsert_customer(data["buyer"])
+        _write_json(CUSTOMERS_FILE, customers)
 
     return render_template(
         "result.html",
@@ -1397,6 +1546,8 @@ def archive_error(error):
     if request.headers.get("X-Requested-With") == "fetch":
         return {"ok": False, "message": ui[key]}, 409
     flash(ui[key], "err")
+    if request.endpoint == "generate":
+        return index(submitted_form=request.form), 409
     return redirect(url_for("index"))
 
 
@@ -1474,6 +1625,13 @@ def archive_delete():
     path = output_dir() / filename
     # Pfad-Traversal verhindern: nur einfache Dateinamen direkt im Ausgabeordner.
     if filename and path.name == filename and path.suffix == ".pdf" and path.exists():
+        files = [path, *(output_dir() / f"{path.stem}.{suffix}" for suffix in ("json", "xml", "csv"))]
+        existing = [p for p in files if p.exists()]
+        ui = translate(get_ui_lang(request))
+        confirm_change(ui["confirm_delete_title"], ui["change_archive_warning"],
+                       {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in existing}, None,
+                       [{"label": p.name, "before": ui["change_exists"], "after": ui["change_deleted"]}
+                        for p in existing])
         path.unlink()
         # Sidecar + XRechnung-XML + evtl. exportierte Einzel-CSV mitlöschen
         for sib in (f"{path.stem}.json", f"{path.stem}.xml", f"{path.stem}.csv"):
@@ -1781,9 +1939,17 @@ def export_csv():
         # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
         # schreiben und im Finder zeigen.
         out = output_dir() / name
-        out.write_bytes(data)
+        count = 2
+        while True:
+            try:
+                with out.open("xb") as export:
+                    export.write(data)
+                break
+            except FileExistsError:
+                out = output_dir() / f"{Path(name).stem} ({count}).csv"
+                count += 1
         reveal_in_finder(out)
-        return {"ok": True, "name": name}
+        return {"ok": True, "name": out.name}
     return Response(
         data, mimetype="text/csv",  # Flask ergänzt charset=utf-8 automatisch
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
@@ -1877,4 +2043,6 @@ if __name__ == "__main__":
     # Exception Code-Ausführung und leakt Quellcode/Variablen (z. B. Bankdaten).
     # Nur bei Bedarf in der Entwicklung via FLASK_DEBUG=1 einschalten.
     debug = os.environ.get("FLASK_DEBUG") == "1"
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5000)), debug=debug)
+    if TEST_MODE:
+        print(f"Testmodus: separater Datenordner {BASE}; wird beim Beenden entfernt.")
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5001 if TEST_MODE else 5000)), debug=debug)
