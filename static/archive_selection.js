@@ -106,7 +106,10 @@
         status.textContent = '';
         update();
         try {
-          const response = await fetch(form.action, {method: 'POST', body: new FormData(form)});
+          // One JSON document avoids multipart's 1,000-field limit for large archives.
+          const selected = entries.filter(entry => entry.checked).map(entry => JSON.parse(entry.value));
+          const response = await fetch(form.action, {method: 'POST',
+            headers: {'Content-Type': 'application/json'}, body: JSON.stringify({entries: selected})});
           if (!response.ok) throw new Error('Export failed');
           if (card.dataset.desktop === 'true') {
             if (!(await response.json()).ok) throw new Error('Export failed');

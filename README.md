@@ -42,7 +42,8 @@ ihren Aussteller. Dateiaktionen bleiben an diesen Aussteller gebunden.
 **Auswählen** blendet Checkboxen für einzelne Rechnungen, ganze Quartale und alle
 angezeigten Belege ein. Im Auswahlmodus markiert ein Klick auf die Rechnungszeile
 (oder Enter/Leertaste auf der fokussierten Zeile) den Beleg; die Aktionsbuttons
-bleiben separat bedienbar. **CSV exportieren** exportiert genau diese Auswahl. Beim
+bleiben separat bedienbar. **CSV exportieren** exportiert genau diese Auswahl
+mit bis zu 10.000 Belegen pro Export. Beim
 Sortieren bleiben Auswahlmodus und markierte Rechnungen erhalten. Beim Wechsel
 von Jahr oder Aussteller wird die Auswahl geleert. Ohne
 Buchungsdaten bleibt eine Datei sichtbar, kann aber nicht als CSV ausgewählt werden.
@@ -55,6 +56,10 @@ sich nach dem Rechnungsdatum; fehlt es bei einer älteren Datei, wird der angeze
 Erstellungszeitpunkt verwendet. Ein Export aus der Ansicht **Alle Aussteller** enthält
 eine zusätzliche Aussteller-Spalte. In der macOS-App werden solche Exporte im
 Unterordner `exports` des Datenordners gespeichert und im Finder angezeigt.
+Beim Wechsel des Datenordners werden diese CSV-Dateien mitgenommen. Abweichende
+gleichnamige CSV-Dateien im Zielordner brechen den Umzug ab; keine Datei wird
+überschrieben. Die Originale werden erst nach erfolgreichem Kopieren und Speichern
+des neuen Speicherorts entfernt.
 
 ## Sicherer Entwicklungs-Testmodus
 

@@ -14,10 +14,11 @@ function memoryStorage() {
   const values = new Map();
   return {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key)};
 }
-function fixture({restore, scope = 'folder-a:all:2026', storage = memoryStorage(), href = 'http://localhost/validate', order = [0, 1, 2]} = {}) {
+function fixture({restore, scope = 'folder-a:all:2026', storage = memoryStorage(), href = 'http://localhost/validate', order = [0, 1, 2], pairs} = {}) {
   let entries = [element({quarter: '2026-Q1'}), element({quarter: '2026-Q2'}), element({quarter: '2026-Q1'})];
   entries.forEach((entry, i) => { entry.value = JSON.stringify([i === 0 ? 'default' : 'company', `Rechnung_${Math.max(0, i - 1)}.pdf`]); });
   entries = order.map(i => entries[i]);
+  if (pairs) entries = pairs.map(pair => ({...element({quarter: '2026-Q1'}), value: JSON.stringify(pair)}));
   const quarters = [element({archiveQuarter: '2026-Q1'}), element({archiveQuarter: '2026-Q2'}), element({archiveQuarter: '2026-Q3'})];
   const toggle = element(), all = element(), count = element(), status = element(), submit = element();
   const toggleText = element();
@@ -215,11 +216,23 @@ test('export submits only checked identities and blocks double submissions', asy
   const first = f.form.listeners.submit(event);
   await f.form.listeners.submit(event);
   assert.equal(f.calls.length, 1);
-  assert.deepEqual(f.calls[0].options.body.entries, [f.entries[1].value]);
+  assert.equal(f.calls[0].options.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(f.calls[0].options.body).entries, [JSON.parse(f.entries[1].value)]);
   assert.equal(f.submit.disabled, true);
   finish({ok: true, json: async () => ({ok: true})});
   await first;
   assert.equal(f.submit.disabled, false);
+});
+
+test('large selections use a single JSON request and retain all issuer/file pairs', async () => {
+  const pairs = Array.from({length: 1001}, (_, i) => [i % 2 ? 'company' : 'default', `Rechnung_${i}.pdf`]);
+  const f = fixture({pairs});
+  f.all.checked = true;
+  f.all.listeners.change();
+  await f.form.listeners.submit({preventDefault() {}, stopPropagation() {}});
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].options.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(f.calls[0].options.body), {entries: pairs});
 });
 
 test('failed export retains selection and announces an error', async () => {

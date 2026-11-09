@@ -185,6 +185,10 @@ def _drop_identical(src_dir: Path, ref_dir: Path) -> None:
 
     rm(src_dir / "customers.json", ref_dir / "customers.json")
     rm(src_dir / "issuer_preferences.json", ref_dir / "issuer_preferences.json")
+    if not (ref_dir / "exports").is_symlink():
+        for relative in _shared_export_files(src_dir):
+            if not (ref_dir / relative).is_symlink():
+                rm(src_dir / relative, ref_dir / relative)
     profiles: dict[str, list[Path]] = {}
     for relative in _issuer_data_files(src_dir):
         issuer = relative.parts[1] if relative.parts[0] == "issuers" else "default"
@@ -226,6 +230,15 @@ def _issuer_data_files(directory: Path) -> list[Path]:
             paths.extend(out.iterdir())
         files.extend(p.relative_to(directory) for p in paths if p.is_file() and not p.is_symlink())
     return files
+
+
+def _shared_export_files(directory: Path) -> list[Path]:
+    """Shared CSV exports belong to the data folder, independently of any issuer."""
+    exports = directory / "exports"
+    if not exports.is_dir() or exports.is_symlink():
+        return []
+    return [p.relative_to(directory) for p in exports.iterdir()
+            if p.suffix.lower() == ".csv" and p.is_file() and not p.is_symlink()]
 
 
 DATA_DIR = _resolve_data_dir()
@@ -285,7 +298,7 @@ def _set_data_dir(raw: str):
     if target.resolve() != old.resolve() and any(
         target.resolve().is_relative_to((old / name).resolve())
         or old.resolve().is_relative_to((target / name).resolve())
-        for name in ("issuers", "output")
+        for name in ("issuers", "output", "exports")
     ):
         return False, "data_dir_err_nested"
     if target.resolve() != old.resolve():
@@ -294,9 +307,14 @@ def _set_data_dir(raw: str):
         import filecmp
 
         try:
-            files = [*_issuer_data_files(old), Path("issuer_preferences.json")]
+            if (old / "exports").is_symlink():
+                return False, "data_dir_err_write"
+            exports = _shared_export_files(old)
+            files = [*_issuer_data_files(old), *exports, Path("issuer_preferences.json")]
             archive_dirs = {Path("output"), *(p.parent / "output" for p in files
                                              if p.name == "seller.json" and p.parent.name != "output")}
+            if exports:
+                archive_dirs.add(Path("exports"))
             # Check parents too: a target folder must not redirect a copy elsewhere.
             for relative in [*files, Path("customers.json"), *archive_dirs]:
                 if any((target / p).is_symlink() for p in (relative, *relative.parents)):
@@ -306,7 +324,7 @@ def _set_data_dir(raw: str):
                 if src.exists() and dst.exists() and (
                     not dst.is_file() or not filecmp.cmp(src, dst, shallow=False)
                 ):
-                    return False, "issuer_move_conflict"
+                    return False, "data_dir_err_export_conflict" if relative in exports else "issuer_move_conflict"
             # One copy path for every issuer, including empty archives. Existing
             # shared customers keep the previous recovery behavior (no overwrite).
             for relative in archive_dirs:
@@ -538,12 +556,13 @@ def _guard_local_only():
 def _lock_data_changes():
     # Serialize writes in the threaded local server, including read-modify-write
     # operations. Pure previews do not need to wait for invoice generation.
-    if request.method == "POST" and request.endpoint in {
+    if (request.method == "POST" and request.endpoint in {
         "settings", "settings_autosave", "customers_autosave",
         "customers_items_save", "customers_save", "customers_delete",
         "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create", "issuer_delete",
         "issuer_set_default", "issuer_restore",
-    }:
+    }) or (request.method in {"GET", "HEAD", "POST"} and request.endpoint == "export_csv"
+           and app.config.get("DESKTOP") and sys.platform == "darwin"):
         DATA_LOCK.acquire()
         g.data_locked = True
         # Hold the shared process lock across the complete read/modify/write operation.
@@ -1923,18 +1942,23 @@ def export_csv():
     profiles = {p["id"]: p for p in issuer_profiles(include_deleted=True) if p["available"]}
     sources = []
     if selection:
-        entries = request.form.getlist("entry")
+        if request.is_json:
+            payload = request.get_json()
+            entries = payload.get("entries") if isinstance(payload, dict) else None
+            if not isinstance(entries, list):
+                abort(400)
+        else:
+            try:
+                entries = [json.loads(entry) for entry in request.form.getlist("entry")]
+            except (ValueError, TypeError):
+                abort(400)
         if only or frm or to or not entries or len(entries) > 10000:
             abort(400)
         seen = set()
-        for entry in entries:
-            try:
-                pair = json.loads(entry)
-                if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(v, str) for v in pair):
-                    raise ValueError("Invalid selection")
-                identity, filename = pair
-            except (ValueError, TypeError):
+        for pair in entries:
+            if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(v, str) for v in pair):
                 abort(400)
+            identity, filename = pair
             if (identity not in profiles or (not all_issuers and identity != current_issuer())
                     or Path(filename).name != filename or Path(filename).suffix.lower() != ".pdf"):
                 abort(400)
