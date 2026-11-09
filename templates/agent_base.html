@@ -10,6 +10,16 @@
     .agent-page .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
     .agent-check input { width: auto; flex: none; margin-top: 4px; }
     .agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+    .agent-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .agent-toggle-row h2 { margin: 0; }
+    .agent-toggle-control { display: flex; align-items: center; gap: 10px; flex: none; }
+    .agent-toggle-control .hint { margin: 0; }
+    .agent-toggle { display: inline-flex; align-items: center; width: 52px; height: 30px; padding: 4px; border-radius: 999px; background: var(--muted); }
+    .agent-toggle:hover { background: var(--muted); }
+    .agent-toggle[aria-checked="true"] { background: var(--accent); }
+    .agent-toggle[aria-checked="true"]:hover { background: var(--accent-d); }
+    .agent-toggle span { width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+    .agent-toggle[aria-checked="true"] span { transform: translateX(22px); }
     .agent-page pre { white-space: pre-wrap; overflow-wrap: anywhere; }
     .agent-page td { vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
     .agent-page .agent-fields { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 8px 16px; }

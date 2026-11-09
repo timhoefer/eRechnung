@@ -82,6 +82,50 @@ def test_opt_in_form_csrf_and_bearer_cannot_manage_access(client):
                        headers={"Authorization": "Bearer " + credential}).status_code == 403
 
 
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_opt_in_switch_submits_consent_and_revokes_grants(client, language):
+    client.set_cookie("lang", language)
+    access = m.app.extensions["mcp_access"]
+    before = snapshot()
+
+    def switch_form(response, enabled):
+        assert response.status_code == 200
+        page = html.fromstring(response.data)
+        switch, = page.xpath('//button[@role="switch"]')
+        assert switch.get("aria-checked") == ("true" if enabled else "false")
+        for identifier in (switch.get("aria-labelledby") + " " + switch.get("aria-describedby")).split():
+            assert page.get_element_by_id(identifier).text_content().strip()
+        return switch.xpath('ancestor::form')[0]
+
+    off = switch_form(client.get("/agents"), False)
+    assert not (m.BASE / "agent_access.json").exists()
+    # Submit the actual UI form, without adding consent or CSRF in the test.
+    enable_fields = dict(off.form_values())
+    switch_form(client.post(off.action, data=enable_fields), True)
+    assert access.load() == {"enabled": True, "connections": {}}
+    # Retrying a submission must set the requested state, never flip it back.
+    switch_form(client.post(off.action, data=enable_fields), True)
+
+    credential = grant(client)
+    pending = call(credential, "delete_customer", issuer="default", name=BUYER["name"])
+    assert pending["status"] == "approval_required"
+    on = switch_form(client.get("/agents"), True)
+    disable_fields = dict(on.form_values())
+    switch_form(client.post(on.action, data=disable_fields), False)
+    switch_form(client.post(on.action, data=disable_fields), False)
+    assert access.load() == {"enabled": False, "connections": {}}
+    assert not access.pending
+    assert not call(credential, "list_customers")["ok"]
+
+    off = switch_form(client.get("/agents"), False)
+    switch_form(client.post(off.action, data=dict(off.form_values())), True)
+    assert access.load() == {"enabled": True, "connections": {}}
+    assert not call(credential, "list_customers")["ok"]
+    assert client.post("/agents/requests/" + pending["request_id"],
+                       data={"csrf": csrf(client), "decision": "approve"}).status_code == 403
+    assert snapshot() == before
+
+
 def test_browser_forms_preserve_same_origin_and_reject_opaque_origins(client):
     page = client.get("/agents")
     # no-referrer would make real browser form POSTs carry Origin: null.

@@ -26,7 +26,10 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 1. In den Einstellungen **Agentenzugriff** öffnen. Ohne `ERECHNUNG_MCP=1` bleibt
    dieser Eintrag unsichtbar und die Werkzeug- und Einstellungsendpunkte sind abgeschaltet.
 2. Den Hinweis zur möglichen Datenübertragung an den Agentenanbieter lesen und
-   **Zugriff aktivieren** bestätigen. Das allein gibt noch keinem Agenten Zugriff.
+   den Schalter **Agentenzugriff erlauben** einschalten. Die Änderung gilt sofort,
+   ohne zusätzlichen Speichern-Button. Das allein gibt noch keinem Agenten Zugriff.
+   Ausschalten widerruft alle Verbindungen und offenen Anfragen; erneutes
+   Einschalten stellt diese nicht wieder her.
 3. Eine benannte Verbindung anlegen und die gewünschten Aussteller auswählen.
    Ohne zusätzliche Auswahl bleibt die Verbindung auf Lesen, Prüfen und Vorschau
    beschränkt. Die Liste der Aussteller steht vertikal untereinander.

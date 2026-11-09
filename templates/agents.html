@@ -4,24 +4,23 @@
 <p class="hint">{{ 'Experimentell · Nur nach deiner Freigabe' if de else 'Experimental · Only with your permission' }}</p>
 {% if error %}<p class="flash err">{{ error }}</p>{% endif %}
 <section class="card">
-  {% if not state.enabled %}
-  <h2>{{ 'Agentenzugriff ist ausgeschaltet' if de else 'Agent access is off' }}</h2>
-  <p>{{ 'Verbinde einen kompatiblen Agenten mit eRechnung. Du wählst die Aussteller und kannst jeden Zugang jederzeit widerrufen.' if de else 'Connect a compatible agent to eRechnung. Choose the issuers and revoke any connection at any time.' }}</p>
-  <form method="post" action="{{ url_for('agents_update') }}">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="enable">
-    <label class="agent-check"><input type="checkbox" name="consent" value="yes" required>
-      <span>{{ 'Ich möchte Agentenzugriff erlauben. Freigegebene Daten können vom Agenten an dessen Anbieter übertragen werden. eRechnung erstellt und prüft Rechnungen weiterhin lokal.' if de else 'I want to allow agent access. The agent may send granted data to its provider. eRechnung continues to create and validate invoices locally.' }}</span>
-    </label>
-    <button type="submit">{{ 'Zugriff aktivieren' if de else 'Enable access' }}</button>
+  <form class="agent-toggle-row" method="post" action="{{ url_for('agents_update') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="{{ 'disable' if state.enabled else 'enable' }}">
+    {% if not state.enabled %}<input type="hidden" name="consent" value="yes">{% endif %}
+    <h2 id="agent-access-label">{{ 'Agentenzugriff erlauben' if de else 'Allow agent access' }}</h2>
+    <span class="agent-toggle-control">
+      <span class="hint" aria-hidden="true">{{ ('Ein' if state.enabled else 'Aus') if de else ('On' if state.enabled else 'Off') }}</span>
+      <button class="agent-toggle" type="submit" role="switch" aria-checked="{{ 'true' if state.enabled else 'false' }}"
+              aria-labelledby="agent-access-label" aria-describedby="agent-access-notice agent-access-effect">
+        <span aria-hidden="true"></span>
+      </button>
+    </span>
   </form>
+  <p id="agent-access-effect">{% if state.enabled %}{{ 'Nur eingerichtete Verbindungen erhalten Zugriff. Ausschalten widerruft alle Zugänge und offenen Anfragen.' if de else 'Only configured connections have access. Turning this off revokes all connections and pending requests.' }}
   {% else %}
-  <h2>{{ 'Agentenzugriff ist aktiviert' if de else 'Agent access is enabled' }}</h2>
-  <p>{{ 'Nur eingerichtete Verbindungen erhalten Zugriff. Ausschalten widerruft alle Zugänge und offenen Anfragen.' if de else 'Only configured connections have access. Turning this off revokes all connections and pending requests.' }}</p>
-  <form method="post" action="{{ url_for('agents_update') }}">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="disable">
-    <button class="secondary" type="submit">{{ 'Zugriff ausschalten' if de else 'Turn access off' }}</button>
-  </form>
-  {% endif %}
+  {{ 'Mit dem Einschalten erlaubst du Agentenzugriff. Anschließend wählst du für jede Verbindung die freigegebenen Aussteller und Rechte.' if de else 'Turning this on allows agent access. Then choose the permitted issuers and permissions for each connection.' }}{% endif %}</p>
+  <p class="hint" id="agent-access-notice">{{ 'Freigegebene Daten können vom Agenten an dessen Anbieter übertragen werden. eRechnung erstellt und prüft Rechnungen weiterhin lokal.' if de else 'The agent may send granted data to its provider. eRechnung continues to create and validate invoices locally.' }}</p>
 </section>
 {% if configuration %}
 <section class="card">
