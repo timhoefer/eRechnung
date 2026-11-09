@@ -24,11 +24,18 @@ binaries = []
 hiddenimports = ["cffi"]
 
 # Pakete mit eigenen Daten/Native-Libs vollständig einsammeln.
-for pkg in ("weasyprint", "saxonche", "webview", "mcp", "mcp_types"):
+for pkg in ("weasyprint", "saxonche", "webview", "mcp_types"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
     hiddenimports += h
+
+# The SDK's optional developer CLI exits during import when its extra dependencies
+# are absent. The app exposes its own --mcp entrypoint and does not use that CLI.
+d, b, h = collect_all("mcp", filter_submodules=lambda name: name != "mcp.cli" and not name.startswith("mcp.cli."))
+datas += d
+binaries += b
+hiddenimports += h
 
 # drafthorse bringt die Factur-X-/EN16931-XSD mit (für die XML-Validierung).
 datas += collect_data_files("drafthorse")
