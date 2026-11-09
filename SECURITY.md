@@ -69,6 +69,8 @@ The stdio bridge contacts only `http://127.0.0.1:<port>` on the existing app, wi
 no proxies or redirects. It does not start another network listener or load
 invoice files directly. The app validates credentials and scopes on every call.
 Bearer credentials do not authorize access-management or approval pages.
+App form submissions additionally require an existing, non-empty session CSRF
+token. Missing sessions, empty tokens and guessed fallback values are rejected.
 
 Destructive changes and every final invoice creation wait for an immutable,
 operation-bound request to be approved in the app. Requests expire after five

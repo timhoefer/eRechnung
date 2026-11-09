@@ -64,6 +64,10 @@ Rechnungen, öffentlichen Repositories oder Fehlerberichten teilen.
 | Wiederherstellen | `restore_issuer` | Freigegebenen deaktivierten Aussteller mit bestehender Nummernfolge reaktivieren |
 | Rückmeldung | `request_status` | Status ausschließlich eigener Anfragen abfragen; keine Freigabe erteilen |
 
+Beim XML-Abruf wird für ZUGFeRD das unveränderte XML aus dem archivierten PDF
+ausgelesen, für XRechnung die archivierte XML-Datei. Die App erzeugt dafür kein
+neues XML aus aktuellen Stammdaten.
+
 Schreibende Werkzeuge benötigen die zusätzliche Änderungsberechtigung. Neue
 Kundendatensätze und Reaktivierungen sind keine destruktiven Änderungen und
 benötigen keine zweite Bestätigung. Bestehende Archivdateien können auch mit einer
@@ -89,6 +93,8 @@ Zu diesem Zeitpunkt wurde die angefragte Änderung nicht ausgeführt. Die App ze
 die Verbindung, die konkrete Aktion, Warnung und betroffenen Daten. Bei einer
 Rechnung werden zusätzlich Rechnungsfelder, Kunde und Positionen gezeigt.
 
+Die Anzeige verwendet den geprüften Rechnungsstand einschließlich automatisch
+übernommener Bezugsdaten bei Korrekturen und des ausgewählten Zahlungskontos.
 **Ausdrücklich bestätigen** führt ausschließlich die gespeicherte Anfrage aus.
 Die Freigabe gilt einmalig, höchstens fünf Minuten und nur für den zuvor geprüften
 Datenstand. Änderungen zwischen Anfrage und Bestätigung führen zu Ablehnung oder

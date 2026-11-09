@@ -407,7 +407,8 @@ class ChangeConfirmationRequired(Exception):
         self.confirmation = confirmation
 
 
-def confirm_change(title: str, message: str, before, after, details: list[dict]) -> None:
+def confirm_change(title: str, message: str, before, after, details: list[dict],
+                   *, invoice_snapshot: dict | None = None) -> None:
     """Protect changes to saved data while DATA_LOCK is held.
 
     All handlers check before their first persistent side effect. The signature
@@ -430,6 +431,7 @@ def confirm_change(title: str, message: str, before, after, details: list[dict])
             raise ChangeConfirmationRequired({
                 "fingerprint": fingerprint, "title": title, "message": message, "details": details,
                 "issuer": issuer_label(load_seller()),
+                "invoice_snapshot": invoice_snapshot,
             })
         return
     token = request.headers.get("X-Change-Confirmation") or request.form.get("_change_confirmation", "")
@@ -1510,6 +1512,7 @@ def generate():
                for old in load_customers() for new in customers
                if old.get("name", "").lower() == new.get("name", "").lower()
                for d in change_details(old, new)]],
+            invoice_snapshot=data,
         )
     else:
         confirm_customer_changes(customers)

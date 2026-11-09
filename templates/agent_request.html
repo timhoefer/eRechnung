@@ -11,12 +11,14 @@
     <thead><tr><th>{{ 'Angabe' if de else 'Field' }}</th><th>{{ 'Bisher' if de else 'Before' }}</th><th>{{ 'Danach' if de else 'After' }}</th></tr></thead>
     <tbody>{% for detail in entry.confirmation.details %}<tr><td>{{ detail.label }}</td><td>{{ detail.before }}</td><td>{{ detail.after }}</td></tr>{% endfor %}</tbody>
   </table>
-  {% macro fields(record) %}<dl class="agent-fields">{% for key, value in record.items() %}<dt>{{ t.get(key, key.replace('_', ' ')) }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endmacro %}
-  {% if entry.arguments.invoice %}
-  <h3>{{ 'Rechnung' if de else 'Invoice' }}</h3>{{ fields(entry.arguments.invoice) }}
-  <h3>{{ 'Kunde' if de else 'Customer' }}</h3>{{ fields(entry.arguments.buyer) }}
+  {% macro fields(record) %}<dl class="agent-fields">{% for key, value in record.items() %}<dt>{{ t.get(key, key.replace('_', ' ')) }}</dt><dd>{{ '—' if value is none or value == '' else value }}</dd>{% endfor %}</dl>{% endmacro %}
+  {% set invoice = entry.confirmation.invoice_snapshot %}
+  {% if invoice %}
+  <h3>{{ 'Rechnung' if de else 'Invoice' }}</h3>{{ fields(invoice.invoice) }}
+  <h3>{{ 'Kunde' if de else 'Customer' }}</h3>{{ fields(invoice.buyer) }}
   <h3>{{ 'Positionen' if de else 'Items' }}</h3>
-  {% for item in entry.arguments['items'] %}<div class="export-box">{{ fields(item) }}</div>{% endfor %}
+  {% for item in invoice['items'] %}<div class="export-box">{{ fields(item) }}</div>{% endfor %}
+  {% if invoice.bank %}<h3>{{ 'Zahlungskonto' if de else 'Payment account' }}</h3>{{ fields(invoice.bank) }}{% endif %}
   {% endif %}
   <p>{{ 'Bestätige nur, wenn du diese konkrete Aktion beauftragt hast. Die Ausführung erfolgt sofort; Löschungen können nicht rückgängig gemacht werden.' if de else 'Approve only if you requested this specific operation. It executes immediately; deletions may be irreversible.' }}</p>
   <form method="post" class="agent-actions">

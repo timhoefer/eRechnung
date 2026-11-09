@@ -48,7 +48,10 @@ def register(m):
             origin = request.headers.get("Origin")
             if origin and origin != request.host_url.rstrip("/"):
                 abort(403)
-            if not secrets.compare_digest(request.form.get("csrf", ""), session.get("mcp_csrf", "invalid")):
+            expected = session.get("mcp_csrf")
+            supplied = request.form.get("csrf", "")
+            if (not isinstance(expected, str) or not expected or not supplied
+                    or not secrets.compare_digest(supplied.encode(), expected.encode())):
                 abort(403)
 
     def settings_page(token=None, error=None):
@@ -282,11 +285,22 @@ def register(m):
                 raise ValueError("Invoice snapshot unavailable.")
             if operation == "get_invoice":
                 return {"ok": True, "invoice": original}
-            path = (m.output_dir() / filename).with_suffix("." + arguments["format"])
+            file_format = arguments["format"]
+            embedded_xml = file_format == "xml" and original["invoice"].get("profile") != "xrechnung"
+            path = (m.output_dir() / filename).with_suffix(".pdf" if embedded_xml else "." + file_format)
             if path.is_symlink() or not path.is_file() or path.stat().st_size > 20_000_000:
                 raise ValueError("File unavailable or too large.")
-            return {"ok": True, "filename": path.name, "mime_type": "application/" + arguments["format"],
-                    "base64": base64.b64encode(path.read_bytes()).decode()}
+            content = path.read_bytes()
+            if embedded_xml:
+                from pypdf.errors import PyPdfError
+                try:
+                    content = m.extract_xml_from_pdf(content)
+                except (PyPdfError, ValueError, KeyError) as exc:
+                    raise ValueError("Cannot read XML from the archived PDF.") from exc
+                if not content or len(content) > 20_000_000:
+                    raise ValueError("Embedded XML unavailable or too large.")
+            return {"ok": True, "filename": path.with_suffix("." + file_format).name,
+                    "mime_type": "application/" + file_format, "base64": base64.b64encode(content).decode()}
         numbers = archived_number_files(m.output_dir(), strict=True)
         last = m.load_seller().get("last_invoice_number", "")
         import re
