@@ -70,6 +70,9 @@ Rechnungen prüfen, Vorschauen erzeugen und Änderungen anfragen. Die Funktion i
 hinter `ERECHNUNG_MCP=1` verborgen und benötigt zusätzlich dein Opt-in in den
 Einstellungen. Jede Verbindung hat einen eigenen widerrufbaren Zugang und
 explizit ausgewählte Aussteller; standardmäßig erlaubt sie nur Lesen und Vorschauen.
+Nach der Einrichtung öffnet die Verbindung eRechnung bei Bedarf automatisch.
+Das Starten erteilt keine zusätzlichen Rechte und aktiviert keinen widerrufenen
+Zugang. Im isolierten Testmodus bleibt der App-Start manuell.
 
 Löschen, Überschreiben bestehender Daten und das endgültige Erstellen von
 Rechnungen warten auf eine konkrete Bestätigung in der App. Über MCP selbst

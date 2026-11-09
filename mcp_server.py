@@ -8,41 +8,28 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlparse
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from urllib.parse import quote
+from urllib.request import ProxyHandler, Request, build_opener
 
 from mcp import types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
+from mcp_connection import NoRedirect, autostart_enabled, ensure_app
 from mcp_contract import TOOLS
 from version import __version__
 
 
-class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
 def app_call(name, arguments):
-    endpoint = os.environ.get("ERECHNUNG_MCP_URL", "")
-    location = os.environ.get("ERECHNUNG_MCP_ENDPOINT_FILE")
     try:
-        if location:
-            endpoint = json.loads(Path(location).read_text())["url"]
-        parsed = urlparse(endpoint)
-        if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
-                or parsed.username or parsed.password or parsed.path not in ("", "/")
-                or parsed.query or parsed.fragment):
-            raise ValueError("Use the local connection configuration supplied by eRechnung.")
         token = os.environ.get("ERECHNUNG_MCP_TOKEN", "")
         if not token:
             raise ValueError("Enable agent access in eRechnung and create a connection first.")
         body = json.dumps({"tool": name, "arguments": arguments}, allow_nan=False).encode()
         if len(body) > 1_000_000:
             raise ValueError("Request too large.")
+        endpoint = ensure_app()
         req = Request(endpoint.rstrip("/") + "/agents/call", data=body,
                       headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
         with build_opener(ProxyHandler({}), NoRedirect()).open(req, timeout=120) as response:
@@ -94,6 +81,12 @@ def server():
 
 
 async def run():
+    if autostart_enabled():
+        try:
+            await asyncio.to_thread(ensure_app)
+        except (OSError, ValueError, KeyError, TypeError):
+            # Keep MCP discovery available. Tool calls return a controlled error.
+            pass
     instance = server()
     async with stdio_server() as (reader, writer):
         await instance.run(reader, writer, instance.create_initialization_options())

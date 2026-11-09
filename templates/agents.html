@@ -26,7 +26,8 @@
 {% if configuration %}
 <section class="card">
   <h2>{{ 'Verbindung einrichten' if de else 'Set up the connection' }}</h2>
-  <p>{{ 'Kopiere diese Konfiguration in die MCP-Einstellungen deines Agenten. Der Zugangsschlüssel wird nur jetzt angezeigt. Behandle ihn wie ein Passwort. eRechnung muss geöffnet bleiben.' if de else 'Copy this configuration into your agent’s MCP settings. The credential is shown only now. Treat it like a password. Keep eRechnung open.' }}</p>
+  <p>{{ 'Kopiere diese Konfiguration in die MCP-Einstellungen deines Agenten. Der Zugangsschlüssel wird nur jetzt angezeigt. Behandle ihn wie ein Passwort.' if de else 'Copy this configuration into your agent’s MCP settings. The credential is shown only now. Treat it like a password.' }}</p>
+  <p>{{ ('eRechnung öffnet sich bei Bedarf automatisch. Deine Zugriffsrechte und Bestätigungen gelten weiterhin.' if autostart else 'Für diese Verbindung muss eRechnung bereits geöffnet sein. Testinstanzen starten nicht automatisch neu.') if de else ('eRechnung opens automatically when needed. Your access permissions and approvals still apply.' if autostart else 'Keep eRechnung open for this connection. Test instances do not restart automatically.') }}</p>
   <pre id="mcp-configuration">{{ configuration|tojson(indent=2) }}</pre>
 </section>
 {% endif %}

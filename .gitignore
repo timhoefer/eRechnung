@@ -40,3 +40,5 @@ assets/icon_master.png
 .erechnung.lock
 agent_access.json
 mcp-endpoint.json
+.mcp-start.lock
+.mcp-instance.lock

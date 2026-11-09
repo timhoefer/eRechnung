@@ -68,6 +68,13 @@ connection is granted. Newly created issuers are never automatically granted.
 The stdio bridge contacts only `http://127.0.0.1:<port>` on the existing app, with
 no proxies or redirects. It does not start another network listener or load
 invoice files directly. The app validates credentials and scopes on every call.
+Configured connections may open the same local installation when it is closed.
+Startup uses a fixed executable/script, detached from MCP's input/output, and
+never passes the bearer credential to the app process or changes access settings.
+A data-free readiness endpoint identifies the app before any tool request;
+running instances with MCP disabled are reused without enabling them. Concurrent
+starts are serialized, and auto-started windows hold an instance lock until exit.
+Test-mode connections never auto-start. Failed tool POSTs are never retried.
 Bearer credentials do not authorize access-management or approval pages.
 App form submissions additionally require an existing, non-empty session CSRF
 token. Missing sessions, empty tokens and guessed fallback values are rejected.
@@ -85,7 +92,8 @@ can act outside this boundary, including clicking approval controls. No OS-level
 human-presence check, audit log or undo is provided. Do not expose the app publicly.
 
 The app keeps token hashes in `agent_access.json` beside its local configuration
-and writes its loopback address to `mcp-endpoint.json`; these files use mode 0600
+and writes its loopback address to `mcp-endpoint.json` (also with MCP disabled,
+to avoid launching another copy); these files use mode 0600
 on POSIX systems. The agent's own MCP configuration contains the actual bearer
 token and must be protected as a password. Its provider may receive the invoice,
 customer and banking data returned by tools. Opt-in makes this explicit; local

@@ -20,10 +20,11 @@ from mcp_contract import ITEM_FIELDS, TOOLS, validate
 
 
 def publish_endpoint(m, url):
-    if m.app.config.get("MCP_FEATURE"):
-        path = m.BASE / "mcp-endpoint.json"
-        m._write_json(path, {"url": url})
-        m.app.config["MCP_ENDPOINT_FILE"] = str(path)
+    # Publish even with the feature off so the bridge reuses this instance and
+    # receives its refusal instead of opening another copy with different flags.
+    path = m.BASE / "mcp-endpoint.json"
+    m._write_json(path, {"url": url})
+    m.app.config["MCP_ENDPOINT_FILE"] = str(path)
 
 
 def register(m):
@@ -63,19 +64,27 @@ def register(m):
             command, args = sys.executable, [str(m.RESOURCE_BASE / "mcp_server.py")]
         endpoint = ({"ERECHNUNG_MCP_ENDPOINT_FILE": app.config["MCP_ENDPOINT_FILE"]}
                     if app.config.get("MCP_ENDPOINT_FILE") else {"ERECHNUNG_MCP_URL": request.host_url.rstrip("/")})
+        startup = ({"ERECHNUNG_TEST_MODE": "1"} if m.TEST_MODE else
+                   {"ERECHNUNG_MCP_AUTOSTART": "1"} if app.config.get("MCP_ENDPOINT_FILE") else {})
         configuration = {"mcpServers": {"erechnung": {
             "command": command, "args": args,
-            "env": {**endpoint, "ERECHNUNG_MCP_TOKEN": token},
+            "env": {**endpoint, **startup, "ERECHNUNG_MCP_TOKEN": token, "ERECHNUNG_MCP": "1"},
         }}} if token else None
         return render_template("agents.html", state=state, csrf=csrf(),
                                profiles=m.issuer_profiles(include_deleted=True),
-                               requests=access.pending, configuration=configuration, error=error)
+                               requests=access.pending, configuration=configuration,
+                               autostart="ERECHNUNG_MCP_AUTOSTART" in startup, error=error)
 
     @app.get("/agents")
     def agents_settings():
         ui_guard()
         with m.DATA_LOCK:
             return settings_page()
+
+    @app.get("/agents/status")
+    def agents_status():
+        # Readiness only: never expose grants, profile data or a CSRF session.
+        return {"service": "eRechnung", "mcp_enabled": app.config["MCP_FEATURE"]}
 
     @app.post("/agents/settings")
     def agents_update():

@@ -24,7 +24,7 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 ```
 
 1. In den Einstellungen **Agentenzugriff** öffnen. Ohne `ERECHNUNG_MCP=1` bleibt
-   dieser Eintrag unsichtbar und die zugehörigen Endpunkte sind abgeschaltet.
+   dieser Eintrag unsichtbar und die Werkzeug- und Einstellungsendpunkte sind abgeschaltet.
 2. Den Hinweis zur möglichen Datenübertragung an den Agentenanbieter lesen und
    **Zugriff aktivieren** bestätigen. Das allein gibt noch keinem Agenten Zugriff.
 3. Eine benannte Verbindung anlegen und die gewünschten Aussteller auswählen.
@@ -34,14 +34,36 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 5. Die einmalig angezeigte Konfiguration in den MCP-Client übernehmen. Manche
    Clients benötigen statt des `mcpServers`-Blocks ein eigenes Konfigurationsformat;
    Befehl, Argumente und Umgebungsvariablen bleiben dieselben.
-6. Die App geöffnet lassen. In der App unter **Anfragen → Aktualisieren** offene
-   Anfragen prüfen. Jede Verbindung lässt sich einzeln widerrufen.
+6. In der App unter **Anfragen → Aktualisieren** offene Anfragen prüfen. Jede
+   Verbindung lässt sich einzeln widerrufen.
 
 Der erzeugte Befehl startet entweder `mcp_server.py` mit dem Python-Interpreter
-der App oder die gebündelte macOS-Datei mit `--mcp`. Der MCP-Modus öffnet kein
-weiteres App-Fenster und liest keine Rechnungsdaten direkt. Eine lokale Datei
-enthält die aktuelle Adresse der laufenden App, sodass sich die Konfiguration
-beim zufälligen macOS-Port nach einem Neustart nicht ändern muss.
+der App oder die gebündelte macOS-Datei mit `--mcp`. Außerhalb des Testmodus enthält
+die erzeugte Konfiguration zusätzlich `ERECHNUNG_MCP_AUTOSTART=1` und den bereits
+verwendeten Feature-Schalter `ERECHNUNG_MCP=1`. Beim Verbindungsaufbau wird eine
+laufende App wiederverwendet; ist sie geschlossen, öffnet sich dieselbe Installation
+automatisch. Auf macOS erscheint das native App-Fenster, beim Quellstart die lokale
+Web-App im Browser. Die Brücke wartet höchstens 15 Sekunden auf die Bereitschaft.
+Mehrere Verbindungen teilen eine Startsperre; eine zusätzliche Instanzsperre
+verhindert doppelte automatisch gestartete Fenster auch bei langsamem Start.
+
+Der Start aktiviert weder das Opt-in noch legt er Zugänge an. Ausgeschalteter oder
+widerrufener Zugriff bleibt gesperrt. Eine laufende App mit abgeschaltetem
+Feature-Schalter wird ebenfalls nicht ersetzt. Rechnungen und destruktive Aktionen
+brauchen weiterhin ihre separate Bestätigung. Fehlgeschlagene Schreibaufrufe
+werden nicht automatisch wiederholt.
+
+Eine lokale Datei enthält die aktuelle Adresse, sodass ein geänderter macOS-Port
+keine neue Konfiguration erfordert. Der MCP-Prozess liest keine Rechnungsdaten
+direkt und übergibt den Zugangsschlüssel nicht an die gestartete App. Beim Trennen
+des Agenten bleibt das App-Fenster geöffnet.
+
+Bestehende Konfigurationen können die beiden Schalter ergänzen; der vorhandene
+Zugang bleibt verwendbar. Mit `ERECHNUNG_MCP_AUTOSTART=0` bleibt der Start manuell.
+Konfigurationen mit fester URL, Testinstanzen und andere Betriebssysteme als macOS
+oder Linux starten nicht automatisch. Testkonfigurationen enthalten ausdrücklich
+`ERECHNUNG_TEST_MODE=1`, damit sie niemals produktive Daten öffnen; nach Beenden der
+Testinstanz muss für eine neue Testinstanz auch eine neue Verbindung angelegt werden.
 
 Die Umgebungsvariablen der Brücke sind `ERECHNUNG_MCP_TOKEN` und
 `ERECHNUNG_MCP_ENDPOINT_FILE`. Für eigene lokale Integrationen kann stattdessen
@@ -142,3 +164,7 @@ stdio mit einer isolierten App und prüft Widerruf sowie die fehlende Möglichke
 über MCP zu bestätigen. Beide Tests verwenden ausschließlich temporäre Testdaten.
 Die macOS-CI startet zusätzlich die gebündelte App mit `--mcp` und prüft
 Protokollinitialisierung, Werkzeugliste und Ablehnung ohne Freigabe.
+Sie prüft auch den tatsächlichen App-Start aus dem ZIP in einem neuen temporären
+Testordner und verifiziert, dass dadurch kein Opt-in erteilt wird.
+`tests/test_mcp_startup.py` prüft Start, Wiederverwendung, parallele Verbindungen,
+Startfehler, unveränderte Rechte und die weiterhin erforderlichen Bestätigungen.

@@ -5,6 +5,7 @@ import sys
 import threading
 
 import pytest
+from flask import request
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 from test_mcp_access import BUYER, call, configure, decide, grant
@@ -19,18 +20,35 @@ from mcp_contract import TOOLS
 
 
 @pytest.mark.parametrize("entrypoint", ["mcp_server.py", "desktop.py"])
-def test_real_stdio_client_discovery_scopes_approval_and_revocation(client, entrypoint):
+def test_real_stdio_client_discovery_scopes_approval_and_revocation(client, entrypoint, monkeypatch):
+    readiness = []
+    def observe_start():
+        if request.path == "/agents/status":
+            readiness.append(True)
+    monkeypatch.setitem(m.app.before_request_funcs, None, [*m.app.before_request_funcs[None], observe_start])
     credential = grant(client)
     server = make_server("127.0.0.1", 0, m.app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     publish_endpoint(m, f"http://127.0.0.1:{server.server_port}")
+    # Exercise real MCP initialization/reuse, but make any unexpected cold start
+    # fail instead of launching the developer's production data from the repo.
+    wrapper = """import runpy, sys, mcp_connection
+def unexpected_start():
+    raise OSError('The test app is already running; no real launcher is allowed')
+mcp_connection.launch_app = unexpected_start
+mcp_connection.autostart_enabled = lambda: True
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
     params = StdioServerParameters(command=sys.executable,
-        args=[str(m.RESOURCE_BASE / entrypoint), *(["--mcp"] if entrypoint == "desktop.py" else [])],
-        env={"ERECHNUNG_MCP_TOKEN": credential, "ERECHNUNG_MCP_ENDPOINT_FILE": str(m.BASE / "mcp-endpoint.json")})
+        args=["-c", wrapper, str(m.RESOURCE_BASE / entrypoint), *(["--mcp"] if entrypoint == "desktop.py" else [])],
+        env={"ERECHNUNG_MCP_TOKEN": credential, "ERECHNUNG_MCP_ENDPOINT_FILE": str(m.BASE / "mcp-endpoint.json"),
+             "ERECHNUNG_MCP": "1", "ERECHNUNG_MCP_AUTOSTART": "1", "ERECHNUNG_TEST_MODE": "1"})
 
     async def scenario():
         async with Client(params, read_timeout_seconds=20) as agent:
+            assert readiness, "App readiness must be checked during MCP initialization."
             tools = (await agent.list_tools()).tools
             assert {t.name for t in tools} == set(TOOLS)
             assert not any("approve" in t.name for t in tools)

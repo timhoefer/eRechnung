@@ -2083,6 +2083,21 @@ if __name__ == "__main__":
     debug = os.environ.get("FLASK_DEBUG") == "1"
     if TEST_MODE:
         print(f"Testmodus: separater Datenordner {BASE}; wird beim Beenden entfernt.")
-    port = int(os.environ.get("PORT", 5001 if TEST_MODE else 5000))
-    publish_endpoint(sys.modules[__name__], f"http://127.0.0.1:{port}")
-    app.run(host="127.0.0.1", port=port, debug=debug)
+    if "--mcp-start" in sys.argv:
+        import webbrowser
+
+        from werkzeug.serving import make_server
+
+        from mcp_connection import automatic_app_instance
+
+        with automatic_app_instance(BASE) as acquired:
+            if acquired:
+                server = make_server("127.0.0.1", 0, app, threaded=True)
+                url = f"http://127.0.0.1:{server.server_port}"
+                publish_endpoint(sys.modules[__name__], url)
+                webbrowser.open(url)
+                server.serve_forever()
+    else:
+        port = int(os.environ.get("PORT", 5001 if TEST_MODE else 5000))
+        publish_endpoint(sys.modules[__name__], f"http://127.0.0.1:{port}")
+        app.run(host="127.0.0.1", port=port, debug=debug)

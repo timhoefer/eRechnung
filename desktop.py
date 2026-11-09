@@ -77,9 +77,19 @@ def main() -> None:
     if "--selftest" in sys.argv:
         sys.exit(_selftest())
 
-    import webview
-
     import app as appmod
+
+    if "--mcp-start" in sys.argv:
+        from mcp_connection import automatic_app_instance
+        with automatic_app_instance(appmod.BASE) as acquired:
+            if acquired:
+                _show_app(appmod)
+    else:
+        _show_app(appmod)
+
+
+def _show_app(appmod):
+    import webview
 
     app = appmod.app
     # Läuft im nativen Fenster (kein Browser): Downloads via WKWebView greifen
