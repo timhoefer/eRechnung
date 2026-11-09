@@ -2075,6 +2075,10 @@ let restoredFromLang = false;
 })();
 
 if (!restoredFromLang) applyDraft();
+if (window.IMPORTED_DRAFT && restoredFromLang) {
+  if (!window.SUBMITTED_FORM.tax_treatment) autoSelectTreatment();
+  document.getElementById("generate-btn").disabled = false;
+}
 // Nach restoreForm (Sprachwechsel) kann der Bank-Select-Wert gesetzt worden sein,
 // ohne dass das sichtbare Trigger-Label folgte -> einmal nachziehen.
 syncUnitDisplay(document.getElementById("bank-account-select"));

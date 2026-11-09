@@ -1,0 +1,38 @@
+{
+  "format": "erechnung-draft",
+  "schema_version": 1,
+  "customer": "Example Client",
+  "issuer": "Example Studio",
+  "invoice": {
+    "currency": "EUR",
+    "language": "en",
+    "tax_treatment": "de_19",
+    "service_start": "2026-11-01",
+    "service_end": "2026-11-30",
+    "discount": "25",
+    "discount_type": "abs",
+    "discount_reason": "Project discount",
+    "prepaid": "100",
+    "prepaid_ref": "Payment for project EX-001"
+  },
+  "items": [
+    {
+      "description": "Design work (fictional example)",
+      "quantity": "2",
+      "unit": "DAY",
+      "unit_price": "100",
+      "item_discount": "10",
+      "item_discount_type": "pct",
+      "item_discount_reason": "Loyalty"
+    },
+    {
+      "description": "Workshop (fictional example)",
+      "quantity": "1",
+      "unit": "LS",
+      "unit_price": "50",
+      "item_discount": "5",
+      "item_discount_type": "abs",
+      "item_discount_reason": "Bundle"
+    }
+  ]
+}

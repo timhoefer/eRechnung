@@ -20,6 +20,7 @@ Helpful details: affected version/commit, steps to reproduce, and impact.
 - The Werkzeug debugger is **off** by default (only `FLASK_DEBUG=1` enables it) and
   must never be enabled on a shared machine.
 
+
 ## Data at rest
 
 All data stays on your machine, in your data folder (by default next to the app,

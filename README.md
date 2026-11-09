@@ -72,6 +72,17 @@ Zwei Wege:
 
 Beim ersten Start einmal die **Stammdaten** (Absender) ausfüllen und speichern — sie werden lokal in `seller.json` abgelegt und bei jeder Rechnung wiederverwendet.
 
+## Entwürfe importieren (experimentell)
+
+Ein experimenteller **Entwurfsimport** übernimmt vorbereitete Rechnungspositionen,
+Rabatte und bereits geleistete Anzahlungen aus einer JSON-Datei ins normale
+Rechnungsformular. Aussteller und Kunde werden
+sichtbar zugeordnet; erstellt und archiviert wird erst nach Prüfung in der App.
+Die App kann dabei auch ein entsprechend beauftragter Agent bedienen.
+Die Funktion ist standardmäßig aus (`ERECHNUNG_DRAFT_IMPORT=1` zum Testen).
+Die allgemeinen Schutzfunktionen aus PR #22 und #23 gelten unabhängig vom Import.
+[Anleitung, Agentenhinweise und Beispieldatei](docs/draft-import.md).
+
 ## Mehrere Rechnungsaussteller
 
 Über **Weitere Stammdaten anlegen** unten links in den Stammdaten kannst du weitere Profile
@@ -249,6 +260,15 @@ und gelten nicht als signierte Veröffentlichungen. Der Selbsttest verwendet
 bereits beim Laden der App einen temporären Datenordner.
 
 Für lokale Prüfungen:
+
+Interaktive Entwicklungstests starten mit `ERECHNUNG_TEST_MODE=1 ./run.sh` auf
+http://127.0.0.1:5001 (Port über `PORT` änderbar). Jeder Start verwendet einen
+frischen temporären Datenordner für Stammdaten, Kunden, Archiv und Nummernlauf.
+Produktive Konfiguration wird nicht gelesen; ein Wechsel in einen anderen
+Datenordner ist in diesem Modus gesperrt. Beim Beenden werden die Testdaten entfernt.
+Es gibt dafür keine zusätzliche Einstellung in der normalen App.
+Auch pytest isoliert den Datenordner bereits vor dem ersten Import der App.
+Für Tests nur fiktive Daten verwenden; niemals gegen eine laufende produktive Instanz testen.
 
 ```bash
 .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt pypdf==6.12.2

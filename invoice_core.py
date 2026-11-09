@@ -229,7 +229,7 @@ def safe_name(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "_", text)
 
 
-def render_invoice_preview(seller, buyer, inv, items, mode=""):
+def render_invoice_preview(seller, buyer, inv, items, mode="", *, preview_base=None):
     """Rechnungs-HTML für Live-Vorschau und neue Exporte rendern.
     Rückgabe: (html, (line_total, discount, tax_basis, tax_total, grand_total, treatment))."""
     inv_lang = inv.get("language") or "de"
@@ -253,6 +253,7 @@ def render_invoice_preview(seller, buyer, inv, items, mode=""):
     body_class = "mini" if mode == "mini" else ("page" if mode else "")
     bank = select_account(seller, inv.get("bank_account"))
     html = _templates.get_template("invoice_pdf.html").render(
+        preview_base=preview_base,
         ti=translate(inv_lang),
         body_class=body_class,
         seller=seller,

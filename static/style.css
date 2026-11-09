@@ -802,3 +802,4 @@ body.drawer-open { overflow: hidden; }
 .draft-import-table th, .draft-import-table td { text-align: left; padding: 12px 8px; vertical-align: top; }
 .draft-import-table td:first-child { white-space: pre-wrap; overflow-wrap: anywhere; }
 .draft-import-table th:nth-child(n+2), .draft-import-table td:nth-child(n+2) { text-align: right; white-space: nowrap; }
+.draft-import-link { margin: 14px 0 0; font-size: .85rem; }
