@@ -16,10 +16,11 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 ./run.sh
 
 Das startet die App mit einem frischen temporären Datenordner auf Port 5001.
 Stammdaten und einen Beispielkunden in dieser Testinstanz anlegen. Für einen
-selbst gebauten macOS-Build lautet der entsprechende Teststart:
+selbst gebauten macOS-Build zuerst `dist/eRechnung.app.zip` in einen Testordner
+entpacken. Aus diesem Ordner lautet der entsprechende Teststart:
 
 ```sh
-ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 dist/eRechnung.app/Contents/MacOS/eRechnung
+ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 ```
 
 1. In den Einstellungen **Agentenzugriff** öffnen. Ohne `ERECHNUNG_MCP=1` bleibt

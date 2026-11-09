@@ -1,6 +1,8 @@
 """Probe the packaged bridge, without an app connection, credentials or real data."""
 import asyncio
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from mcp import Client
@@ -20,4 +22,8 @@ async def check(binary):
 
 
 if __name__ == "__main__":
-    asyncio.run(check(sys.argv[1]))
+    # build_macos.sh publishes the ZIP/DMG and removes its temporary app bundle.
+    # Probe the actual ZIP payload, not an app left over from an earlier build.
+    with tempfile.TemporaryDirectory(prefix="erechnung-mcp-bundle-") as directory:
+        subprocess.run(["ditto", "-x", "-k", str(Path(sys.argv[1]).resolve()), directory], check=True)
+        asyncio.run(check(Path(directory) / "eRechnung.app/Contents/MacOS/eRechnung"))

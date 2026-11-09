@@ -88,4 +88,4 @@ jobs:
       - name: Build and test Apple Silicon DMG and ZIP
         run: ./build_macos.sh
       - name: Test bundled MCP bridge over stdio
-        run: .venv/bin/python scripts/check_mcp_bundle.py dist/eRechnung.app/Contents/MacOS/eRechnung
+        run: .venv/bin/python scripts/check_mcp_bundle.py dist/eRechnung.app.zip
