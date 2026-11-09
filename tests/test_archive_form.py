@@ -2,7 +2,7 @@
 import json
 
 import pytest
-from helpers import export_invoice
+from helpers import confirmed_post, export_invoice
 from lxml import html
 from test_issuer_profiles import FORM, SELLER, YEAR, add_issuer
 from test_issuer_profiles import client as client
@@ -28,7 +28,7 @@ def test_archive_error_preserves_complete_draft(client, fast_generation, monkeyp
     fields.setlist("unit", ["C62", "HUR"])
     fields.setlist("unit_price", ["100", "50"])
     if issuer_kind == "retired":
-        assert client.post("/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
+        assert confirmed_post(client, "/issuers/delete", data={"issuer": issuer, "confirm": "delete"}).json["ok"]
         fields.update(dict(doc_type="384", correction_source=f"Rechnung_{FORM['number']}.pdf"))
     before = {p.relative_to(m.DATA_DIR): p.read_bytes() for p in m.DATA_DIR.rglob("*") if p.is_file()}
     if failure == "archive_io":

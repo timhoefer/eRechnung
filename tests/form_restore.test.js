@@ -517,6 +517,80 @@ function masterForm() {
   return {app, revision, fields, notice, details};
 }
 
+function languageView() {
+  const h = masterForm();
+  const {app, fields, revision} = h;
+  const invoice = {};
+  const lookup = app.document.getElementById;
+  app.document.getElementById = id => id === 'invoice-form' ? invoice : lookup(id);
+  app.FormData = class extends URLSearchParams {
+    constructor(form) {
+      super(form === invoice
+        ? [['buyer_name', 'Draft customer'], ['description', 'First line'], ['description', 'Second line']]
+        : [['name', fields.name], ['seller_revision', revision.value]]);
+    }
+  };
+  app.clearTimeout = () => {};
+  const stored = [], destinations = [];
+  app.sessionStorage.setItem = (key, value) => stored.push({key, fields: JSON.parse(value)});
+  app.window.location = {assign: url => destinations.push(url)};
+  let prevented = false;
+  return {...h, stored, destinations, prevented: () => prevented,
+    click: () => Promise.all(app.document.listeners.click.map(handler => handler({
+      preventDefault() { prevented = true; },
+      target: {closest: selector => selector === '.langswitch a' ? {href: '/lang/en'} : null},
+    })))};
+}
+
+test('language click waits for master confirmation and edits made during approval, preserving every invoice line', async () => {
+  const {app, fields, stored, destinations, click, prevented} = languageView();
+  const requests = [];
+  app.window.ChangeConfirmation = {fetch(url, options, interactive) {
+    if (!interactive) return Promise.resolve({status: 428});
+    return new Promise(resolve => requests.push({body: options.body, resolve}));
+  }};
+  assert.equal(await app.autosaveSeller(), false);
+  const switching = click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(prevented(), true);
+  assert.equal(destinations.length, 0);
+  assert.equal(stored.length, 0);
+  assert.equal(requests[0].body.get('name'), 'First edit');
+  await click(); // Ignore a second click while the first approval is pending.
+  assert.equal(requests.length, 1);
+  fields.name = 'Latest edit';
+  requests[0].resolve({ok: true, headers: {get: () => 'first-approved'}});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(destinations.length, 0);
+  assert.equal(requests[1].body.get('name'), 'Latest edit');
+  requests[1].resolve({ok: true, headers: {get: () => 'latest-approved'}});
+  await switching;
+  assert.deepEqual(destinations, ['/lang/en']);
+  assert.deepEqual(stored, [{key: app.languageDraftKey(), fields: {
+    buyer_name: ['Draft customer'], description: ['First line', 'Second line'],
+  }}]);
+});
+
+for (const failure of ['cancel', 'server', 'stale']) {
+  test(`language switch keeps all edits when master confirmation fails: ${failure}`, async () => {
+    const {app, fields, stored, destinations, click} = languageView();
+    app.window.ChangeConfirmation = {async fetch() {
+      if (failure === 'cancel') throw Object.assign(new Error('Cancelled'), {name: 'AbortError'});
+      return {ok: false, status: failure === 'stale' ? 409 : 500,
+        json: async () => ({message: 'Changed elsewhere'})};
+    }};
+    await click();
+    assert.equal(destinations.length, 0);
+    assert.equal(stored.length, 0);
+    assert.equal(fields.name, 'First edit');
+    if (failure !== 'stale') {
+      app.window.ChangeConfirmation.fetch = async () => ({ok: true, headers: {get: () => 'approved'}});
+      await click();
+      assert.deepEqual(destinations, ['/lang/en']);
+    }
+  });
+}
+
 test("queued master edits use the previous save's revision without losing the newer edit", async () => {
   const {app, revision, fields} = masterForm();
   const requests = [];
@@ -786,3 +860,181 @@ for (const source of ["restoreForm", "applyDraft"]) {
     });
   }
 }
+
+test("restoring line discounts preserves percent/amount and row alignment", () => {
+  const app = loadApp();
+  const data = {
+    description: ["First", "Second", "No discount"],
+    item_discount: ["10", "5", "0"],
+    item_discount_type: ["pct", "abs", "pct"],
+    item_discount_reason: ["Loyalty", "Bundle", ""],
+  };
+  const fields = Object.fromEntries(Object.keys(data).map(key => [key, [{value: ""}, {value: ""}, {value: ""}]]));
+  const form = {
+    querySelectorAll(selector) {
+      if (selector === "#items .item") return fields.description;
+      return fields[selector.match(/name="([^"]+)"/)?.[1]] || [];
+    },
+    querySelector: () => null,
+  };
+  app.restoreForm(form, data);
+  for (const key of Object.keys(data)) assert.deepEqual(fields[key].map(el => el.value), data[key]);
+});
+
+test('a queued customer autosave cannot recreate a customer during deletion', async () => {
+  const app = loadApp();
+  app.window.CUSTOMER_AUTOSAVE_URL = '/customers/autosave';
+  const name = {name: 'buyer_name', value: 'Existing customer'};
+  app.document.getElementById = id => id === 'invoice-form' ? {
+    querySelector: () => name, querySelectorAll: () => [name],
+  } : null;
+  app.FormData = class { append() {} };
+  let finishPrevious;
+  app.previousSave = new Promise(resolve => { finishPrevious = resolve; });
+  vm.runInContext('pendingCustomerSave = previousSave', app);
+  app.changeFetch = () => { throw new Error('must not save queued data during deletion'); };
+  const queued = app.autosaveCustomer();
+  vm.runInContext('customerDeletionPending = true', app);
+  finishPrevious();
+  await queued;
+  await app.autosaveCustomer();
+});
+
+test('customer autosave leaves an overwrite pending without showing a dialog', async () => {
+  const app = loadApp();
+  app.window.CUSTOMER_AUTOSAVE_URL = '/customers/autosave';
+  const name = {name: 'buyer_name', value: 'Existing customer'};
+  const notice = {hidden: true};
+  app.document.getElementById = id => id === 'invoice-form' ? {
+    querySelector: () => name, querySelectorAll: () => [name],
+  } : id === 'customer-change-pending' ? notice : null;
+  app.FormData = class { append() {} };
+  app.changeFetch = async (url, options, interactive) => {
+    assert.equal(interactive, false);
+    return {status: 428, json: async () => ({ok: false})};
+  };
+  await app.autosaveCustomer();
+  assert.equal(notice.hidden, false);
+});
+
+function customerSwitchForm() {
+  const app = loadApp();
+  const fields = Object.fromEntries(Object.entries({buyer_name: '', buyer_city: '',
+    buyer_country: 'DE', buyer_payment_term_days: '14'}).map(([name, initial]) => {
+      let value = initial;
+      return [name, {name, get value() { return value; }, set value(v) { value = String(v); }}];
+    }));
+  const notice = {hidden: true};
+  const form = {
+    querySelectorAll: () => Object.values(fields),
+    querySelector: selector => fields[selector.match(/name=["']([^"']+)["']/)?.[1]] || null,
+  };
+  const prompts = [], answers = [];
+  let close;
+  const dialog = {
+    returnValue: '',
+    addEventListener(event, handler) { close = handler; },
+    showModal() {
+      prompts.push({name: fields.buyer_name.value, city: fields.buyer_city.value});
+      this.returnValue = answers.shift() || 'cancel';
+      close();
+    },
+  };
+  app.document.getElementById = id => ({'invoice-form': form, 'customer-change-pending': notice,
+    'customer-switch-dialog': dialog}[id] || null);
+  app.document.querySelector = selector => form.querySelector(selector);
+  app.FormData = class extends Map { append(key, value) { this.set(key, value); } };
+  app.setTimeout = fn => { app.debounce = fn; return 1; };
+  app.clearTimeout = () => { app.debounce = null; };
+  app.window.CUSTOMERS = [{name: 'A', city: 'Berlin', country: 'DE', items: [{description: 'Saved item'}]},
+    {name: 'B', city: 'Leipzig', country: 'DE'}];
+  app.window.ChangeConfirmation = {};
+  app.window.CUSTOMER_AUTOSAVE_URL = '/customers/autosave';
+  for (const fn of ['updateStateField', 'setDueDateFromTerm', 'autoSelectTreatment',
+    'refreshSavedItems', 'recalc', 'schedulePreview']) app[fn] = () => {};
+  app.fillCustomer(0);
+  app.changeFetch = async () => ({status: 428, json: async () => ({ok: false})});
+  return {app, fields, notice, prompts, answers};
+}
+
+for (const autosaved of [false, true]) {
+  test(`cancelling customer switch preserves edits ${autosaved ? 'after' : 'before'} autosave`, async () => {
+    const {app, fields, prompts} = customerSwitchForm();
+    fields.buyer_city.value = 'Hamburg';
+    if (autosaved) await app.autosaveCustomer();
+    else app.scheduleCustomerSave();
+    await app.chooseCust(1);
+    assert.equal(fields.buyer_name.value, 'A');
+    assert.equal(fields.buyer_city.value, 'Hamburg');
+    assert.equal(app.window.CUSTOMERS[0].city, 'Berlin');
+    assert.equal(prompts.length, 1);
+  });
+}
+
+test('discarding customer edits switches only after a warning and leaves saved data intact', async () => {
+  const {app, fields, notice, prompts, answers} = customerSwitchForm();
+  fields.buyer_city.value = 'Hamburg';
+  await app.autosaveCustomer();
+  answers.push('discard');
+  await app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(fields.buyer_city.value, 'Leipzig');
+  assert.equal(notice.hidden, true);
+  await app.chooseCust(0);
+  assert.equal(fields.buyer_city.value, 'Berlin');
+  assert.equal(prompts.length, 1);
+});
+
+test('customer search text and unchanged legacy defaults do not trigger discard warnings', async () => {
+  const {app, fields, prompts} = customerSwitchForm();
+  app.window.CUSTOMERS[0].payment_term_days = '';
+  fields.buyer_name.value = 'B';
+  await app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(fields.buyer_city.value, 'Leipzig');
+  assert.equal(prompts.length, 0);
+});
+
+test('switch waits for in-flight save and uses the saved data when returning', async () => {
+  const {app, fields, prompts} = customerSwitchForm();
+  fields.buyer_city.value = 'Hamburg';
+  let finish;
+  app.changeFetch = () => new Promise(resolve => { finish = resolve; });
+  const saving = app.autosaveCustomer();
+  await Promise.resolve();
+  const switching = app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'A');
+  finish({status: 200, json: async () => ({name: 'A', customer: {name: 'A', city: 'Hamburg', country: 'DE', payment_term_days: '14'}})});
+  await saving;
+  await switching;
+  await app.chooseCust(0);
+  assert.equal(fields.buyer_city.value, 'Hamburg');
+  assert.equal(app.window.CUSTOMERS[0].items[0].description, 'Saved item');
+  assert.equal(prompts.length, 0);
+});
+
+test('customer switch suppresses queued autosaves of discarded fields', async () => {
+  const {app, fields, answers} = customerSwitchForm();
+  fields.buyer_city.value = 'Hamburg';
+  let finish;
+  app.previous = new Promise(resolve => { finish = resolve; });
+  vm.runInContext('pendingCustomerSave = previous', app);
+  app.changeFetch = () => { throw new Error('must not save discarded fields'); };
+  const queued = app.autosaveCustomer();
+  answers.push('discard');
+  const switching = app.chooseCust(1);
+  finish();
+  await queued;
+  await switching;
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(app.window.CUSTOMERS[0].city, 'Berlin');
+});
+
+test('customer switch keeps existing behavior when the experimental flag is off', async () => {
+  const {app, fields, prompts} = customerSwitchForm();
+  delete app.window.ChangeConfirmation;
+  fields.buyer_city.value = 'Hamburg';
+  await app.chooseCust(1);
+  assert.equal(fields.buyer_name.value, 'B');
+  assert.equal(prompts.length, 0);
+});
