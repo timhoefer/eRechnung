@@ -20,8 +20,10 @@ app.CUSTOMERS_FILE = root / 'customers.json'
 app.OUTPUT_DIR = root / 'output'
 app.CONFIG_FILE = root / 'config.json'
 app.OUTPUT_DIR.mkdir(exist_ok=True)
+sys.path.insert(0, str(Path.cwd() / "tests"))
+from helpers import confirmed_post
 fields = json.loads(sys.stdin.read())
-response = app.app.test_client().post('/settings/autosave?issuer=default', data=fields)
+response = confirmed_post(app.app.test_client(), '/settings/autosave?issuer=default', data=fields)
 print(json.dumps({'status': response.status_code, 'seller': app.load_seller()}))
 """
 

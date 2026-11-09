@@ -8,6 +8,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from helpers import confirmed_post
 
 import app as appmod
 import invoice_archive as archive
@@ -161,7 +162,7 @@ def test_app_seller_autosave_waits_for_shared_archive_lock(setup):
     def autosave():
         started.set()
         with appmod.app.test_client() as client:
-            assert client.post("/settings/autosave", data={"name": "Changed name",
+            assert confirmed_post(client, "/settings/autosave", data={"name": "Changed name",
                                "seller_revision": data["seller_revision"]}).status_code == 204
         finished.set()
     with archive.data_lock(source):
