@@ -99,7 +99,7 @@ Example invoice/items (illustrative values, not user defaults):
 }
 ```
 
-Use decimal **strings** with a dot, no thousands separators (`"800.50"`). Dates are
+Use decimal **strings** with ASCII digits (0–9), a dot and no thousands separators (`"800.50"`). Dates are
 `YYYY-MM-DD`; periods need both start/end. `DAY` means days, `HUR` hours, `C62`
 pieces and `LS` lump sum (quantity `"1"`). Language is `de` or `en`. Profile is
 `en16931` (ZUGFeRD PDF with embedded XML) or `xrechnung` (XML plus visual PDF).

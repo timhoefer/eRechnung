@@ -31,6 +31,9 @@ response = json.loads(result.stdout)
    proposes a number without reserving it. Respect `requires_clarification`.
 4. `--issuer <id> draft --customer <name> [--template <filename>] --out <draft.json>`
    writes a draft outside the data root. Edit only `buyer`, `invoice` and `items`.
+   Numeric values use decimal strings with ASCII digits (0–9) and a dot, without
+   thousands separators. Customer and template selection use the app's name-matching
+   rule: letter case is ignored, but names such as `Straße` and `Strasse` stay distinct.
 5. `check --draft <draft.json>` validates and returns a summary including the issuer.
    Present that proposal to the user and obtain confirmation before producing files.
 6. `preview --draft … --out <preview.pdf>` makes a labelled PDF without invoice XML.
@@ -61,9 +64,10 @@ retries reuse the files; changed contents with an occupied number fail. A pendin
 transaction is recovered instead of overwriting existing invoices. Other issuers
 can use the same number. Separate exports use one subfolder per issuer.
 
-The released 1.2.0 app does not use this shared process lock: test concurrent use
-with the app from this PR. The lock coordinates local processes, not multiple Macs
-writing through cloud synchronization.
+The shared process lock is already on `main`; concurrent app/CLI use requires an app
+build containing that archive update. Older builds without the lock cannot coordinate
+with the CLI. The lock coordinates local processes, not multiple Macs writing through
+cloud synchronization.
 
 ## Consent and data handling
 

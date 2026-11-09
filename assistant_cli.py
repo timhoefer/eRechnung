@@ -154,7 +154,7 @@ def templates_from(source: Path, customer: str, issuer: str | None = None) -> li
             if data.get("issuer_id", issuer) != issuer:
                 continue
             buyer, invoice = data["buyer"], data.get("invoice", {})
-            if customer.casefold() != str(buyer.get("name", "")).casefold():
+            if customer.lower() != str(buyer.get("name", "")).lower():
                 continue
             results.append({"template": path.name, "number": invoice.get("number"),
                             "issue_date": invoice.get("issue_date"), "customer": buyer.get("name")})
@@ -165,7 +165,8 @@ def templates_from(source: Path, customer: str, issuer: str | None = None) -> li
 
 def create_draft(source: Path, customer: str, template: str | None, issuer: str | None = None) -> dict:
     issuer, directory, seller = select_issuer(source, issuer)
-    matches = [c for c in customers_from(source) if str(c.get("name", "")).casefold() == customer.casefold()]
+    # Match the app's customer identity rule. Case folding conflates Straße/Strasse.
+    matches = [c for c in customers_from(source) if str(c.get("name", "")).lower() == customer.lower()]
     if len(matches) != 1:
         raise InputError("ambiguous_customer", "Choose one exact customer name from the customer list.")
     buyer = {key: value for key, value in matches[0].items() if key in BUYER_FIELDS}
@@ -181,7 +182,7 @@ def create_draft(source: Path, customer: str, template: str | None, issuer: str 
         previous = read_json(path)
         if previous.get("issuer_id", issuer) != issuer:
             raise InputError("wrong_issuer", "The template belongs to a different issuer.")
-        if str(previous.get("buyer", {}).get("name", "")).casefold() != customer.casefold():
+        if str(previous.get("buyer", {}).get("name", "")).lower() != customer.lower():
             raise InputError("wrong_customer", "The template belongs to a different customer.")
         # Ordinary invoices only: correction/credit references must not carry into a new bill.
         if previous.get("invoice", {}).get("doc_type", "380") != "380":
@@ -258,14 +259,16 @@ def prepare(data, source: Path, issuer: str | None = None) -> tuple[dict, list[d
         if raw in (None, "") and default is not None:
             raw = default
         try:
-            if not isinstance(raw, str) or not re.fullmatch(r"\d{1,12}(?:\.\d{1,8})?", raw):
+            # Browser number fields and the app calculator only accept ASCII digits.
+            if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{1,12}(?:\.[0-9]{1,8})?", raw):
                 raise InvalidOperation
             result = Decimal(raw)
             if positive and result <= 0:
                 raise InvalidOperation
             return result
         except InvalidOperation:
-            error(f"{prefix}.{key}", "Use a positive decimal string." if positive else "Use a nonnegative decimal string.")
+            kind = "positive" if positive else "nonnegative"
+            error(f"{prefix}.{key}", f"Use a {kind} decimal string with ASCII digits (0-9).")
             return Decimal(0)
 
     def dates(value, start, end, prefix):

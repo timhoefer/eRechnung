@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from helpers import export_invoice
+from helpers import confirmed_post, export_invoice
 from lxml import etree, html
 
 import app as appmod
@@ -186,7 +186,7 @@ def test_retirement_during_render_is_checked_before_archive_write(source, capsys
     render = cli.build_pdf
     def retire(markup, xml):
         with appmod.app.test_client() as client:
-            assert client.post("/issuers/delete", data={"issuer": SECOND, "confirm": "delete"}).json["ok"]
+            assert confirmed_post(client, "/issuers/delete", data={"issuer": SECOND, "confirm": "delete"}).json["ok"]
         return render(markup, xml)
     monkeypatch.setattr(cli, "build_pdf", retire)
     result = call(capsys, source, "archive", "--draft", path)
