@@ -14,6 +14,7 @@ from flask import abort, g, redirect, render_template, request, session, url_for
 from werkzeug.datastructures import MultiDict
 from werkzeug.exceptions import HTTPException
 
+import mcp_customer_scope as customer_scope
 from invoice_archive import ArchiveError, archived_number_files, data_lock
 from mcp_access import Access, AccessError, digest
 from mcp_contract import ITEM_FIELDS, TOOLS, validate
@@ -57,6 +58,7 @@ def register(m):
 
     def settings_page(token=None, error=None):
         state = access.load()
+        customers = customer_records()
         access.prune()
         if m.FROZEN:
             command, args = sys.executable, ["--mcp"]
@@ -72,8 +74,15 @@ def register(m):
         }}} if token else None
         return render_template("agents.html", state=state, csrf=csrf(),
                                profiles=m.issuer_profiles(include_deleted=True),
+                               customer_choices=customer_scope.choices(customers),
+                               customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customers},
                                requests=access.pending, configuration=configuration,
                                autostart="ERECHNUNG_MCP_AUTOSTART" in startup, error=error)
+
+    def customer_records():
+        if m.CUSTOMERS_FILE.is_symlink():
+            raise AccessError("Linked customer files are not supported.")
+        return m.load_customers()
 
     @app.get("/agents")
     def agents_settings():
@@ -90,7 +99,7 @@ def register(m):
     def agents_update():
         ui_guard()
         m.BASE.mkdir(parents=True, exist_ok=True)
-        with m.DATA_LOCK, data_lock(m.BASE):
+        with m.DATA_LOCK, data_lock(m.BASE), data_lock(m.DATA_DIR):
             action = request.form.get("action")
             token = None
             if action == "enable":
@@ -122,7 +131,21 @@ def register(m):
                 allowed = {p["id"] for p in m.issuer_profiles(include_deleted=True) if p["available"]}
                 if not name or len(name) > 80 or not issuers or not set(issuers) <= allowed:
                     abort(400)
-                token = access.create(name, issuers, request.form.get("write") == "yes", m.DATA_DIR)
+                mode = request.form.get("customer_mode", "none")
+                if mode not in {"none", "selected", "all"}:
+                    abort(400)
+                ids = []
+                if mode == "selected":
+                    state = access.load()
+                    if not state.get("enabled") or len(state["connections"]) >= 20:
+                        raise AccessError("Enable access first; at most 20 connections are supported.")
+                    customers = customer_records()
+                    ids = customer_scope.assign_selected(customers, request.form.getlist("customers"))
+                    # Only internal identities are added; no customer fields or
+                    # invoices change. Name-based grants are never persisted.
+                    m._write_json(m.CUSTOMERS_FILE, customers)
+                token = access.create(name, issuers, request.form.get("write") == "yes", m.DATA_DIR,
+                                      customer_mode=mode, customer_ids=ids)
             else:
                 abort(400)
             return settings_page(token)
@@ -209,13 +232,15 @@ def register(m):
                 return {"ok": True, "issuers": [p for p in m.issuer_profiles(include_deleted=True)
                                                 if p["id"] in connection["issuers"]]}
             if operation == "list_customers":
-                if m.CUSTOMERS_FILE.is_symlink():
-                    raise ValueError("Linked customer files are not supported.")
                 query = arguments.get("query", "").lower()
-                return {"ok": True, "customers": [c for c in m.load_customers() if query in c.get("name", "").lower()]}
+                return {"ok": True, "customers": [c for c in customer_scope.visible_customers(connection, customer_records())
+                                                   if query in c.get("name", "").lower()]}
             if operation == "invoice_schema":
                 return {"ok": True, "tools": TOOLS, "units": {u[0]: u[1] for u in m.UNITS},
                         "tax_treatments": {k: v["label"] for k, v in m.TAX_TREATMENTS.items()}}
+            if operation in {"save_customer", "save_customer_items", "delete_customer",
+                             "check_invoice", "preview_invoice", "create_invoice"}:
+                customer_scope.require_customer(connection, arguments, customer_records(), operation)
             fields = form_fields(operation, arguments)
             path = {"save_customer": "/customers/save", "save_customer_items": "/customers/items/save",
                     "delete_customer": "/customers/delete", "save_issuer": "/settings",
@@ -232,8 +257,15 @@ def register(m):
                     raise ValueError("App rejected this operation.")
                 if m.CUSTOMERS_FILE.is_symlink() or any(p.is_symlink() for p in m.output_dir().iterdir()):
                     raise ValueError("Linked customer or archive files are not supported.")
+                source = arguments.get("correction_source")
+                if source and customer_scope.mode(connection) != "all":
+                    original = require_invoice(connection, source)
+                    if original.get("customer_id") != arguments.get("customer_id"):
+                        raise AccessError("Invoice not permitted.")
+                if operation == "delete_invoice" and customer_scope.mode(connection) != "all":
+                    require_invoice(connection, arguments["filename"])
                 if operation in {"get_issuer", "list_invoices", "get_invoice", "get_invoice_file", "next_number"}:
-                    return read_data(operation, arguments)
+                    return read_data(connection, operation, arguments)
                 if operation in {"check_invoice", "preview_invoice", "create_invoice"}:
                     seller = m.invoice_seller()
                     if fields["seller_revision"] != m.seller_revision(seller):
@@ -254,6 +286,8 @@ def register(m):
                             "details": response.get_json(silent=True)}
                 result = response.get_json(silent=True)
                 if result is not None:
+                    if isinstance(result, dict) and "customers" in result:
+                        result["customers"] = customer_scope.visible_customers(connection, result["customers"])
                     return result
                 return {"ok": operation in {"delete_invoice", "restore_issuer"} and response.status_code < 400}
         except m.ChangeConfirmationRequired as exc:
@@ -294,19 +328,29 @@ def register(m):
                     fields.setlist("acct_" + key, [a.get(key, "") for a in changes["accounts"]])
         return fields
 
-    def read_data(operation, arguments):
+    def require_invoice(connection, filename):
+        original = m.correction_original(filename)
+        if not customer_scope.permitted_invoice(connection, original, customer_records()):
+            raise AccessError("Invoice not permitted.")
+        if not original:
+            raise ValueError("Invoice snapshot unavailable.")
+        return original
+
+    def read_data(connection, operation, arguments):
         if operation == "get_issuer":
             seller = m.load_seller()
             return {"ok": True, "seller": seller, "revision": m.seller_revision(seller)}
         if operation == "list_invoices":
-            return {"ok": True, "invoices": m._settings_context()["archive"]}
+            if customer_scope.mode(connection) == "none":
+                return {"ok": True, "invoices": []}
+            customers = customer_records()
+            return {"ok": True, "invoices": [entry for entry in m._settings_context()["archive"]
+                    if customer_scope.permitted_invoice(connection, m.correction_original(entry["filename"]), customers)]}
         if operation in {"get_invoice", "get_invoice_file"}:
             filename = arguments["filename"]
             if Path(filename).name != filename:
                 raise ValueError("Invalid filename.")
-            original = m.correction_original(filename)
-            if not original:
-                raise ValueError("Invoice snapshot unavailable.")
+            original = require_invoice(connection, filename)
             if operation == "get_invoice":
                 return {"ok": True, "invoice": original}
             file_format = arguments["format"]

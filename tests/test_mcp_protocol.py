@@ -11,6 +11,7 @@ from mcp.client.stdio import StdioServerParameters
 from test_mcp_access import BUYER, call, configure, decide, disable, grant
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
+from test_mcp_customer_scope import PRIVATE, scoped_grant
 from werkzeug.serving import make_server
 
 import app as m
@@ -20,13 +21,16 @@ from mcp_contract import TOOLS
 
 
 @pytest.mark.parametrize("entrypoint", ["mcp_server.py", "desktop.py"])
-def test_real_stdio_client_discovery_scopes_approval_and_revocation(client, entrypoint, monkeypatch):
+@pytest.mark.parametrize("customer_mode", ["all", "selected"])
+def test_real_stdio_client_discovery_scopes_approval_and_revocation(client, entrypoint, customer_mode, monkeypatch):
     readiness = []
     def observe_start():
         if request.path == "/agents/status":
             readiness.append(True)
     monkeypatch.setitem(m.app.before_request_funcs, None, [*m.app.before_request_funcs[None], observe_start])
-    credential = grant(client)
+    credential = scoped_grant(client) if customer_mode == "selected" else grant(client)
+    m._write_json(m.CUSTOMERS_FILE, [*m.load_customers(), PRIVATE])
+    original_customers = m.load_customers()
     server = make_server("127.0.0.1", 0, m.app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -54,10 +58,17 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             assert not any("approve" in t.name for t in tools)
             result = await agent.call_tool("list_issuers", {})
             assert result.structured_content["issuers"][0]["id"] == "default"
-            pending = await agent.call_tool("delete_customer", {"issuer": "default", "name": BUYER["name"]})
+            customers = (await agent.call_tool("list_customers", {})).structured_content["customers"]
+            deletion = {"issuer": "default", "name": BUYER["name"]}
+            if customer_mode == "selected":
+                assert len(customers) == 1 and customers[0]["name"] == BUYER["name"]
+                deletion["customer_id"] = customers[0]["customer_id"]
+                denied = await agent.call_tool("delete_customer", {**deletion, "name": PRIVATE["name"]})
+                assert not denied.structured_content["ok"]
+            pending = await agent.call_tool("delete_customer", deletion)
             data = pending.structured_content
             assert not pending.is_error and data["status"] == "approval_required"
-            assert json.loads(m.CUSTOMERS_FILE.read_text())[0] == BUYER
+            assert json.loads(m.CUSTOMERS_FILE.read_text()) == original_customers
             connection_id = m.app.extensions["mcp_access"].authenticate(credential, m.DATA_DIR)["id"]
             assert configure(client, "pause", connection=connection_id).status_code == 200
             refused = await agent.call_tool("list_customers", {})
@@ -65,12 +76,15 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             assert configure(client, "resume", connection=connection_id).status_code == 200
             assert (await agent.call_tool("list_customers", {})).structured_content["ok"]
             assert not (await agent.call_tool("request_status", {"request_id": data["request_id"]})).structured_content["ok"]
-            pending = await agent.call_tool("delete_customer", {"issuer": "default", "name": BUYER["name"]})
+            pending = await agent.call_tool("delete_customer", deletion)
             assert pending.structured_content["request_id"] != data["request_id"]
             data = pending.structured_content
             assert decide(client, data["request_id"]).status_code == 303
             status = await agent.call_tool("request_status", {"request_id": data["request_id"]})
             assert status.structured_content["status"] == "completed"
+            assert m.load_customers() == [PRIVATE]
+            if customer_mode == "selected":
+                assert PRIVATE["name"] not in json.dumps(status.structured_content)
             disable(client)
             refused = await agent.call_tool("list_customers", {})
             assert refused.is_error and not refused.structured_content["ok"]

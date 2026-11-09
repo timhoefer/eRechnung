@@ -37,7 +37,7 @@ def disable(client):
 
 def grant(client, *, issuers=None, writable=True, name="Example agent"):
     assert configure(client, "enable", consent="yes").status_code == 200
-    response = configure(client, "connect", name=name, issuers=issuers or ["default"], write="yes" if writable else "")
+    response = configure(client, "connect", name=name, issuers=issuers or ["default"], write="yes" if writable else "", customer_mode="all")
     assert response.status_code == 200
     config = json.loads(html.fromstring(response.data).get_element_by_id("mcp-configuration").text)
     return config["mcpServers"]["erechnung"]["env"]["ERECHNUNG_MCP_TOKEN"]

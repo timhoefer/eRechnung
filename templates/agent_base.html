@@ -9,6 +9,7 @@
     .agent-page { max-width: 960px; margin: 28px auto; padding: 0 20px; }
     .agent-page .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
     .agent-check input { width: auto; flex: none; margin-top: 4px; }
+    .agent-customer-options { margin-top: 12px; border: 1px solid var(--line); border-radius: 9px; padding: 12px; max-height: 280px; overflow-y: auto; }
     .agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
     .agent-connection { position: relative; isolation: isolate; overflow: hidden; min-height: 220px; overflow-wrap: anywhere; }
     .agent-connection-header form { flex: none; }
@@ -61,4 +62,4 @@
 <body><main class="agent-page">
 {% set de = lang == 'de' %}
 {% block content %}{% endblock %}
-</main></body></html>
+</main>{% block scripts %}{% endblock %}</body></html>

@@ -67,7 +67,7 @@ jobs:
         with:
           node-version: "20"
       - name: Syntax-Check
-        run: node --check static/calc.js && node --check static/app.js && node --check static/change_confirmation.js
+        run: node --check static/calc.js && node --check static/app.js && node --check static/change_confirmation.js && node --check static/agent_settings.js
       - name: JS-Tests (Rechenlogik und Formularwiederherstellung)
         run: node --test tests/*.test.js
 

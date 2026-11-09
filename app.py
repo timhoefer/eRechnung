@@ -1498,6 +1498,17 @@ def generate():
     # Review implicit customer changes before publishing any invoice files.
     # The shared lock keeps this reviewed state stable until the final write.
     customers = prepare_customer_update(data["buyer"])
+    # Authorization metadata stays outside PDF/XML and never retrofits old files.
+    matching = [c for c in customers if c.get("name", "").lower() == data["buyer"]["name"].lower()]
+    customer_id = matching[0].get("_customer_id") if len(matching) == 1 else None
+    if data["invoice"]["doc_type"] in {"381", "384"} and request.form.get("correction_source"):
+        original = correction_original(request.form["correction_source"]) or {}
+        # A correction with a changed recipient or unlinked original must not
+        # inherit either customer's grant, including when created through the UI.
+        if original.get("customer_id") != customer_id:
+            customer_id = None
+    if customer_id:
+        data["customer_id"] = customer_id
     if g.get("mcp_connection"):
         # One review covers both finalization and any implicit customer overwrite.
         # Bind the current customer/issuer state as well as the exact invoice.

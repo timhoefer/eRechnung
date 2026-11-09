@@ -34,8 +34,10 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    **Abbrechen** erhält den bisherigen Zustand. Hat sich die Liste seit der
    Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
 3. Eine benannte Verbindung anlegen und die gewünschten Aussteller auswählen.
-   Ohne zusätzliche Auswahl bleibt die Verbindung auf Lesen, Prüfen und Vorschau
-   beschränkt. Die Liste der Aussteller steht vertikal untereinander.
+   Unter **Kundenzugriff** zwischen **Keine Kundendaten**, **Nur ausgewählte Kunden**
+   (Mehrfachauswahl) und **Alle Kunden** wählen. Neue Verbindungen starten ohne
+   Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
+   Prüfen und Vorschau beschränkt.
 4. Optional **Rechnungen erstellen und Datenänderungen anfragen** erlauben.
 5. Die einmalig angezeigte Konfiguration in den MCP-Client übernehmen. Manche
    Clients benötigen statt des `mcpServers`-Blocks ein eigenes Konfigurationsformat;
@@ -93,8 +95,8 @@ Rechnungen, öffentlichen Repositories oder Fehlerberichten teilen.
 | --- | --- | --- |
 | Format | `invoice_schema` | Felder, Einheiten und Steuerarten abfragen |
 | Stammdaten | `list_issuers`, `get_issuer` | Nur explizit freigegebene Aussteller, einschließlich deaktivierter Profile |
-| Kunden | `list_customers` | Gemeinsame Kundenliste inklusive gespeicherter Positionen durchsuchen |
-| Archiv | `list_invoices`, `get_invoice`, `get_invoice_file` | Archiv und unveränderte PDF-/XML-Dateien des freigegebenen Ausstellers lesen |
+| Kunden | `list_customers` | Nur freigegebene Kunden inklusive ihrer gespeicherten Positionen durchsuchen |
+| Archiv | `list_invoices`, `get_invoice`, `get_invoice_file` | Nur Belege innerhalb der Aussteller- und Kundenfreigabe lesen, einschließlich unveränderter PDF-/XML-Dateien |
 | Vorbereitung | `next_number`, `check_invoice`, `preview_invoice` | Nummer vorschlagen, XML prüfen, als Entwurf markiertes PDF erzeugen; ohne Nummernreservierung oder Archivänderung |
 | Erstellen | `create_invoice` | Endgültige Rechnung erst nach Prüfung und App-Bestätigung erstellen |
 | Bearbeiten | `save_customer`, `save_customer_items`, `save_issuer` | Neue Kundendaten speichern; Änderungen bestehender Daten benötigen App-Bestätigung |
@@ -107,7 +109,7 @@ ausgelesen, für XRechnung die archivierte XML-Datei. Die App erzeugt dafür kei
 neues XML aus aktuellen Stammdaten.
 
 Schreibende Werkzeuge benötigen die zusätzliche Änderungsberechtigung. Neue
-Kundendatensätze und Reaktivierungen sind keine destruktiven Änderungen und
+Kundendatensätze erfordern zusätzlich **Alle Kunden**. Neue Datensätze und Reaktivierungen sind keine destruktiven Änderungen und
 benötigen keine zweite Bestätigung. Bestehende Archivdateien können auch mit einer
 Bestätigung nicht durch abweichende Rechnungen gleicher Nummer ersetzt werden.
 
@@ -123,6 +125,37 @@ ist. Veraltete Revisionen werden abgewiesen. Geldbeträge sind Dezimalstrings mi
 Punkt, Daten sind ISO-Daten, Steuerart und Aussteller müssen ausdrücklich gewählt
 werden. `next_number` reserviert nichts; bei unklarem Nummernlauf fordert seine
 Antwort zur Rückfrage auf. Die endgültige Nummer wird immer nochmals angezeigt.
+
+## Kunden gezielt freigeben
+
+**Nur ausgewählte Kunden** gilt für Kundendaten, gespeicherte Positionen und
+zugeordnete Rechnungen. Auch direkte PDF-/XML-Abrufe, Löschungen, Änderungen,
+Vorschauen und neue Rechnungen werden serverseitig geprüft. Ein erratener
+Dateiname oder ein gleichlautender Kundenname genügt nicht. Die Prüfung erfolgt
+erneut beim Ausführen einer bestätigten Anfrage.
+
+Bei der Auswahl erhalten die Kundendatensätze eine feste interne Kennung.
+`list_customers` liefert sie als `customer_id`; eingeschränkte Verbindungen müssen
+diese bei Kunden- und Rechnungsaktionen mitsenden. Namens- und Adressänderungen
+behalten die Kennung. Löschen und gleichnamiges Neuanlegen erzeugt eine andere
+Identität und übernimmt keine Freigabe. Fehlt ein Kunde oder ist seine Kennung
+mehrdeutig, bleibt auch sein Archiv für die eingeschränkte Verbindung gesperrt.
+
+Neue Rechnungen werden beim Archivieren mit der vorhandenen Kundenkennung
+verknüpft – auch bei Erstellung über die normale App. Die Kennung steht nur in
+den lokalen Metadaten, nicht im PDF/XML. Belege, die vor der ersten gezielten
+Kundenfreigabe erstellt wurden, können noch keine Kennung haben. Sie bleiben bei
+eingeschränktem Zugriff gesperrt; auch ein identischer Neuexport ergänzt sie nicht
+nachträglich. Es gibt keine automatische Zuordnung alter Belege anhand des Namens.
+Korrekturen/Stornos benötigen bei eingeschränktem Zugriff eine freigegebene
+Originalrechnung als `correction_source` mit derselben Kundenkennung.
+
+**Keine Kundendaten** sperrt alle Kunden-/Belegaktionen; freigegebene Aussteller
+und allgemeine Werkzeuge bleiben zugänglich. **Alle Kunden** umfasst ausdrücklich
+auch neue Kunden und alte Belege. Bereits bestehende Verbindungen ohne diese
+neue Einstellung behalten ihren bisherigen vollständigen Kundenzugriff. Um sie
+einzuschränken, den Zugang löschen und mit der gewünschten Auswahl neu anlegen.
+Die Verbindungskarte zeigt ihren aktuellen Kundenumfang.
 
 ## Bestätigung einer Änderung
 
@@ -154,8 +187,11 @@ Aktivitätsprotokoll und kein allgemeines Rückgängig.
   Datenordner. Neue Aussteller sind nicht automatisch freigegeben. Nach einem
   Ordnerwechsel funktionieren alte Zugänge für den neuen Ordner nicht. Beim
   Zurückwechseln können sie wieder für ihren ursprünglichen Ordner gelten.
-- Kunden und gespeicherte Positionen sind appweit gemeinsam. Es gibt noch keine
-  Einschränkung auf einzelne Kunden und keine Feldmaskierung von Bank-/Steuerdaten.
+- Kunden und gespeicherte Positionen sind appweit gemeinsam; die Freigabe filtert
+  den Agentenzugriff, sie trennt die Datenbestände nicht. Freigegebene Datensätze
+  und Belege werden vollständig angezeigt, ohne Feldmaskierung oder automatische
+  Entfernung fremder Kundennamen aus Freitexten. Die gemeinsame Nummernfolge des
+  Ausstellers bleibt auch bei eingeschränkter Kundenfreigabe sichtbar.
 - Der Verbindungsname ist eine frei vergebene Bezeichnung, keine verifizierte
   Identität eines Anbieters. Wer den Schlüssel besitzt, kann diese Verbindung nutzen.
 - Der globale Schalter **Agentenzugriff erlauben** entfernt beim Ausschalten alle
@@ -177,7 +213,9 @@ Wege werden von dieser Anbindung nicht vorausgesetzt oder aktiviert.
 ## Technische Prüfung
 
 `tests/test_mcp_access.py` prüft Opt-in, Rechte, Zustandswechsel und die echte
-Rechnungserzeugung. `tests/test_mcp_protocol.py` verbindet einen SDK-Client über
+Rechnungserzeugung. `tests/test_mcp_customer_scope.py` prüft Mehrfachauswahl,
+stabile Kundenidentitäten, gesperrte Altbelege, Dateiabrufe und erneute Prüfung
+bei Bestätigung. `tests/test_mcp_protocol.py` verbindet einen SDK-Client über
 stdio mit einer isolierten App und prüft Widerruf sowie die fehlende Möglichkeit,
 über MCP zu bestätigen. Beide Tests verwenden ausschließlich temporäre Testdaten.
 Die macOS-CI startet zusätzlich die gebündelte App mit `--mcp` und prüft

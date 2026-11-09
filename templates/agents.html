@@ -60,6 +60,8 @@
     <div class="agent-connection-details">
       <p class="hint">{{ ('Lesen und Änderungen anfragen' if connection.writable else 'Nur lesen') if de else ('Read and request changes' if connection.writable else 'Read only') }}</p>
       <ul>{% for profile in profiles if profile.id in connection.issuers %}<li>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</li>{% endfor %}</ul>
+      {% set customer_mode = connection.get('customer_mode', 'all') %}
+      <p class="hint">{{ 'Kunden: ' if de else 'Customers: ' }}{% if customer_mode == 'all' %}{{ 'Alle Kunden' if de else 'All customers' }}{% elif customer_mode == 'selected' %}{% for customer_id in connection.customer_ids %}{{ customer_names.get(customer_id, 'Nicht mehr vorhanden' if de else 'No longer available') }}{{ ', ' if not loop.last }}{% endfor %}{% else %}{{ 'Keine Freigabe' if de else 'No access' }}{% endif %}</p>
     </div>
   </div>
   {% else %}<p class="hint">{{ 'Noch keine Verbindung freigegeben.' if de else 'No connections granted yet.' }}</p>{% endfor %}
@@ -73,7 +75,23 @@
     {% for profile in profiles if profile.available %}
     <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"><span>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</span></label>
     {% endfor %}
-    <p class="hint">{{ 'Der Zugang umfasst Stammdaten und Archiv der ausgewählten Aussteller sowie die gemeinsame Kunden- und Positionsliste. Neue Aussteller sind nicht automatisch freigegeben. Die Freigabe gilt nur für den aktuellen Datenordner.' if de else 'Access includes issuer details and archives for the selected profiles, plus the shared customer and saved-item list. New issuers are not automatically granted. Permission applies only to the current data folder.' }}</p>
+    <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
+    <h3>{{ 'Kundenzugriff' if de else 'Customer access' }}</h3>
+    <label for="agent-customer-mode">{{ 'Freigegebene Kunden' if de else 'Permitted customers' }}</label>
+    <select id="agent-customer-mode" name="customer_mode">
+      <option value="none">{{ 'Keine Kundendaten' if de else 'No customer data' }}</option>
+      <option value="selected">{{ 'Nur ausgewählte Kunden' if de else 'Selected customers only' }}</option>
+      <option value="all">{{ 'Alle Kunden' if de else 'All customers' }}</option>
+    </select>
+    <fieldset class="agent-customer-options" data-customer-mode="selected">
+      <legend>{{ 'Kunden auswählen' if de else 'Choose customers' }}</legend>
+      {% for customer in customer_choices %}
+      <label class="agent-check"><input type="checkbox" name="customers" value="{{ customer.key }}"><span>{{ customer.name }}</span></label>
+      {% else %}<p class="hint">{{ 'Noch keine Kunden gespeichert.' if de else 'No saved customers yet.' }}</p>{% endfor %}
+      <p class="hint">{{ 'Nur diese Kunden, ihre gespeicherten Positionen und eindeutig zugeordneten Belege werden freigegeben. Neue Kunden und ältere Belege ohne Zuordnung bleiben gesperrt.' if de else 'Only these customers, their saved items and unambiguously linked invoices are permitted. New customers and older invoices without a link remain blocked.' }}</p>
+    </fieldset>
+    <p class="hint" data-customer-mode="none">{{ 'Kein Zugriff auf Kundendaten, gespeicherte Positionen oder Rechnungen. Ausstellerdaten und allgemeine Rechnungsinformationen bleiben verfügbar.' if de else 'No access to customer data, saved items or invoices. Issuer details and general invoice information remain available.' }}</p>
+    <p class="hint" data-customer-mode="all">{{ 'Gibt alle Kunden und ihre gespeicherten Positionen sowie die Archive der gewählten Aussteller frei. Das umfasst auch künftig angelegte Kunden und ältere Belege.' if de else 'Grants all customers and saved items, plus the selected issuers’ archives. This includes future customers and older invoices.' }}</p>
     <label class="agent-check"><input type="checkbox" name="write" value="yes"><span>{{ 'Rechnungen erstellen und Datenänderungen anfragen' if de else 'Create invoices and request data changes' }}</span></label>
     <p class="hint">{{ 'Endgültige Rechnungen, Löschungen und Änderungen an vorhandenen Daten warten auf deine ausdrückliche Bestätigung in eRechnung.' if de else 'Final invoices, deletions and changes to existing data wait for your explicit approval in eRechnung.' }}</p>
     <div class="agent-actions">
@@ -93,3 +111,4 @@
 </section>
 <p><a href="{{ url_for('index') }}">{{ 'Zurück zur Rechnung' if de else 'Back to invoice' }}</a></p>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='agent_settings.js') }}?v={{ asset_version('agent_settings.js') }}"></script>{% endblock %}

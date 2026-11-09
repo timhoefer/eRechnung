@@ -51,7 +51,8 @@ class Access:
             self.pending.clear()
         self.save(data)
 
-    def create(self, name: str, issuers: list[str], writable: bool, directory: Path):
+    def create(self, name: str, issuers: list[str], writable: bool, directory: Path,
+               *, customer_mode="none", customer_ids=()):
         data = self.load()
         if not data.get("enabled") or len(data["connections"]) >= 20:
             raise AccessError("Enable access first; at most 20 connections are supported.")
@@ -59,6 +60,7 @@ class Access:
         data["connections"][identifier] = {
             "id": identifier, "name": name, "issuers": sorted(set(issuers)),
             "active": True, "writable": writable,
+            "customer_mode": customer_mode, "customer_ids": sorted(set(customer_ids)),
             "scope": digest(str(directory.resolve())), "token_hash": digest(token),
         }
         self.save(data)
