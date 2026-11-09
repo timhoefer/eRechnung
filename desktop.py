@@ -78,14 +78,11 @@ def main() -> None:
         sys.exit(_selftest())
 
     import app as appmod
+    from mcp_connection import app_instance
 
-    if "--mcp-start" in sys.argv:
-        from mcp_connection import automatic_app_instance
-        with automatic_app_instance(appmod.BASE) as acquired:
-            if acquired:
-                _show_app(appmod)
-    else:
-        _show_app(appmod)
+    with app_instance(appmod.BASE) as acquired:
+        if acquired:
+            _show_app(appmod)
 
 
 def _show_app(appmod):

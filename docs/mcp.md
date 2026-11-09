@@ -44,8 +44,12 @@ verwendeten Feature-Schalter `ERECHNUNG_MCP=1`. Beim Verbindungsaufbau wird eine
 laufende App wiederverwendet; ist sie geschlossen, öffnet sich dieselbe Installation
 automatisch. Auf macOS erscheint das native App-Fenster, beim Quellstart die lokale
 Web-App im Browser. Die Brücke wartet höchstens 15 Sekunden auf die Bereitschaft.
-Mehrere Verbindungen teilen eine Startsperre; eine zusätzliche Instanzsperre
-verhindert doppelte automatisch gestartete Fenster auch bei langsamem Start.
+Mehrere Verbindungen teilen eine Startsperre; manueller und automatischer Start
+verwenden außerdem dieselbe Instanzsperre. So bleibt auch bei gleichzeitigen oder
+langsamen Starts nur eine App mit einer gemeinsamen Liste offener Bestätigungen
+aktiv. Gehört der zuletzt verwendete Port inzwischen einem anderen Programm,
+startet eRechnung auf einem neuen Port. Das andere Programm erhält weder
+Zugangsschlüssel noch Rechnungsaufrufe; Weiterleitungen werden nicht verfolgt.
 
 Der Start aktiviert weder das Opt-in noch legt er Zugänge an. Ausgeschalteter oder
 widerrufener Zugriff bleibt gesperrt. Eine laufende App mit abgeschaltetem
@@ -167,4 +171,9 @@ Protokollinitialisierung, Werkzeugliste und Ablehnung ohne Freigabe.
 Sie prüft auch den tatsächlichen App-Start aus dem ZIP in einem neuen temporären
 Testordner und verifiziert, dass dadurch kein Opt-in erteilt wird.
 `tests/test_mcp_startup.py` prüft Start, Wiederverwendung, parallele Verbindungen,
-Startfehler, unveränderte Rechte und die weiterhin erforderlichen Bestätigungen.
+gleichzeitige manuelle Starts, anderweitig belegte alte Ports, Startfehler,
+unveränderte Rechte und die weiterhin erforderlichen Bestätigungen.
+
+Beim Quellstart bleibt der Debugger über `FLASK_DEBUG=1` verfügbar; der automatische
+Entwicklungs-Neustart ist deaktiviert, damit kein zweiter Prozess die Instanzsperre
+des Servers übernimmt. Nach Codeänderungen die App manuell neu starten.

@@ -4,6 +4,7 @@
 
 - Experimentelle lokale MCP-Anbindung, standardmäßig verborgen und ausgeschaltet: ausdrückliches Opt-in, getrennte widerrufbare Verbindungen und Ausstellerfreigaben. Lesen und Vorschauen sind getrennt von Änderungsanfragen. Löschen, Überschreiben und endgültiges Erstellen von Rechnungen warten auf eine einmalige Bestätigung der konkreten Aktion in der App.
 - Eingerichtete MCP-Verbindungen öffnen eRechnung bei Bedarf automatisch und verwenden eine laufende App weiter. Opt-in, Widerruf und Bestätigungen gelten unverändert; Testinstanzen starten nicht automatisch neu.
+- Gleichzeitige manuelle und automatische Starts teilen eine App-Instanz. Ist der alte Port inzwischen anderweitig belegt, öffnet sich eRechnung auf einem neuen Port, ohne Zugangsdaten an das andere Programm zu senden.
 
 - macOS-Downloads als gestaltetes DMG mit App und Programme-Verknüpfung; das ZIP bleibt als Alternative verfügbar. Der helle Hintergrund enthält dezente Rechnungsmotive und Installationshinweise auf Deutsch und Englisch.
 - Build- und Release-Prüfungen kontrollieren beide Downloads, einschließlich Signierung, Notarisierung und Selbsttest der aus dem DMG kopierten App. Die Verpackung erfolgt außerhalb synchronisierter Projektordner.

@@ -15,6 +15,7 @@ from test_mcp_access import fresh_access as fresh_access
 from werkzeug.serving import make_server
 
 import app as m
+import desktop
 import mcp_connection as connection
 import mcp_server
 from mcp_app import publish_endpoint
@@ -110,25 +111,106 @@ def test_stale_port_is_replaced_before_any_mutation(startup):
     assert len(servers) == 1
 
 
-def test_unrelated_listener_is_not_sent_a_credential_or_replaced(startup):
+@pytest.mark.parametrize("status, body", [
+    ("404 Not Found", b"Not eRechnung"),
+    ("200 OK", b'{"service":"different app"}'),
+    ("200 OK", b"<html>Another service</html>"),
+    ("302 Found", b""),
+])
+def test_reused_port_starts_app_without_disclosing_credentials_or_skipping_approval(startup, status, body):
     _, location, servers = startup
+    grants = (m.BASE / "agent_access.json").read_bytes()
     received = []
     def unrelated(environ, start_response):
-        received.append(environ.get("HTTP_AUTHORIZATION"))
-        start_response("200 OK", [("Content-Type", "application/json")])
-        return [b'{"service":"different app"}']
+        received.append((environ["REQUEST_METHOD"], environ["PATH_INFO"], environ.get("HTTP_AUTHORIZATION")))
+        start_response(status, [("Content-Type", "application/json"),
+                                ("Location", "http://127.0.0.1:9/do-not-follow")])
+        return [body]
     server = make_server("127.0.0.1", 0, unrelated)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     location.write_text(json.dumps({"url": f"http://127.0.0.1:{server.server_port}"}))
     try:
-        assert not mcp_server.app_call("list_issuers", {})["ok"]
-        assert received == [None]
-        assert not servers
+        assert mcp_server.app_call("list_issuers", {})["ok"]
+        assert received and all(item == ("GET", "/agents/status", None) for item in received)
+        assert len(servers) == 1 and servers[0].server_port != server.server_port
+        pending = mcp_server.app_call("delete_customer", {"issuer": "default", "name": BUYER["name"]})
+        assert pending["status"] == "approval_required"
+        assert json.loads(m.CUSTOMERS_FILE.read_text())[0] == BUYER
+        assert (m.BASE / "agent_access.json").read_bytes() == grants
     finally:
         server.shutdown()
         thread.join(timeout=5)
         server.server_close()
+
+
+@pytest.mark.parametrize("entrypoint", [desktop, m], ids=["desktop", "source"])
+@pytest.mark.parametrize("automatic_first", [False, True], ids=["manual-first", "automatic-first"])
+def test_manual_and_automatic_start_share_one_window(client, monkeypatch, entrypoint, automatic_first):
+    import webbrowser
+
+    import werkzeug.serving
+
+    m.BASE.mkdir()
+    opened = threading.Event()
+    close = threading.Event()
+    windows = []
+    def show(*args, **kwargs):
+        windows.append(True)
+        opened.set()
+        assert close.wait(5)
+    monkeypatch.setattr(desktop, "_show_app", show)
+    monkeypatch.setattr(m.app, "run", show)
+    monkeypatch.setattr(werkzeug.serving, "make_server",
+                        lambda *a, **kw: SimpleNamespace(server_port=12345, serve_forever=show))
+    monkeypatch.setattr(webbrowser, "open", lambda *a: None)
+    monkeypatch.setenv("FLASK_DEBUG", "0")
+    monkeypatch.setattr(sys, "argv", ["eRechnung", *(["--mcp-start"] if automatic_first else [])])
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        running = pool.submit(entrypoint.main)
+        try:
+            assert opened.wait(5)
+            monkeypatch.setattr(sys, "argv", ["eRechnung", *([] if automatic_first else ["--mcp-start"])])
+            entrypoint.main()
+            assert windows == [True]
+        finally:
+            close.set()
+        running.result(timeout=5)
+
+
+@pytest.mark.parametrize("state", ["enabled", "disabled", "revoked", "read_only", "feature_off"])
+def test_bridge_waits_for_manual_start_without_changing_permissions(client, startup, monkeypatch, state):
+    token, _, servers = startup
+    if state == "disabled":
+        configure(client, "disable")
+    elif state == "revoked":
+        identifier = m.app.extensions["mcp_access"].authenticate(token, m.DATA_DIR)["id"]
+        configure(client, "revoke", connection=identifier)
+    elif state == "read_only":
+        monkeypatch.setenv("ERECHNUNG_MCP_TOKEN", grant(client, writable=False))
+    elif state == "feature_off":
+        monkeypatch.setitem(m.app.config, "MCP_FEATURE", False)
+    grants = (m.BASE / "agent_access.json").read_bytes()
+    publish_manual = connection.launch_app
+    exited = threading.Event()
+    def poll():
+        exited.set()
+        return 0
+    monkeypatch.setattr(connection, "launch_app", lambda: SimpleNamespace(poll=poll))
+    with connection.app_instance(m.BASE) as acquired, ThreadPoolExecutor(max_workers=1) as pool:
+        assert acquired
+        pending = pool.submit(mcp_server.app_call, "delete_customer", {"issuer": "default", "name": BUYER["name"]})
+        assert exited.wait(5)
+        publish_manual()
+        result = pending.result(timeout=5)
+        if state == "enabled":
+            assert result["status"] == "approval_required"
+        else:
+            assert not result["ok"] and result.get("status") != "approval_required"
+            assert not m.app.extensions["mcp_access"].pending
+    assert len(servers) == 1
+    assert json.loads(m.CUSTOMERS_FILE.read_text())[0] == BUYER
+    assert (m.BASE / "agent_access.json").read_bytes() == grants
 
 
 def test_start_failure_is_controlled_and_does_not_write_permissions(startup, monkeypatch):
@@ -217,15 +299,22 @@ def test_ambiguous_post_failure_is_never_retried(startup, monkeypatch):
 
 
 def test_instance_lock_prevents_second_window_even_after_start_timeout(tmp_path):
-    script = "from pathlib import Path; from mcp_connection import automatic_app_instance; "
-    script += "ctx = automatic_app_instance(Path(__import__('sys').argv[1])); "
+    script = "from pathlib import Path; from mcp_connection import app_instance; "
+    script += "ctx = app_instance(Path(__import__('sys').argv[1])); "
     script += "print(ctx.__enter__()); ctx.__exit__(None, None, None)"
-    with connection.automatic_app_instance(tmp_path) as acquired:
+    with connection.app_instance(tmp_path) as acquired:
         assert acquired
         result = subprocess.run([sys.executable, "-c", script, str(tmp_path)], capture_output=True, text=True, check=True)
         assert result.stdout.strip() == "False"
-    with connection.automatic_app_instance(tmp_path) as acquired:
+    with connection.app_instance(tmp_path) as acquired:
         assert acquired
+
+
+def test_manual_start_remains_available_on_platform_without_autostart(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    with connection.app_instance(tmp_path) as acquired:
+        assert acquired
+    assert not list(tmp_path.iterdir())
 
 
 def test_real_source_app_start_stays_isolated_and_requires_opt_in():

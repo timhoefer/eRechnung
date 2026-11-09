@@ -2074,8 +2074,9 @@ def _validate_request():
 
 register_mcp(sys.modules[__name__])
 
-if __name__ == "__main__":
-    import os
+
+def main():
+    from mcp_connection import app_instance
 
     # Debugger standardmäßig AUS: der Werkzeug-Debugger erlaubt sonst bei jeder
     # Exception Code-Ausführung und leakt Quellcode/Variablen (z. B. Bankdaten).
@@ -2083,21 +2084,26 @@ if __name__ == "__main__":
     debug = os.environ.get("FLASK_DEBUG") == "1"
     if TEST_MODE:
         print(f"Testmodus: separater Datenordner {BASE}; wird beim Beenden entfernt.")
-    if "--mcp-start" in sys.argv:
-        import webbrowser
+    with app_instance(BASE) as acquired:
+        if not acquired:
+            return
+        if "--mcp-start" in sys.argv:
+            import webbrowser
 
-        from werkzeug.serving import make_server
+            from werkzeug.serving import make_server
 
-        from mcp_connection import automatic_app_instance
+            server = make_server("127.0.0.1", 0, app, threaded=True)
+            url = f"http://127.0.0.1:{server.server_port}"
+            publish_endpoint(sys.modules[__name__], url)
+            webbrowser.open(url)
+            server.serve_forever()
+        else:
+            port = int(os.environ.get("PORT", 5001 if TEST_MODE else 5000))
+            publish_endpoint(sys.modules[__name__], f"http://127.0.0.1:{port}")
+            # Keep the instance lock in the serving process, also during debugging.
+            # A reloader child would compete with its own parent for this lock.
+            app.run(host="127.0.0.1", port=port, debug=debug, use_reloader=False)
 
-        with automatic_app_instance(BASE) as acquired:
-            if acquired:
-                server = make_server("127.0.0.1", 0, app, threaded=True)
-                url = f"http://127.0.0.1:{server.server_port}"
-                publish_endpoint(sys.modules[__name__], url)
-                webbrowser.open(url)
-                server.serve_forever()
-    else:
-        port = int(os.environ.get("PORT", 5001 if TEST_MODE else 5000))
-        publish_endpoint(sys.modules[__name__], f"http://127.0.0.1:{port}")
-        app.run(host="127.0.0.1", port=port, debug=debug)
+
+if __name__ == "__main__":
+    main()

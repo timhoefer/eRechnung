@@ -1,15 +1,15 @@
 """Connect to, or open, this installation. No invoice or permission-file access."""
 from __future__ import annotations
 
-import errno
 import json
 import os
 import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from http.client import HTTPException
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, ProxyHandler, build_opener
 
@@ -17,8 +17,12 @@ START_TIMEOUT = 15
 
 
 @contextmanager
-def automatic_app_instance(base):
-    """Keep slow starts/reconnects from opening a second automatically started UI."""
+def app_instance(base):
+    """Share one UI/server between manual and automatic starts of this installation."""
+    if sys.platform not in {"darwin", "linux"}:
+        # Auto-start is unavailable here; preserve the existing manual entrypoint.
+        yield True
+        return
     import fcntl
 
     fd = os.open(base / ".mcp-instance.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -69,13 +73,16 @@ def ready_endpoint():
         with build_opener(ProxyHandler({}), NoRedirect()).open(url + "/agents/status", timeout=1) as response:
             status = json.loads(response.read(4097))
         if not isinstance(status, dict) or status.get("service") != "eRechnung":
-            raise ValueError("The configured port does not belong to eRechnung.")
+            return None
         # An app with the feature disabled is still running. Never replace it.
         return url
-    except URLError as exc:
-        if isinstance(exc.reason, OSError) and exc.reason.errno == errno.ECONNREFUSED:
-            return None
-        raise
+    except HTTPError as exc:
+        exc.close()
+        return None
+    except (URLError, HTTPException, OSError, ValueError):
+        # The old port may now host another service (including non-HTTP data).
+        # Only discovery failed: never send credentials or a tool call there.
+        return None
 
 
 def launch_app():
@@ -121,6 +128,11 @@ def ensure_app():
             if url:
                 return url
             if child.poll() is not None:
-                raise OSError("eRechnung could not be started.")
+                # A simultaneous manual start may own the instance lock before
+                # publishing its endpoint. The redundant child exits in that case;
+                # keep waiting for the owner instead of reporting a failed start.
+                with app_instance(location.parent) as acquired:
+                    if acquired:
+                        raise OSError("eRechnung could not be started.")
             time.sleep(0.1)
     raise TimeoutError("eRechnung did not become ready in time.")
