@@ -6,10 +6,10 @@
       <stop offset="1" stop-color="white"/>
     </linearGradient>
   </defs>
-  <g stroke="url(#trace)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M16 40h54l32 32h48l22 22h40"/>
+  <g stroke="url(#trace)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19.5 40h50.5l32 32h48l22 22h40"/>
     <path d="M0 110h212"/>
-    <path d="M36 188h56l38-38h44l24-24h14"/>
+    <path d="M39.5 188h52.5l38-38h44l24-24h14"/>
     <path d="M114 0v22l30 30h52l28 28"/>
     <path d="M172 0v22l40 40h28v18"/>
     <path d="M244 0v44l12 12v24"/>
@@ -17,8 +17,8 @@
     <path d="M240 140v42l-16 16v22"/>
     <path d="M256 140v26l28 28v26"/>
     <path d="M268 94h32m-32 16h32m-32 16h32"/>
-    <path d="M270 26h8l22 22m-14 118h14"/>
-    <path d="M76 220v-24l38-38"/>
+    <path d="M273.5 26h4.5l22 22m-10.5 118h10.5"/>
+    <path d="M76 220v-24l35.525-35.525"/>
     <rect x="212" y="80" width="56" height="60" rx="10"/>
     <rect x="228" y="98" width="24" height="24" rx="5"/>
     <circle cx="16" cy="40" r="3.5"/>
