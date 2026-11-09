@@ -451,6 +451,7 @@ button:hover { background: var(--accent-d); }
 button.secondary { background: var(--surface-2); color: var(--ink); }
 button.secondary:hover { background: var(--surface-2-h); }
 .hint { color: var(--muted); font-size: var(--text-sm); margin: 8px 0 0; }
+.hint.settings-description { margin-bottom: 16px; }
 .hint code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 .discount-row { display: flex; gap: 12px; align-items: flex-end; margin: 10px 0 4px; }
 .discount-row label:first-child { flex: 0 0 140px; }

@@ -179,7 +179,7 @@
   <h2>{{ t.check_file }}</h2>
   <form method="post" enctype="multipart/form-data" class="check-file-form"
         action="{{ url_for('settings_panel' if inplace else 'validate', issuer='all' if archive_all else issuer_id, year=archive_year, sort=archive_sort) }}">
-    <p class="hint">{{ t.check_file_hint }}</p>
+    <p class="hint settings-description">{{ t.check_file_hint }}</p>
     <input type="file" name="file" accept=".pdf,.xml" required>
     <div style="margin-top:12px"><button type="submit">{{ t.check }}</button></div>
   </form>
@@ -187,7 +187,7 @@
 
 <div class="card">
   <h2>{{ t.datadir_title }}</h2>
-  <p class="hint">{{ t.datadir_hint }}</p>
+  <p class="hint settings-description">{{ t.datadir_hint }}</p>
   <form method="post" action="{{ url_for('data_dir_set') }}" class="datadir-form">
     <label class="wide">{{ t.datadir_label }}
       <input name="data_dir" id="data-dir-input" value="{{ data_dir if data_dir_custom else '' }}" placeholder="{{ data_dir }}">
