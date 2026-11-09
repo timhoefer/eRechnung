@@ -63,9 +63,18 @@
 .archive-select-toggle { display: inline-flex; align-items: center; gap: 6px; }
 .archive-select-toggle svg { flex: none; }
 .archive-select-toggle[aria-pressed="true"] .archive-select-box { display: none; }
-.archive-selection-bar { display: grid; gap: 12px; padding: 12px; margin: 16px 0; background: var(--panel-2, var(--bg)); border-radius: 9px; }
+.archive-card { container-type: inline-size; }
+.archive-selection-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "selection export" "quarters export"; gap: 12px 24px; padding: 16px; margin: 16px 0; background: var(--panel-2, var(--bg)); border-radius: 9px; }
 .archive-selection-actions, .archive-quarter-selection { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.archive-quarter-selection { gap: 12px 20px; }
+.archive-selection-actions { grid-area: selection; }
+.archive-quarter-selection { grid-area: quarters; gap: 12px 20px; }
+.archive-selection-export { grid-area: export; align-self: center; display: grid; gap: 8px; justify-items: end; max-width: 240px; }
+.archive-selection-export button { padding: 14px 22px; white-space: nowrap; }
+.archive-selection-export [data-archive-export-status]:empty { display: none; }
+@container (max-width: 660px) {
+  .archive-selection-bar { grid-template-columns: minmax(0, 1fr); grid-template-areas: "selection" "quarters" "export"; }
+  .archive-selection-export { justify-self: end; }
+}
 .archive-selection-bar label.check { padding-bottom: 0; align-self: center; }
 .archive-selection-bar .hint { margin: 0; }
 .archive-selection-cell { display: none; }

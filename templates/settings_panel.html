@@ -106,14 +106,16 @@
     <div class="archive-selection-actions">
       <label class="check"><input type="checkbox" data-archive-all>{{ t.archive_select_all }}</label>
       <span class="hint" data-archive-count role="status" aria-live="polite"></span>
-      <button type="submit" class="secondary small" disabled>{{ t.export_csv }}</button>
-      <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
     </div>
     <div class="archive-quarter-selection" role="group" aria-label="{{ t.archive_select_quarters }}" title="{{ t.archive_period_hint }}">
       <span class="hint">{{ t.archive_select_quarters }}</span>
       {% for period in archive_quarters %}
       <label class="check"><input type="checkbox" data-archive-quarter="{{ period.key }}">{% if archive_year == 'all' %}{{ period.year }} · {% endif %}{{ t.archive_quarter.format(n=period.quarter) }}</label>
       {% endfor %}
+    </div>
+    <div class="archive-selection-export">
+      <button type="submit" class="secondary" disabled>{{ t.export_csv }}</button>
+      <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
     </div>
   </form>
   <table class="archive">
