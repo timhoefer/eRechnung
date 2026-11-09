@@ -517,6 +517,80 @@ function masterForm() {
   return {app, revision, fields, notice, details};
 }
 
+function languageView() {
+  const h = masterForm();
+  const {app, fields, revision} = h;
+  const invoice = {};
+  const lookup = app.document.getElementById;
+  app.document.getElementById = id => id === 'invoice-form' ? invoice : lookup(id);
+  app.FormData = class extends URLSearchParams {
+    constructor(form) {
+      super(form === invoice
+        ? [['buyer_name', 'Draft customer'], ['description', 'First line'], ['description', 'Second line']]
+        : [['name', fields.name], ['seller_revision', revision.value]]);
+    }
+  };
+  app.clearTimeout = () => {};
+  const stored = [], destinations = [];
+  app.sessionStorage.setItem = (key, value) => stored.push({key, fields: JSON.parse(value)});
+  app.window.location = {assign: url => destinations.push(url)};
+  let prevented = false;
+  return {...h, stored, destinations, prevented: () => prevented,
+    click: () => Promise.all(app.document.listeners.click.map(handler => handler({
+      preventDefault() { prevented = true; },
+      target: {closest: selector => selector === '.langswitch a' ? {href: '/lang/en'} : null},
+    })))};
+}
+
+test('language click waits for master confirmation and edits made during approval, preserving every invoice line', async () => {
+  const {app, fields, stored, destinations, click, prevented} = languageView();
+  const requests = [];
+  app.window.ChangeConfirmation = {fetch(url, options, interactive) {
+    if (!interactive) return Promise.resolve({status: 428});
+    return new Promise(resolve => requests.push({body: options.body, resolve}));
+  }};
+  assert.equal(await app.autosaveSeller(), false);
+  const switching = click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(prevented(), true);
+  assert.equal(destinations.length, 0);
+  assert.equal(stored.length, 0);
+  assert.equal(requests[0].body.get('name'), 'First edit');
+  await click(); // Ignore a second click while the first approval is pending.
+  assert.equal(requests.length, 1);
+  fields.name = 'Latest edit';
+  requests[0].resolve({ok: true, headers: {get: () => 'first-approved'}});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(destinations.length, 0);
+  assert.equal(requests[1].body.get('name'), 'Latest edit');
+  requests[1].resolve({ok: true, headers: {get: () => 'latest-approved'}});
+  await switching;
+  assert.deepEqual(destinations, ['/lang/en']);
+  assert.deepEqual(stored, [{key: app.languageDraftKey(), fields: {
+    buyer_name: ['Draft customer'], description: ['First line', 'Second line'],
+  }}]);
+});
+
+for (const failure of ['cancel', 'server', 'stale']) {
+  test(`language switch keeps all edits when master confirmation fails: ${failure}`, async () => {
+    const {app, fields, stored, destinations, click} = languageView();
+    app.window.ChangeConfirmation = {async fetch() {
+      if (failure === 'cancel') throw Object.assign(new Error('Cancelled'), {name: 'AbortError'});
+      return {ok: false, status: failure === 'stale' ? 409 : 500,
+        json: async () => ({message: 'Changed elsewhere'})};
+    }};
+    await click();
+    assert.equal(destinations.length, 0);
+    assert.equal(stored.length, 0);
+    assert.equal(fields.name, 'First edit');
+    if (failure !== 'stale') {
+      app.window.ChangeConfirmation.fetch = async () => ({ok: true, headers: {get: () => 'approved'}});
+      await click();
+      assert.deepEqual(destinations, ['/lang/en']);
+    }
+  });
+}
+
 test("queued master edits use the previous save's revision without losing the newer edit", async () => {
   const {app, revision, fields} = masterForm();
   const requests = [];

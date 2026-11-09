@@ -6,9 +6,10 @@
       <tbody id="change-rows"></tbody>
     </table>
   </div>
+  <p id="change-cancel-error" class="callout" role="alert" hidden>{{ t.change_cancel_failed }}</p>
   <form method="dialog" class="modal-actions">
     <button value="cancel" class="secondary" autofocus>{{ t.cancel }}</button>
-    <button value="confirm" class="danger">{{ t.change_confirm }}</button>
+    <button id="change-confirm-button" value="confirm" class="danger">{{ t.change_confirm }}</button>
   </form>
 </dialog>
 <script src="{{ url_for('static', filename='change_confirmation.js') }}?v={{ asset_version('change_confirmation.js') }}"></script>

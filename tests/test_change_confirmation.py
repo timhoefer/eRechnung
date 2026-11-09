@@ -294,6 +294,41 @@ def test_customer_rename_is_reviewed_and_keeps_one_record(client):
     assert [c['name'] for c in m.load_customers()] == ['Renamed customer']
 
 
+@pytest.mark.parametrize('action', ['save', 'autosave', 'rename', 'delete', 'items/save'])
+def test_confirmation_distinguishes_customers_with_casefold_equivalent_names(client, action):
+    customers = [{**BUYER, 'name': 'Straße', 'city': 'Berlin'},
+                 {**BUYER, 'name': 'Strasse', 'city': 'Hamburg'}]
+    m.CUSTOMERS_FILE.write_text(json.dumps(customers))
+    fields = {'buyer_' + k: v for k, v in customers[1].items()}
+    fields['buyer_city'] = 'Munich'
+    endpoint = '/customers/' + ('save' if action == 'rename' else action)
+    if action == 'rename':
+        fields.update(prev_name='Strasse', buyer_name='New Studio')
+    if action == 'items/save':
+        fields.update(description='New service', quantity='1', unit_price='100', unit='HUR')
+        customers[1]['items'] = [{'description': 'Old service'}]
+        m.CUSTOMERS_FILE.write_text(json.dumps(customers))
+    response = post(client, endpoint, fields)
+    assert response.status_code == 428
+    change = response.json['confirmation']
+    assert change['details'] and all(d['label'].startswith('Strasse · ') for d in change['details'])
+    if action in ('save', 'autosave', 'rename'):
+        assert any(d['before'] == 'Hamburg' and d['after'] == 'Munich' for d in change['details'])
+    if action == 'delete':
+        assert all(d['after'] == '—' for d in change['details'])
+    assert m.load_customers() == customers
+    assert post(client, endpoint, fields, change['token']).status_code == 200
+    saved = m.load_customers()
+    assert saved[0] == customers[0]
+    if action == 'delete':
+        assert saved == [customers[0]]
+    elif action == 'items/save':
+        assert saved[1]['items'][0]['description'] == 'New service'
+    else:
+        assert saved[1]['city'] == 'Munich'
+        assert saved[1]['name'] == fields['buyer_name']
+
+
 @pytest.mark.parametrize('endpoint', ['/customers/autosave', '/customers/save'])
 def test_rename_cannot_merge_two_existing_customers(client, endpoint):
     m.CUSTOMERS_FILE.write_text(json.dumps([BUYER, {**BUYER, 'name': 'Other customer', 'city': 'Hamburg'}]))

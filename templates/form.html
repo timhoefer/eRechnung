@@ -134,8 +134,8 @@
 </div>
 {% endif %}
 
-{% if submitted_form is not none and not imported_draft %}<div class="callout" id="export-conflict" role="alert">{{ t.export_master_conflict }}</div>{% endif %}
-<details class="card" id="master-data" {% if not seller.name or (submitted_form is not none and not imported_draft) or request.args.get('edit_issuer') == '1' %}open{% endif %}>
+{% if master_conflict %}<div class="callout" id="export-conflict" role="alert">{{ t.export_master_conflict }}</div>{% endif %}
+<details class="card" id="master-data" {% if not seller.name or master_conflict or request.args.get('edit_issuer') == '1' %}open{% endif %}>
   <summary>
     <span class="summary-text"><strong>{{ t.master }}</strong>{% if issuers|length == 1 %} &mdash; {{ t.master_hint }}{% endif %}</span>
     {% if issuers|length > 1 and not issuer_deleted %}

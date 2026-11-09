@@ -979,10 +979,12 @@ def confirm_customer_changes(customers: list[dict]) -> None:
         details = []
         removed = False
         for old in before:
-            name = old.get("name", "").casefold()
-            if name == request.form.get("prev_name", "").strip().casefold():
-                name = request.form.get("buyer_name", "").strip().casefold()
-            new = next((c for c in customers if c.get("name", "").casefold() == name), {})
+            # Use the same identity comparison as prepare_customer_update/delete.
+            # casefold() would conflate distinct saved names such as Straße/Strasse.
+            name = old.get("name", "").lower()
+            if name == request.form.get("prev_name", "").strip().lower():
+                name = request.form.get("buyer_name", "").strip().lower()
+            new = next((c for c in customers if c.get("name", "").lower() == name), {})
             removed = removed or not new
             for detail in change_details(old, new):
                 detail["label"] = f'{old.get("name", "")} · {detail["label"]}'
@@ -1272,7 +1274,7 @@ DEFAULT_TERM_DAYS = 14  # Standard-Zahlungsziel für neue Kunden (pro Kunde änd
 
 
 @app.route("/")
-def index(submitted_form=None, *, imported_draft=False):
+def index(submitted_form=None, master_conflict=False, *, imported_draft=False):
     seller = invoice_seller()
     numbers = used_invoice_numbers()
     profiles = issuer_profiles(include_deleted=True)
@@ -1307,6 +1309,7 @@ def index(submitted_form=None, *, imported_draft=False):
         draft=draft,
         submitted_form=submitted_form.to_dict(flat=False) if submitted_form is not None else None,
         imported_draft=imported_draft,
+        master_conflict=master_conflict,
         used_numbers=numbers,
         ref_invoices=archived_invoices(),
         first_run=first_run,
@@ -1555,7 +1558,7 @@ def generate():
     # DATA_LOCK covers this check through archiving: another window cannot change
     # the reviewed issuer between the comparison and PDF/XML creation.
     if request.form.get("seller_revision") != seller_revision(seller):
-        return index(submitted_form=request.form), 409
+        return index(submitted_form=request.form, master_conflict=True), 409
     if not data["items"]:
         flash(translate(get_ui_lang(request))["need_item"], "err")
         return redirect(url_for("index"))
@@ -1639,6 +1642,8 @@ def archive_error(error):
     if request.headers.get("X-Requested-With") == "fetch":
         return {"ok": False, "message": ui[key]}, 409
     flash(ui[key], "err")
+    if request.endpoint == "generate":
+        return index(submitted_form=request.form), 409
     return redirect(url_for("index"))
 
 

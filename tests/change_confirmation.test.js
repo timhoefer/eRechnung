@@ -7,7 +7,8 @@ const vm = require('node:vm');
 function harness(responses, answers = ['confirm']) {
   const calls = [], prompts = [];
   const nodes = {
-    'change-title': {}, 'change-message': {},
+    'change-title': {}, 'change-message': {}, 'change-cancel-error': {hidden: true},
+    'change-confirm-button': {disabled: false},
     'change-rows': {children: [], replaceChildren() { this.children = []; }, appendChild(row) { this.children.push(row); }},
   };
   let close;
@@ -16,7 +17,10 @@ function harness(responses, answers = ['confirm']) {
     addEventListener(event, callback) { assert.equal(event, 'close'); close = callback; },
     showModal() {
       prompts.push(nodes['change-title'].textContent);
-      this.returnValue = answers.shift() || 'cancel';
+      assert.ok(answers.length, 'unexpected dialog');
+      const answer = answers.shift();
+      if (answer === 'wait') return;
+      this.returnValue = answer || 'cancel';
       close();
     },
   };
@@ -30,11 +34,13 @@ function harness(responses, answers = ['confirm']) {
       calls.push({url, body: options.body, headers: new Headers(options.headers)});
       const response = responses.shift();
       assert.ok(response, 'unexpected request');
+      if (response instanceof Error) throw response;
       return response;
     },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../static/change_confirmation.js'), 'utf8'), context);
-  return {api: context.window.ChangeConfirmation, nodes, calls, prompts};
+  return {api: context.window.ChangeConfirmation, nodes, calls, prompts,
+    answer(value) { nodes['change-confirmation'].returnValue = value; close(); }};
 }
 function challenge(token = 'once', title = 'Delete invoice') {
   return {status: 428, json: async () => ({confirmation: {
@@ -59,10 +65,46 @@ test('confirmation retries the captured operation with the issued token', async 
 });
 
 test('cancel revokes the pending token and does not retry the destructive operation', async () => {
-  const h = harness([challenge(), {status: 204}], ['cancel']);
+  const h = harness([challenge(), {status: 204, ok: true}], ['cancel']);
   await assert.rejects(h.api.fetch('/archive/delete', {method: 'POST'}), {name: 'AbortError'});
   assert.deepEqual(h.calls.map(c => c.url), ['/archive/delete', '/changes/cancel']);
   assert.equal(h.calls[1].body.get('token'), 'once');
+});
+
+for (const failure of [{status: 500, ok: false}, new Error('Connection lost')]) {
+  test(`failed modal cancellation stays pending and retries the same token: ${failure.status || 'network'}`, async () => {
+    const h = harness([challenge(), failure, {status: 204, ok: true}], ['cancel', 'wait']);
+    let finished = false;
+    const pending = assert.rejects(h.api.fetch('/archive/delete', {method: 'POST'}), {name: 'AbortError'})
+      .then(() => { finished = true; });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(finished, false);
+    assert.equal(h.nodes['change-cancel-error'].hidden, false);
+    assert.equal(h.nodes['change-confirm-button'].disabled, true);
+    assert.equal(h.prompts.length, 2);
+    h.answer('cancel');
+    await pending;
+    assert.deepEqual(h.calls.map(c => c.url), ['/archive/delete', '/changes/cancel', '/changes/cancel']);
+    assert.deepEqual(h.calls.slice(1).map(c => c.body.get('token')), ['once', 'once']);
+    assert.equal(h.calls[2].headers.get('X-Requested-With'), 'fetch');
+  });
+}
+
+test('another operation waits until a failed cancellation has been retried', async () => {
+  const h = harness([challenge('first'), {status: 500, ok: false}, challenge('second', 'Other change'),
+    {status: 204, ok: true}, success], ['cancel', 'wait', 'confirm']);
+  const first = assert.rejects(h.api.fetch('/archive/delete', {method: 'POST'}), {name: 'AbortError'});
+  await new Promise(resolve => setImmediate(resolve));
+  const second = h.api.fetch('/settings/autosave', {method: 'POST'});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(h.prompts, ['Delete invoice', 'Delete invoice']);
+  h.answer('cancel');
+  await first;
+  assert.equal(await second, success);
+  assert.equal(h.nodes['change-cancel-error'].hidden, true);
+  assert.equal(h.nodes['change-confirm-button'].disabled, false);
+  assert.deepEqual(h.calls.map(c => c.url), ['/archive/delete', '/changes/cancel',
+    '/settings/autosave', '/changes/cancel', '/settings/autosave']);
 });
 
 test('a changed server state requires another visible confirmation', async () => {
@@ -73,7 +115,7 @@ test('a changed server state requires another visible confirmation', async () =>
 });
 
 test('cancelling a revised proposal never sends the new token to the write endpoint', async () => {
-  const h = harness([challenge('old'), challenge('new'), {status: 204}], ['confirm', 'cancel']);
+  const h = harness([challenge('old'), challenge('new'), {status: 204, ok: true}], ['confirm', 'cancel']);
   await assert.rejects(h.api.fetch('/archive/delete', {method: 'POST'}), {name: 'AbortError'});
   assert.equal(h.calls.filter(c => c.url === '/archive/delete').length, 2);
   assert.equal(h.calls[2].url, '/changes/cancel');
