@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Die lokale JSON-Schnittstelle ist unabhängig vom Agenten oder Modellanbieter verwendbar. Der Codex-Skill bleibt ein optionaler Adapter; Freigabe-Oberfläche und Berechtigungskonzept sind noch nicht enthalten.
+- Aussteller lassen sich über stabile IDs auswählen. Entwürfe im Format 2 behalten Aussteller, Datenordner und Stammdatenstand; ein geänderter Standard leitet sie nicht um. Vorlagen, Bankdaten, Nummernprüfung und Archivierung berücksichtigen das gewählte Profil. Bei mehreren aktiven Profilen ist eine ausdrückliche Auswahl erforderlich. Deaktivierte Profile können keine neuen Agenten-Rechnungen ausstellen.
+- App und Agent verwenden dieselbe Sperre auf dem gemeinsamen Datenordner. Unterbrochene Archivierungen weiterer Aussteller werden vor einem Datenordnerwechsel abgeschlossen; getrennte Exporte liegen in eigenen Unterordnern pro Aussteller.
+- Der optionale Skill kann geprüfte Rechnungen auf ausdrücklichen Auftrag ins App-Archiv übernehmen. App und Skill teilen Speicherweg und lokale Dateisperre; ein Nummernvorschlag berücksichtigt vorhandene Belege.
+
+- Optionaler, separat entfernbarer eRechnung-Skill mit lokaler Schnittstelle für Kunden, Vorlagen, Entwürfe, PDF-Vorschauen und validierte Exporte. Entwürfe und separate Exporte bleiben außerhalb des App-Datenordners.
+- App und Assistent verwenden denselben Rechnungskern. Die App bleibt ohne Skill und ohne LLM-Abhängigkeit nutzbar.
 - Änderungen an bestehenden Stammdaten, Kunden und gespeicherten Positionen sowie Löschungen erhalten eine zusätzliche Bestätigung mit den betroffenen Daten. Unbestätigte Änderungen bleiben im Formular; beim Kundenwechsel wird vor ihrem Verlust gewarnt.
 - Bestätigungen sind einmalig, zeitlich begrenzt und an Sitzung, konkrete Anfrage und bisherigen Datenstand gebunden. Abbrechen widerruft die Bestätigung.
 - CSV-Exporte, Rechnungsbegleitdateien und Schreibproben ersetzen keine vorhandenen Dateien. Ein interner Testmodus verwendet ausschließlich temporäre Daten und einen eigenen Nummernlauf.

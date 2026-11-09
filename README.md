@@ -183,6 +183,109 @@ Das Format wählst du pro Rechnung oben im Kopf:
 
 Beide werden gegen die offizielle XSD validiert; das Ergebnis lässt sich zusätzlich mit Validatoren wie dem [KoSIT-Validator] oder Mustang prüfen.
 
+## Lokale Agenten-Schnittstelle (Prototyp)
+
+Die Schnittstelle `assistant_cli.py` ist agentenunabhängig: Jeder Agent mit lokalem
+Prozesszugriff kann Kunden und Rechnungsvorlagen lesen, JSON-Entwürfe vorbereiten und
+PDF-Vorschauen oder validierte ZUGFeRD-/XRechnung-Dateien erzeugen. Sie verwendet
+denselben Rechnungskern und dieselbe Vorlage wie die App. Es gibt keine Abhängigkeit
+von Codex, einem Modellanbieter oder einem LLM-API-Schlüssel und keinen zusätzlichen
+Server. Der separat installierbare Codex-Skill ist ein optionaler Adapter.
+Die [Agenten-Schnittstelle](docs/agent-interface.md) beschreibt die direkte Nutzung,
+Rückgaben und Grenzen für andere Agenten und Automatisierungen.
+
+`issuers` listet die Aussteller mit stabilen IDs und dem App-Standard auf.
+Bei mehreren aktiven Profilen muss für Nummernvorschlag, Vorlagen und neue Entwürfe
+`--issuer ID` vor dem Befehl angegeben werden. Der Standard wird bei Unklarheit
+vorgeschlagen, aber nicht stillschweigend ausgewählt. Kunden und gespeicherte
+Positionen bleiben gemeinsam; Bankdaten, Nummern und Archive gehören zum gewählten
+Aussteller. Deaktivierte Profile können über die Schnittstelle keine neuen
+Rechnungen ausstellen; Reaktivierung, Stornos und Korrekturen bleiben App-Aktionen.
+
+Ein Entwurf enthält eine feste Aussteller-ID, den Datenordner-Bezug und den
+geprüften Stammdatenstand. Ein geänderter Standard leitet ihn nicht um. Nach einer
+Adress-/Bankdatenänderung, Reaktivierung oder einem Ordnerwechsel muss ein neuer
+Entwurf erstellt und bestätigt werden. Alte Entwürfe im Format 1 werden ebenfalls
+neu erstellt. Separate Exporte liegen in Unterordnern pro Aussteller, sodass beide
+dieselbe Rechnungsnummer verwenden können.
+
+Vor dem Erzeugen einer PDF oder dem finalen Export fasst der Skill die geplante
+Rechnung zusammen und wartet auf eine ausdrückliche Bestätigung. Offene Angaben
+fragt er mit passenden Vorschlägen aus dem Gespräch, Kundendaten und früheren
+Rechnungen ab; die Herkunft eines Vorschlags wird benannt. Erst nach Bestätigung
+erstellt er die vereinbarte Vorschau, den Export oder den Archiveintrag. Der
+gewählte Aussteller ist Teil dieser Zusammenfassung. Diese
+Gesprächsregel gilt für den Skill; direkte CLI-Aufrufe haben keinen Bestätigungsdialog.
+
+Der Prototyp unterstützt gewöhnliche Rechnungen (`380`) auf macOS/Linux. Kunden,
+Vorlagen und Nummernvorschläge werden gelesen; Entwürfe, Vorschauen und separate
+Exporte liegen außerhalb des Datenordners. Nur der ausdrückliche Befehl `archive`
+finalisiert eine geprüfte Rechnung im App-Archiv und aktualisiert die zuletzt
+verwendete Rechnungsnummer. Die Rechnung erscheint nach Aktualisieren des Archivs
+mit Vorschau, Vorlagenfunktion und CSV-Export. Beispielrechnungen bleiben Entwürfe.
+
+App und Skill verwenden dafür denselben Speicherweg und eine gemeinsame lokale
+Sperre. Identische Wiederholungen geben den bestehenden Beleg zurück; andere
+Inhalte mit derselben Nummer oder einem belegten Dateinamen werden abgelehnt.
+Die PDF wird erst sichtbar, wenn die zugehörigen Dateien vollständig bereitliegen.
+Bei einer Unterbrechung bleibt ein Wiederaufnahmeprotokoll erhalten; derselbe
+Auftrag oder der nächste schreibende App-Zugriff schließt die Speicherung ab.
+XML-Prüfungen müssen vor der Archivierung erfolgreich sein. Auch die App archiviert
+keine Rechnungen mit fehlgeschlagener oder nicht verfügbarer Validierung mehr.
+
+`next-number` berücksichtigt das Archiv, reserviert die vorgeschlagene Nummer aber
+noch nicht. Bei unklaren oder eigenen Nummernkreisen sowie einem Jahreswechsel
+fordert der Skill eine Klärung an, statt selbst eine Nummer festzulegen. Klare
+Vorgaben des Nutzers werden übernommen; Konflikte führen zu einer Rückfrage.
+Doppelte Nummern im Altbestand werden als Unklarheit gemeldet. Bei bekannten
+Testrechnungen ist die höchste Archivnummer kein verlässlicher Ausgangspunkt;
+der Skill fragt nach der letzten tatsächlich ausgestellten Rechnung. Bestehende
+Belege werden nicht automatisch als Tests eingeordnet oder umnummeriert. Ein separates `export` registriert ebenfalls keine Nummer im Archiv.
+Vor gleichzeitiger Nutzung von App und Skill muss die App auf diesen gemeinsamen
+Speicherweg aktualisiert sein; auch die veröffentlichte Version 1.2.0 kennt diese
+Sperre noch nicht. Für parallele Tests die App aus diesem PR verwenden. Sie gilt nur
+auf demselben Rechner, nicht über Dropbox/iCloud zwischen verschiedenen Geräten.
+Die Dateien im Datenordner müssen lokal verfügbar sein.
+
+Zum Ausprobieren mit ausschließlich fiktiven Daten (vorher Python-Abhängigkeiten
+und Pango wie oben installieren):
+
+```bash
+.venv/bin/python scripts/create_assistant_demo.py /tmp/erechnung-demo-daten
+.venv/bin/python assistant_cli.py --data-dir /tmp/erechnung-demo-daten issuers
+.venv/bin/python scripts/install_assistant_skill.py --data-dir /tmp/erechnung-demo-daten
+```
+
+Mit `--multiple-issuers` beim Erstellen der Beispieldaten werden zwei fiktive
+Aussteller angelegt. Die Skill-Installation ist für direkte CLI-Aufrufe nicht nötig.
+
+Der Installer speichert die Pfade dieses Checkouts und dieser Python-Umgebung im
+Skill. Beide müssen nach der Installation erhalten bleiben. In Codex lässt sich
+der Skill als `$erechnung` verwenden; falls er noch nicht aufgelistet wird, einen
+neuen Chat öffnen. Ein Beispielauftrag:
+
+> Nutze eRechnung mit den Beispieldaten. Erstelle nur eine Vorschau für Beispiel
+> GmbH: drei Tage Gestaltung à 800 EUR netto, Leistungszeitraum 1.–3. Oktober 2026,
+> Rechnungsdatum 7. Oktober 2026, fällig am 21. Oktober 2026, 19 % USt,
+> Rechnungsnummer DEMO-2026-002.
+
+Zum Entfernen ausschließlich des Skills:
+
+```bash
+.venv/bin/python scripts/install_assistant_skill.py --uninstall
+```
+
+Rechnungen, Arbeitsordner und App bleiben erhalten. Die Schnittstelle lässt sich
+auch direkt mit `.venv/bin/python assistant_cli.py --help` verwenden; sie ist keine
+Abhängigkeit der App. Befehle und Datenformat stehen in
+[`integrations/codex/erechnung/references/commands.md`](integrations/codex/erechnung/references/commands.md).
+Für echte Daten muss der betreffende Datenordner explizit ausgewählt werden.
+Die Dateien werden lokal erzeugt; Angaben, die der Assistent liest, gelangen aber
+in seinen Modellkontext und gegebenenfalls zum Cloud-Anbieter.
+Eine Freigabe-Oberfläche und Berechtigungen pro Agent sind noch nicht enthalten.
+Die Bestätigung im Skill ist eine Gesprächsregel, keine technische Zugriffssperre.
+Dieses Konzept wird separat entworfen; der PR bleibt vorerst ein Prototyp.
+
 ## Hinweise
 
 - Die E-Rechnungs-**pflicht** (ab 2025 Empfang, gestaffelt ab 2027/2028 Versand) gilt nur für **inländische B2B-Umsätze**. Rechnungen an Nicht-EU-Kunden sind freiwillig, lassen sich hier aber im selben Format erzeugen.

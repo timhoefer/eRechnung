@@ -19,6 +19,7 @@ output/
 
 # Lokaler Datenordner-Pfad (kein Commit)
 config.json
+integrations/codex/erechnung/runtime.json
 
 # PyInstaller Build-Artefakte
 /build/
@@ -34,6 +35,9 @@ docs/improvement-plan.md
 assets/eRechnung.iconset/
 assets/icon_master.png
 
+# Shared local app/assistant state
+.erechnung.lock
+.seller-*
 # Local check caches and process lock
 .mypy_cache/
 .pytest_cache/
