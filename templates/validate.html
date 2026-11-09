@@ -56,27 +56,19 @@
     document.querySelectorAll("#archive-issuer-form select").forEach(select => {
       select.addEventListener("change", () => select.form.requestSubmit());
     });
-    const csv = document.getElementById("export-csv");
-    if (csv) csv.addEventListener("click", () => {
-      const url = new URL(csv.dataset.url, window.location.href);
-      for (const key of ["from", "to"]) {
-        const value = document.getElementById("export-" + key).value;
-        if (value) url.searchParams.set(key, value);
-      }
-      window.location.assign(url);
-    });
     const modal = document.getElementById("delete-modal");
     const nameEl = document.getElementById("del-filename");
     const input = document.getElementById("del-input");
-    function open(filename) {
+    function open(filename, url) {
       nameEl.textContent = filename;
       input.value = filename;
+      input.form.action = url;
       modal.hidden = false;
     }
     function close() { modal.hidden = true; }
     document.querySelectorAll(".js-delete").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!window.ChangeConfirmation) { open(btn.dataset.filename); return; }
+        if (!window.ChangeConfirmation) { open(btn.dataset.filename, btn.dataset.url); return; }
         const body = new FormData();
         body.append("filename", btn.dataset.filename);
         btn.disabled = true;
@@ -121,5 +113,6 @@
   })();
 </script>
 {% include "_whats_new.html" %}
+<script src="{{ url_for('static', filename='archive_selection.js') }}?v={{ asset_version('archive_selection.js') }}"></script>
 </body>
 </html>

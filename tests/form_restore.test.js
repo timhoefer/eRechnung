@@ -445,28 +445,14 @@ test("archive controls block overlapping switches until the chosen issuer is loa
   assert.equal(sort.disabled, false);
 });
 
-test("sorting preserves CSV dates, including edits made while the archive is loading", async () => {
+test("reloading the archive initializes a fresh selection for its current filters", async () => {
   const {app, pane} = settingsView();
-  let from = {value: "2026-07-01"};
-  let to = {value: "2026-09-30"};
-  const getElement = app.document.getElementById;
-  app.document.getElementById = id => ({"export-from": from, "export-to": to}[id] || getElement(id));
-  let html = pane.innerHTML;
-  Object.defineProperty(pane, "innerHTML", {
-    get() { return html; },
-    set(value) { html = value; from = {value: "2026-07-01"}; to = {value: "2026-09-30"}; },
-  });
-  let finish;
-  app.fetch = () => new Promise(resolve => { finish = resolve; });
-  const loading = app.loadSettingsPanel("/settings/panel?sort=number");
-  // The latest input, not the range captured by the request, must survive.
-  from.value = "2026-10-01";
-  to.value = "";
-  finish({ok: true, text: async () => "Sorted archive"});
-  await loading;
-  assert.equal(pane.innerHTML, "Sorted archive");
-  assert.equal(from.value, "2026-10-01");
-  assert.equal(to.value, "");
+  const initialized = [];
+  app.window.ArchiveSelection = {init: root => initialized.push(root)};
+  app.fetch = async () => ({ok: true, text: async () => "Filtered archive"});
+  await app.loadSettingsPanel("/settings/panel?issuer=all&year=2025");
+  assert.equal(pane.innerHTML, "Filtered archive");
+  assert.deepEqual(initialized, [pane]);
 });
 
 test("data folder conflicts are shown without reloading the archive or changing draft scope", async () => {

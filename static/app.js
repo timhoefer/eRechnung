@@ -2368,14 +2368,9 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     if (!response.ok) throw new Error("archive load failed");
     const html = await response.text();
     if (loadId !== settingsPanelLoadId) return false;
-    // Read just before replacement, so edits made during loading also survive.
-    const csvDates = ["export-from", "export-to"].map(id => [id, document.getElementById(id)?.value]);
     settingsPanelUrl = url;
     pane.innerHTML = html;
-    for (const [id, value] of csvDates) {
-      const input = document.getElementById(id);
-      if (input && value !== undefined) input.value = value;
-    }
+    window.ArchiveSelection?.init(pane);
     loadDepsAsync();
     return true;
   } catch (error) {
@@ -2473,7 +2468,7 @@ function closeSettings() {
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
   pane.addEventListener("change", (e) => {
-    if (["archive-issuer-select", "archive-sort-select"].includes(e.target.id)) e.target.form.requestSubmit();
+    if (["archive-issuer-select", "archive-sort-select", "archive-year-select"].includes(e.target.id)) e.target.form.requestSubmit();
   });
 
   // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.
@@ -2566,44 +2561,8 @@ function closeSettings() {
       browseDataDir(browse, pane.querySelector("#data-dir-input"));
       return;
     }
-    // Export-Preset (Jahr/Quartal) -> Datumsfelder füllen.
-    const preset = e.target.closest("[data-preset]");
-    if (preset) {
-      const from = pane.querySelector("#export-from");
-      const to = pane.querySelector("#export-to");
-      if (from && to) {
-        const y = new Date().getFullYear();
-        const iso = (yy, m, d) => `${yy}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-        const ranges = {
-          thisyear: [iso(y, 1, 1), iso(y, 12, 31)],
-          lastyear: [iso(y - 1, 1, 1), iso(y - 1, 12, 31)],
-          q1: [iso(y, 1, 1), iso(y, 3, 31)],
-          q2: [iso(y, 4, 1), iso(y, 6, 30)],
-          q3: [iso(y, 7, 1), iso(y, 9, 30)],
-          q4: [iso(y, 10, 1), iso(y, 12, 31)],
-        };
-        const r = ranges[preset.dataset.preset];
-        if (r) { from.value = r[0]; to.value = r[1]; }
-      }
-      return;
-    }
-    // CSV-Export (Bulk, gefiltert über Datumsbereich).
-    if (e.target.closest("#export-csv")) {
-      const from = (pane.querySelector("#export-from") || {}).value || "";
-      const to = (pane.querySelector("#export-to") || {}).value || "";
-      const qs = new URLSearchParams();
-      if (from) qs.set("from", from);
-      if (to) qs.set("to", to);
-      const q = qs.toString();
-      const baseUrl = e.target.closest("#export-csv").dataset.url;
-      const url = baseUrl + (q ? (baseUrl.includes("?") ? "&" : "?") + q : "");
-      // Desktop: Server schreibt die CSV + zeigt sie im Finder (kein Download).
-      if (window.IS_DESKTOP) fetch(url).catch(() => flashError());
-      else window.location = url;
-      return;
-    }
     // Klick auf die Zeile (nicht auf Links/Buttons) -> PDF im Tab öffnen.
-    if (e.target.closest("a, button")) return;
+    if (e.target.closest("a, button, input, label")) return;
     const row = e.target.closest(".arch-row");
     if (row && row.dataset.viewUrl) window.open(row.dataset.viewUrl, "_blank");
   });

@@ -32,6 +32,26 @@ Zugriffskontrolle gegen Programme mit direktem Datei- oder Bedienzugriff. Die
 Prüfung und Schreiben verwenden die gemeinsame lokale Prozesssperre. Bestätigungen
 sind an die laufende App gebunden; mehrere Macs bleiben unkoordiniert.
 
+## Archiv und CSV-Auswahl
+
+Das Archiv zeigt zunächst das aktuelle Jahr. Über die Jahresauswahl lassen sich
+ältere Jahre oder alle Jahre anzeigen. Bei mehreren Ausstellern führt **Alle
+Aussteller** auch die Belege deaktivierter Profile zusammen; jede Rechnung zeigt
+ihren Aussteller. Dateiaktionen bleiben an diesen Aussteller gebunden.
+
+**Auswählen** blendet Checkboxen für einzelne Rechnungen, ganze Quartale und alle
+angezeigten Belege ein. **CSV exportieren** exportiert genau diese Auswahl. Beim
+Wechsel von Jahr, Aussteller oder Sortierung wird die Auswahl geleert. Ohne
+Buchungsdaten bleibt eine Datei sichtbar, kann aber nicht als CSV ausgewählt werden.
+Die bisherigen CSV-Links je Rechnung und der Export per Datumsbereich bleiben
+technisch verfügbar.
+
+Quartale richten sich nach dem Rechnungsdatum; fehlt es bei einer älteren Datei,
+wird der angezeigte Erstellungszeitpunkt verwendet. Die gewählte Sortierung gilt
+innerhalb jedes Quartals. Ein Export aus der Ansicht **Alle Aussteller** enthält
+eine zusätzliche Aussteller-Spalte. In der macOS-App werden solche Exporte im
+Unterordner `exports` des Datenordners gespeichert und im Finder angezeigt.
+
 ## Sicherer Entwicklungs-Testmodus
 
 Für manuelle Tests ausschließlich `ERECHNUNG_TEST_MODE=1 ./run.sh` verwenden.

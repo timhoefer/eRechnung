@@ -615,6 +615,15 @@ def _select_issuer():
         if not profiles:
             abort(410)
         issuer = default_issuer(profiles)
+    g.archive_all = request.args.get("archive") == "all" and request.endpoint in {"validate", "settings_panel"}
+    if issuer == "all":
+        # An archive filter is never an identity for invoice creation or changes.
+        if request.endpoint not in {"validate", "settings_panel", "export_csv"}:
+            abort(400)
+        if request.form.get("filename") or request.args.get("file"):
+            abort(400)  # A single file always needs its actual issuer.
+        g.archive_all = True
+        issuer = default_issuer()
     # Retired issuers allow archive access and adjustments to an archived original,
     # but no regular invoices or late writes from an old master-data form.
     archive_endpoints = {
@@ -652,6 +661,11 @@ def seller_file() -> Path:
 
 def output_dir() -> Path:
     return g.get("issuer_output_dir", OUTPUT_DIR) if has_request_context() else OUTPUT_DIR
+
+
+def issuer_output_dir(issuer: str) -> Path:
+    directory = issuer_directory(issuer)  # Validate identity and reject linked folders.
+    return OUTPUT_DIR if issuer == "default" else directory / "output"
 
 
 def issuer_scope() -> str:
@@ -1125,16 +1139,21 @@ def load_draft(src: str | None) -> dict | None:
         return None
 
 
-def correction_original(source: str) -> dict | None:
+def correction_original(source: str, *, issuer: str | None = None) -> dict | None:
     """A retired issuer can issue adjustments only against its own archived PDF."""
     if Path(source).name != source or Path(source).suffix.lower() != ".pdf":
         return None
-    pdf = output_dir() / source
+    identity = issuer if issuer is not None else current_issuer()
+    directory = issuer_output_dir(identity) if issuer is not None else output_dir()
+    pdf = directory / source
     sidecar = pdf.with_suffix(".json")
     if not pdf.is_file() or pdf.is_symlink() or sidecar.is_symlink():
         return None
-    draft = load_draft(source)
-    if (not isinstance(draft, dict) or draft.get("issuer_id", current_issuer()) != current_issuer()
+    try:
+        draft = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+    if (not isinstance(draft, dict) or draft.get("issuer_id", identity) != identity
             or not isinstance(draft.get("invoice"), dict) or not draft["invoice"].get("number")
             or not isinstance(draft.get("seller"), dict) or not draft["seller"].get("name")
             or not isinstance(draft.get("buyer"), dict) or not isinstance(draft.get("items"), list)):
@@ -1738,13 +1757,19 @@ def check_updates():
 def _settings_context() -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
-    # Match the displayed timestamp; filename ordering misplaces 07 vs 008.
-    files = [(p.stat().st_mtime, p) for p in output_dir().glob("*.pdf")]
-    for modified_at, p in sorted(files, reverse=True):
+    profiles = issuer_profiles(include_deleted=True)
+    all_issuers = g.get("archive_all", False)
+    selected = [p for p in profiles if p["available"] and (all_issuers or p["id"] == current_issuer())]
+    files = [(p.stat().st_mtime, profile["id"], p, profile)
+             for profile in selected for p in issuer_output_dir(profile["id"]).glob("*.pdf")
+             if p.is_file() and not p.is_symlink()]
+    for modified_at, identity, p, profile in sorted(files, key=lambda f: f[:3], reverse=True):
         # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
         number, buyer_name, amount, currency = None, None, None, "EUR"
-        sidecar = output_dir() / f"{p.stem}.json"
-        if sidecar.exists():
+        sidecar = p.with_suffix(".json")
+        issue_date = datetime.fromtimestamp(modified_at).date()
+        exportable = False
+        if sidecar.is_file() and not sidecar.is_symlink():
             try:
                 d = json.loads(sidecar.read_text(encoding="utf-8"))
                 inv = d.get("invoice") or {}
@@ -1758,7 +1783,13 @@ def _settings_context() -> dict:
                     _dec(inv.get("discount") or "0"), inv.get("discount_type") or "abs",
                 )
                 currency = inv.get("currency") or "EUR"
-            except (ValueError, OSError, ArithmeticError):
+                exportable = True
+                if inv.get("issue_date"):
+                    try:
+                        issue_date = date.fromisoformat(inv["issue_date"])
+                    except (ValueError, TypeError):
+                        pass
+            except (ValueError, OSError, ArithmeticError, AttributeError, TypeError):
                 logger.warning("Sidecar %s nicht lesbar/berechenbar", sidecar.name, exc_info=True)
         if not number and p.stem.startswith("Rechnung_"):
             # Ohne Sidecar: Nummer aus dem Tool-Namensschema ableiten (wie
@@ -1770,10 +1801,16 @@ def _settings_context() -> dict:
                 "modified": datetime.fromtimestamp(modified_at).strftime(
                     "%Y-%m-%d %H:%M"
                 ),
-                "has_draft": sidecar.exists(),
-                "can_correct": correction_original(p.name) is not None,
+                "has_draft": sidecar.is_file() and not sidecar.is_symlink(),
+                "can_export": exportable,
+                "issuer_id": identity,
+                "issuer_label": profile["label"],
+                "issuer_deleted": profile["deleted"],
+                "year": issue_date.year,
+                "quarter": (issue_date.month - 1) // 3 + 1,
+                "can_correct": correction_original(p.name, issuer=identity) is not None,
                 "xml_filename": (
-                    f"{p.stem}.xml" if (output_dir() / f"{p.stem}.xml").exists() else None
+                    f"{p.stem}.xml" if p.with_suffix(".xml").exists() else None
                 ),
                 "number": number,
                 "buyer": buyer_name,
@@ -1781,6 +1818,13 @@ def _settings_context() -> dict:
                 "currency": currency,
             }
         )
+    years = sorted({date.today().year, *(row["year"] for row in archive)}, reverse=True)
+    year = request.args.get("year", str(date.today().year))
+    if year != "all" and not re.fullmatch(r"[1-9][0-9]{3}", year):
+        year = str(date.today().year)
+    if year != "all" and int(year) not in years:
+        years = sorted([*years, int(year)], reverse=True)
+    archive = [row for row in archive if year == "all" or str(row["year"]) == year]
     archive_sort = request.args.get("sort", request.cookies.get("archive_sort", "created"))
     if archive_sort not in {"created", "number", "customer"}:
         archive_sort = "created"
@@ -1791,10 +1835,22 @@ def _settings_context() -> dict:
         archive.sort(key=number_key, reverse=True)  # stable: timestamp breaks equal-number ties
     elif archive_sort == "customer":
         archive.sort(key=lambda row: _country_sortkey(str(row["buyer"] or "")))
+    # Keep the requested sorting inside each calendar quarter.
+    archive.sort(key=lambda row: (row["year"], row["quarter"]), reverse=True)
+    groups: list[dict] = []
+    for row in archive:
+        key = f'{row["year"]}-Q{row["quarter"]}'
+        if not groups or groups[-1]["key"] != key:
+            groups.append({"key": key, "year": row["year"], "quarter": row["quarter"], "rows": []})
+        groups[-1]["rows"].append(row)
     return {
         "archive": archive,
+        "archive_groups": groups,
+        "archive_all": all_issuers,
+        "archive_year": year,
+        "archive_years": years,
         "archive_sort": archive_sort,
-        "archive_issuers": issuer_profiles(include_deleted=True),
+        "archive_issuers": profiles,
         "default_issuer_id": default_issuer(),
         "data_dir": str(DATA_DIR),
         "data_dir_custom": DATA_DIR.resolve() != BASE.resolve(),
@@ -1852,7 +1908,7 @@ def settings_depinfo():
     return render_template("_deps_card.html", depinfo=drafthorse_version_info())
 
 
-@app.route("/export/csv")
+@app.route("/export/csv", methods=["GET", "POST"])
 def export_csv():
     """Rechnungen als Buchungsjournal-CSV (für eigene Buchhaltung/EÜR/USt-VA).
     Optional gefiltert über ?from=YYYY-MM-DD&to=YYYY-MM-DD oder eine Einzelrechnung
@@ -1865,38 +1921,80 @@ def export_csv():
     frm = (request.args.get("from") or "").strip()
     to = (request.args.get("to") or "").strip()
     only = request.args.get("file")
+    selection = request.method == "POST"
+    all_issuers = g.get("archive_all", False)
+    profiles = {p["id"]: p for p in issuer_profiles(include_deleted=True) if p["available"]}
+    sources = []
+    if selection:
+        entries = request.form.getlist("entry")
+        if only or frm or to or not entries or len(entries) > 10000:
+            abort(400)
+        seen = set()
+        for entry in entries:
+            try:
+                pair = json.loads(entry)
+                if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(v, str) for v in pair):
+                    raise ValueError("Invalid selection")
+                identity, filename = pair
+            except (ValueError, TypeError):
+                abort(400)
+            if (identity not in profiles or (not all_issuers and identity != current_issuer())
+                    or Path(filename).name != filename or Path(filename).suffix.lower() != ".pdf"):
+                abort(400)
+            if (identity, filename) in seen:
+                continue
+            seen.add((identity, filename))
+            sources.append((identity, issuer_output_dir(identity) / filename))
+    else:
+        identities = profiles if all_issuers else [current_issuer()]
+        sources = [(identity, p) for identity in identities for p in issuer_output_dir(identity).glob("*.pdf")
+                   if not only or p.name == only]
 
     def fnum(value):
         s = f"{value:.2f}"
         return s.replace(".", ",") if de else s
 
     rows = []
-    for p in output_dir().glob("*.pdf"):
-        sidecar = output_dir() / f"{p.stem}.json"
-        if not sidecar.exists() or (only and p.name != only):
+    for identity, p in sources:
+        sidecar = p.with_suffix(".json")
+        if not p.is_file() or p.is_symlink() or not sidecar.is_file() or sidecar.is_symlink():
+            if selection:
+                abort(409)  # Do not silently omit a selected invoice that changed.
             continue
         try:
             d = json.loads(sidecar.read_text(encoding="utf-8"))
         except (ValueError, OSError):
+            if selection:
+                abort(409)
             continue
-        inv = d.get("invoice") or {}
-        issue = inv.get("issue_date") or ""
-        if (frm and issue < frm) or (to and issue > to):
+        if not isinstance(d, dict):
+            if selection:
+                abort(409)
             continue
-        treatment = TAX_TREATMENTS.get(inv.get("tax_treatment") or "de_19", TAX_TREATMENTS["de_19"])
-        _c, _lt, _disc, net, vat, gross = compute_totals(
-            d.get("items") or [], cast(Decimal, treatment["rate"]),
-            _dec(inv.get("discount") or "0"), inv.get("discount_type") or "abs",
-        )
-        buyer = d.get("buyer") or {}
-        doc_type = inv.get("doc_type") or "380"
-        sign = -1 if doc_type == "381" else 1
-        rows.append([
-            inv.get("number", ""), issue, buyer.get("name", ""), buyer.get("country", ""),
-            loc(treatment["label"], lang), treatment["category"], str(treatment["rate"]),
-            fnum(sign * net), fnum(sign * vat), fnum(sign * gross), inv.get("currency", "EUR"),
-            doc_type, inv.get("ref_number") or "",
-        ])
+        try:
+            inv = d.get("invoice") or {}
+            issue = inv.get("issue_date") or ""
+            if (frm and issue < frm) or (to and issue > to):
+                continue
+            treatment = TAX_TREATMENTS.get(inv.get("tax_treatment") or "de_19", TAX_TREATMENTS["de_19"])
+            _c, _lt, _disc, net, vat, gross = compute_totals(
+                d.get("items") or [], cast(Decimal, treatment["rate"]),
+                _dec(inv.get("discount") or "0"), inv.get("discount_type") or "abs",
+            )
+            buyer = d.get("buyer") or {}
+            doc_type = inv.get("doc_type") or "380"
+            sign = -1 if doc_type == "381" else 1
+            rows.append([
+                inv.get("number", ""), issue, buyer.get("name", ""), buyer.get("country", ""),
+                loc(treatment["label"], lang), treatment["category"], str(treatment["rate"]),
+                fnum(sign * net), fnum(sign * vat), fnum(sign * gross), inv.get("currency", "EUR"),
+                doc_type, inv.get("ref_number") or "",
+                *([profiles[identity]["label"]] if all_issuers else []),
+            ])
+        except (ValueError, ArithmeticError, AttributeError, TypeError):
+            if selection:
+                abort(409)
+            continue
     rows.sort(key=lambda r: (r[1], r[0]))  # nach Datum, dann Nummer
 
     header = (
@@ -1905,6 +2003,8 @@ def export_csv():
         ["Number", "Date", "Customer", "Country", "Treatment", "VAT code",
          "VAT rate %", "Net", "VAT amount", "Gross", "Currency", "Document type", "Original invoice"]
     )
+    if all_issuers:
+        header.append("Aussteller" if de else "Issuer")
     # CSV-Formel-Injection abwehren: Zellen, die mit =,+,-,@ (oder Tab/CR) beginnen,
     # werden in Excel/Calc sonst als Formel ausgewertet -> mit ' als Text entschärfen.
     def csv_safe(v):
@@ -1934,11 +2034,15 @@ def export_csv():
             rng = f"{ab}{frm}"
         elif iso(to):
             rng = f"{bis}{to}"
-        name = f"{base}{rng}.csv"
+        name = f"{base}{'_auswahl' if selection and de else '_selection' if selection else ''}{rng}.csv"
     if app.config.get("DESKTOP") and sys.platform == "darwin":
         # Desktop-App: WKWebView lädt nichts herunter -> CSV in den Datenordner
         # schreiben und im Finder zeigen.
-        out = output_dir() / name
+        directory = DATA_DIR / "exports" if all_issuers else output_dir()
+        if directory.is_symlink():
+            abort(400)
+        directory.mkdir(parents=True, exist_ok=True)
+        out = directory / name
         count = 2
         while True:
             try:
@@ -1946,7 +2050,7 @@ def export_csv():
                     export.write(data)
                 break
             except FileExistsError:
-                out = output_dir() / f"{Path(name).stem} ({count}).csv"
+                out = directory / f"{Path(name).stem} ({count}).csv"
                 count += 1
         reveal_in_finder(out)
         return {"ok": True, "name": out.name}

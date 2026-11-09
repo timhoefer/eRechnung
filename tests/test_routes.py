@@ -749,15 +749,14 @@ def test_archive_sort_choices_use_numeric_numbers_and_customer_names(client, end
 
 
 @pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
-def test_archive_sort_keeps_csv_dates(client, endpoint):
+def test_archive_sort_keeps_year_filter(client, endpoint):
     from lxml import html
 
     (appmod.OUTPUT_DIR / 'Rechnung_2026-001.pdf').write_bytes(b'%PDF-1.4')
     page = html.fromstring(client.get(endpoint, query_string={
-        'sort': 'customer', 'export_from': '2026-07-01', 'export_to': '2026-09-30',
+        'sort': 'customer', 'year': 'all',
     }).data)
-    assert page.get_element_by_id('export-from').value == '2026-07-01'
-    assert page.get_element_by_id('export-to').value == '2026-09-30'
+    assert page.get_element_by_id('archive-year-select').value == 'all'
     assert page.get_element_by_id('archive-sort-select').value == 'customer'
 
 
