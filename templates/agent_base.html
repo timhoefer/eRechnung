@@ -10,7 +10,10 @@
     .agent-page .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
     .agent-check input { width: auto; flex: none; margin-top: 4px; }
     .agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
-    .agent-connection { position: relative; isolation: isolate; overflow: hidden; min-height: 220px; padding-right: 142px; overflow-wrap: anywhere; }
+    .agent-connection { position: relative; isolation: isolate; overflow: hidden; min-height: 220px; overflow-wrap: anywhere; }
+    .agent-connection-header form { flex: none; }
+    .agent-connection-header strong { min-width: 0; }
+    .agent-connection-details { padding-right: 126px; }
     .agent-circuit {
       position: absolute; right: 0; top: 50%; width: 300px; height: 220px; transform: translateY(-50%);
       z-index: -1; pointer-events: none; color: var(--accent);
@@ -34,11 +37,12 @@
       .is-active .agent-circuit-chip { animation: none; stroke-opacity: .45; }
     }
     @media (max-width: 480px) {
-      .agent-connection { padding-right: 16px; padding-bottom: 164px; }
+      .agent-connection { padding-bottom: 164px; }
+      .agent-connection-details { padding-right: 0; }
       .agent-circuit { top: auto; bottom: -30px; transform: none; }
       .agent-chip-control { top: auto; bottom: 80px; transform: translate(50%, 50%); }
     }
-    .agent-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .agent-toggle-row, .agent-connection-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .agent-toggle-row h2 { margin: 0; }
     .agent-toggle-control { display: flex; align-items: center; gap: 10px; flex: none; }
     .agent-toggle-control .hint { margin: 0; }

@@ -28,8 +28,11 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 2. Den Hinweis zur möglichen Datenübertragung an den Agentenanbieter lesen und
    den Schalter **Agentenzugriff erlauben** einschalten. Die Änderung gilt sofort,
    ohne zusätzlichen Speichern-Button. Das allein gibt noch keinem Agenten Zugriff.
-   Ausschalten widerruft alle Verbindungen und offenen Anfragen; erneutes
-   Einschalten stellt diese nicht wieder her.
+   Beim Ausschalten erscheint zuerst eine Bestätigung mit den betroffenen
+   Verbindungen. Erst **Ausschalten und Zugänge löschen** widerruft alle Zugänge
+   und offenen Anfragen; erneutes Einschalten stellt diese nicht wieder her.
+   **Abbrechen** erhält den bisherigen Zustand. Hat sich die Liste seit der
+   Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
 3. Eine benannte Verbindung anlegen und die gewünschten Aussteller auswählen.
    Ohne zusätzliche Auswahl bleibt die Verbindung auf Lesen, Prüfen und Vorschau
    beschränkt. Die Liste der Aussteller steht vertikal untereinander.

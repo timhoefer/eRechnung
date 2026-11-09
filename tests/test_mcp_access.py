@@ -29,6 +29,12 @@ def configure(client, action, **fields):
     return client.post("/agents/settings", data={"csrf": csrf(client), "action": action, **fields})
 
 
+def disable(client):
+    review = configure(client, "disable")
+    form, = html.fromstring(review.data).xpath('//form[input[@name="action" and @value="disable"]]')
+    return client.post(form.action, data=dict(form.form_values()))
+
+
 def grant(client, *, issuers=None, writable=True, name="Example agent"):
     assert configure(client, "enable", consent="yes").status_code == 200
     response = configure(client, "connect", name=name, issuers=issuers or ["default"], write="yes" if writable else "")
@@ -112,8 +118,20 @@ def test_opt_in_switch_submits_consent_and_revokes_grants(client, language):
     assert pending["status"] == "approval_required"
     on = switch_form(client.get("/agents"), True)
     disable_fields = dict(on.form_values())
-    switch_form(client.post(on.action, data=disable_fields), False)
-    switch_form(client.post(on.action, data=disable_fields), False)
+    grants_before = access.load()
+    review = client.post(on.action, data=disable_fields)
+    assert review.status_code == 200
+    page = html.fromstring(review.data)
+    assert "Example agent" in page.text_content()
+    assert access.load() == grants_before
+    assert call(credential, "request_status", request_id=pending["request_id"])["status"] == "pending"
+    cancel, = page.xpath('//a/@href')
+    switch_form(client.get(cancel), True)
+    assert access.load() == grants_before
+    confirm_form, = page.xpath('//form')
+    disable_fields = dict(confirm_form.form_values())
+    switch_form(client.post(confirm_form.action, data=disable_fields), False)
+    switch_form(client.post(confirm_form.action, data=disable_fields), False)
     assert access.load() == {"enabled": False, "connections": {}}
     assert not access.pending
     assert not call(credential, "list_customers")["ok"]
@@ -125,6 +143,41 @@ def test_opt_in_switch_submits_consent_and_revokes_grants(client, language):
     assert client.post("/agents/requests/" + pending["request_id"],
                        data={"csrf": csrf(client), "decision": "approve"}).status_code == 403
     assert snapshot() == before
+
+
+@pytest.mark.parametrize("change", ["new_connection", "paused", "reenabled"])
+def test_global_disable_rechecks_connections_before_confirming(client, change):
+    credential = grant(client)
+    access = m.app.extensions["mcp_access"]
+    identifier = access.authenticate(credential, m.DATA_DIR)["id"]
+    review = configure(client, "disable")
+    form, = html.fromstring(review.data).xpath('//form')
+    fields = dict(form.form_values())
+    if change == "new_connection":
+        grant(client, name="Second agent")
+    elif change == "paused":
+        configure(client, "pause", connection=identifier)
+    else:
+        assert disable(client).status_code == 200
+        grant(client, name="New grant after re-enabling")
+    before = access.load()
+    response = client.post(form.action, data=fields)
+    assert response.status_code == 409
+    assert access.load() == before
+    page = html.fromstring(response.data)
+    assert all(c["name"] in page.text_content() for c in before["connections"].values())
+    updated_form, = page.xpath('//form')
+    assert client.post(updated_form.action, data=dict(updated_form.form_values())).status_code == 200
+    assert access.load() == {"enabled": False, "connections": {}}
+
+
+def test_global_disable_cannot_skip_review_with_confirmation_flag(client):
+    grant(client)
+    access = m.app.extensions["mcp_access"]
+    before = access.load()
+    assert configure(client, "disable", confirm="yes").status_code == 409
+    assert configure(client, "disable", confirm="yes", revision="stale").status_code == 409
+    assert access.load() == before
 
 
 @pytest.mark.parametrize("language", ["de", "en"])
@@ -231,14 +284,14 @@ def test_resume_preserves_read_only_scope_and_cannot_restore_global_revocation(c
         assert configure(client, "resume", connection=identifier).status_code == 200
         assert not call(credential, "list_customers")["ok"]
     assert configure(client, "pause", connection=identifier).status_code == 200
-    assert configure(client, "disable").status_code == 200
+    assert disable(client).status_code == 200
     assert configure(client, "resume", connection=identifier).status_code == 403
     assert configure(client, "enable", consent="yes").status_code == 200
     assert configure(client, "resume", connection=identifier).status_code == 403
     assert not call(credential, "list_customers")["ok"]
 
 
-@pytest.mark.parametrize("action", ["pause", "resume", "revoke"])
+@pytest.mark.parametrize("action", ["pause", "resume", "revoke", "disable"])
 def test_connection_controls_require_ui_session_and_reject_bearer(client, action):
     credential = grant(client)
     access = m.app.extensions["mcp_access"]
@@ -355,7 +408,7 @@ def test_cancelled_or_revoked_approvals_cannot_execute(client, monkeypatch, tmp_
     elif cause == "revoke":
         configure(client, "revoke", connection=access.pending[identifier]["connection"]["id"], confirm="yes")
     elif cause == "disable":
-        configure(client, "disable")
+        disable(client)
         configure(client, "enable", consent="yes")
         assert not call(token, "list_customers")["ok"]
     elif cause == "directory":

@@ -15,7 +15,7 @@ from werkzeug.datastructures import MultiDict
 from werkzeug.exceptions import HTTPException
 
 from invoice_archive import ArchiveError, archived_number_files, data_lock
-from mcp_access import Access, AccessError
+from mcp_access import Access, AccessError, digest
 from mcp_contract import ITEM_FIELDS, TOOLS, validate
 
 
@@ -98,6 +98,13 @@ def register(m):
                     abort(400)
                 access.enable(True)
             elif action == "disable":
+                state = access.load()
+                if state.get("enabled") or state["connections"]:
+                    revision = digest(json.dumps(state, sort_keys=True))
+                    confirmed = request.form.get("confirm") == "yes"
+                    if not confirmed or request.form.get("revision") != revision:
+                        return render_template("agent_disable.html", connections=state["connections"].values(),
+                                               revision=revision, changed=confirmed, csrf=csrf()), 409 if confirmed else 200
                 access.enable(False)
             elif action in {"pause", "resume"}:
                 access.set_active(request.form.get("connection", ""), action == "resume")

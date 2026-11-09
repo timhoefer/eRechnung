@@ -8,7 +8,7 @@ import pytest
 from flask import request
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
-from test_mcp_access import BUYER, call, configure, decide, grant
+from test_mcp_access import BUYER, call, configure, decide, disable, grant
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
 from werkzeug.serving import make_server
@@ -71,7 +71,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             assert decide(client, data["request_id"]).status_code == 303
             status = await agent.call_tool("request_status", {"request_id": data["request_id"]})
             assert status.structured_content["status"] == "completed"
-            configure(client, "disable")
+            disable(client)
             refused = await agent.call_tool("list_customers", {})
             assert refused.is_error and not refused.structured_content["ok"]
     try:

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 from lxml import html
-from test_mcp_access import BUYER, OTHER, call, configure, decide, grant, invoice_args
+from test_mcp_access import BUYER, OTHER, call, configure, decide, disable, grant, invoice_args
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
 from werkzeug.serving import make_server
@@ -72,7 +72,7 @@ def test_start_preserves_issuer_scopes_and_approval(client, startup):
 def test_start_cannot_restore_or_expand_permissions(client, startup, monkeypatch, state):
     token, _, servers = startup
     if state == "disabled":
-        configure(client, "disable")
+        disable(client)
     elif state in {"revoked", "paused"}:
         identifier = m.app.extensions["mcp_access"].authenticate(token, m.DATA_DIR)["id"]
         configure(client, "revoke" if state == "revoked" else "pause", connection=identifier, confirm="yes")
@@ -182,7 +182,7 @@ def test_manual_and_automatic_start_share_one_window(client, monkeypatch, entryp
 def test_bridge_waits_for_manual_start_without_changing_permissions(client, startup, monkeypatch, state):
     token, _, servers = startup
     if state == "disabled":
-        configure(client, "disable")
+        disable(client)
     elif state in {"revoked", "paused"}:
         identifier = m.app.extensions["mcp_access"].authenticate(token, m.DATA_DIR)["id"]
         configure(client, "revoke" if state == "revoked" else "pause", connection=identifier, confirm="yes")
