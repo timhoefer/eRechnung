@@ -286,6 +286,38 @@ def test_explicit_generation_uses_normal_archive_and_embeds_xml(client):
     assert archived["items"][0]["quantity"] == "15"
     assert archived["seller"]["iban"] == SELLER["iban"]
 
+
+def test_imported_draft_survives_archive_conflict_and_can_be_retried(client):
+    proposal = discounted_proposal()
+    response = open_draft(client, proposal)
+    page = html.fromstring(response.data)
+    fields = submitted(response)
+    fields.update(number=[f"{date.today().year}-011"], seller_revision=page.xpath(
+        '//*[@id="invoice-form"]/input[@name="seller_revision"]/@value'))
+    form = MultiDict((k, v) for k, vs in fields.items() for v in vs)
+    assert client.post("/generate", data=form).status_code == 200
+
+    proposal["items"][0]["description"] = "Revised design"
+    response = open_draft(client, proposal)
+    fields = submitted(response)
+    fields.update(number=[f"{date.today().year}-011"], seller_revision=html.fromstring(response.data).xpath(
+        '//*[@id="invoice-form"]/input[@name="seller_revision"]/@value'))
+    form = MultiDict((k, v) for k, vs in fields.items() for v in vs)
+    before = snapshot()
+    response = client.post("/generate", data=form)
+    assert response.status_code == 409
+    assert snapshot() == before
+    assert not html.fromstring(response.data).xpath('//*[@id="export-conflict"]')
+    restored = submitted(response)
+    for key, values in fields.items():
+        assert restored[key] == values
+
+    form["number"] = f"{date.today().year}-012"
+    assert client.post("/generate", data=form).status_code == 200
+    archived = json.loads((appmod.OUTPUT_DIR / f"Rechnung_{date.today().year}-012.json").read_text())
+    assert [item["description"] for item in archived["items"]] == form.getlist("description")
+
+
 def discounted_proposal(*, line_type="pct", overall_type="abs", prepaid="100"):
     draft = copy.deepcopy(PROPOSAL)
     draft["items"] = [
