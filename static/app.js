@@ -470,6 +470,20 @@ function snapshotForm(form) {
   });
   return data;
 }
+function revealInvoiceExtras(form) {
+  if (!form) return;
+  for (const [field, detail] of [["discount", "discount_reason"], ["prepaid", "prepaid_ref"]]) {
+    const row = document.getElementById(field + "-row");
+    const add = document.getElementById("add-" + field);
+    if (!row || !add) continue;
+    const amount = form.querySelector(`[name="${field}"]`);
+    const note = form.querySelector(`[name="${detail}"]`);
+    if (num(amount && amount.value) > 0 || (note && note.value.trim())) {
+      row.hidden = false;
+      add.hidden = true;
+    }
+  }
+}
 function restoreForm(form, data) {
   if (!form || !data) return;
   if (data.issuer && data.issuer[0] !== window.ISSUER_ID) return;
@@ -493,6 +507,7 @@ function restoreForm(form, data) {
     const el = form.querySelector(`[name="${name}"]`);
     if (el) el.value = data[name][0];
   });
+  revealInvoiceExtras(form);
 }
 
 let lastSavedCustomerName = "";
@@ -607,19 +622,10 @@ function applyDraft() {
   set("discount_reason", inv.discount_reason);
   const dt = form.querySelector('[name="discount_type"]');
   if (dt && inv.discount_type) { dt.value = inv.discount_type; syncUnitDisplay(dt); }
-  if (num(inv.discount) > 0 || (inv.discount_reason || "").trim()) {
-    const add = document.getElementById("add-discount");
-    const row = document.getElementById("discount-row");
-    if (add && row) { row.hidden = false; add.hidden = true; }
-  }
   // Anzahlung wiederherstellen und ggf. ausklappen.
   set("prepaid", inv.prepaid);
   set("prepaid_ref", inv.prepaid_ref);
-  if (num(inv.prepaid) > 0 || (inv.prepaid_ref || "").trim()) {
-    const add = document.getElementById("add-prepaid");
-    const row = document.getElementById("prepaid-row");
-    if (add && row) { row.hidden = false; add.hidden = true; }
-  }
+  revealInvoiceExtras(form);
 
   if (items.length) {
     // Share the complete line-field mapping with language/conflict restoration.
@@ -838,13 +844,60 @@ function openCustMenu(input) {
   menu.hidden = false;
   input.setAttribute("aria-expanded", "true");
 }
-function chooseCust(idx) {
-  fillCustomer(idx);
+function customerHasUnsavedChanges() {
+  const form = document.getElementById("invoice-form");
+  if (!form) return false;
+  const saved = (window.CUSTOMERS || []).find(c =>
+    c.name.toLowerCase() === lastSavedCustomerName.toLowerCase()) || {};
+  return [...form.querySelectorAll('[name^="buyer_"]')].some(el => {
+    // The name input also filters the customer picker. Choosing a result is
+    // intentional replacement of that search text, not a customer rename.
+    if (el.name === "buyer_name") return false;
+    const key = el.name.slice(6);
+    let value = saved[key] || "";
+    if (key === "country") value ||= "DE";
+    if (key === "payment_term_days") {
+      const days = parseInt(saved[key], 10);
+      value = days >= 0 ? days : 14;
+    }
+    return el.value.trim() !== String(value).trim();
+  });
+}
+function confirmCustomerSwitch() {
+  const dialog = document.getElementById("customer-switch-dialog");
+  return new Promise(resolve => {
+    dialog.returnValue = "cancel";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "discard"), {once: true});
+    dialog.showModal();
+  });
+}
+async function chooseCust(idx) {
+  if (customerSwitchPending || customerDeletionPending) return;
+  const target = (window.CUSTOMERS || [])[idx];
+  if (!target) return;
   closeCustMenu();
-  autoSelectTreatment();
-  refreshSavedItems();
-  recalc();
-  schedulePreview();
+  customerSwitchPending = true;
+  let switched = false;
+  try {
+    if (window.ChangeConfirmation) {
+      clearTimeout(customerSaveTimer);
+      // Finish in-flight saves and suppress queued ones before comparing fields.
+      await pendingCustomerSave;
+      if (customerHasUnsavedChanges() && !(await confirmCustomerSwitch())) return;
+    }
+    const index = window.CUSTOMERS.findIndex(c => c.name === target.name);
+    if (index < 0) return;
+    fillCustomer(index);
+    showPendingChange("customer", false);
+    autoSelectTreatment();
+    refreshSavedItems();
+    recalc();
+    schedulePreview();
+    switched = true;
+  } finally {
+    customerSwitchPending = false;
+    if (!switched) scheduleCustomerSave();
+  }
 }
 function highlightCust(delta) {
   if (!custMenu || custMenu.hidden) return;
@@ -1043,7 +1096,7 @@ function saveCustomerItems() {
   });
   // Käuferdaten mitsenden, falls der Kunde neu angelegt werden muss.
   form.querySelectorAll('[name^="buyer_"]').forEach((el) => fd.append(el.name, el.value));
-  fetch(window.CUSTOMER_ITEMS_SAVE_URL, { method: "POST", body: fd })
+  changeFetch(window.CUSTOMER_ITEMS_SAVE_URL, { method: "POST", body: fd })
     .then((r) => r.json())
     .then((d) => {
       if (!d || !d.ok) return;
@@ -1223,6 +1276,16 @@ function closePreviewDrawer() {
   }
 }
 
+function changeFetch(url, options, interactive = true) {
+  return window.ChangeConfirmation ? window.ChangeConfirmation.fetch(url, options, interactive) : fetch(url, options);
+}
+function changeError(error) {
+  if (error.name !== "AbortError") flashError();
+}
+function showPendingChange(kind, pending) {
+  const notice = document.getElementById(kind + "-change-pending");
+  if (notice) notice.hidden = !pending;
+}
 let sellerSaveTimer;
 let pendingSellerSave = Promise.resolve(true);
 let issuerDeletionPending = false;
@@ -1236,7 +1299,7 @@ function showSellerConflict(message) {
   if (notice) notice.scrollIntoView({block: "center"});
   if (message) flashError(message);
 }
-function autosaveSeller() {
+function autosaveSeller(interactive = false) {
   if (window.ISSUER_RETIRED) return Promise.resolve(true);
   if (issuerDeletionPending || sellerConflict) return Promise.resolve(false);
   const form = document.getElementById("settings-form");
@@ -1249,8 +1312,10 @@ function autosaveSeller() {
     const revision = form.querySelector('[name="seller_revision"]');
     // Queued edits use the revision returned by the previous completed save.
     body.set("seller_revision", revision.value);
-    return fetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body })
+    return changeFetch(window.SELLER_AUTOSAVE_URL, { method: "POST", body }, interactive)
       .then(async (r) => {
+        showPendingChange("master", r.status === 428);
+        if (r.status === 428) return false;
         if (r.status === 409) {
           const data = await r.json();
           showSellerConflict(data.message);
@@ -1265,7 +1330,11 @@ function autosaveSeller() {
         if (option && label) option.textContent = label;
         return true;
       })
-      .catch(() => { flashError(); return false; });
+      .catch((error) => {
+        if (error.name === "AbortError") showPendingChange("master", true);
+        changeError(error);
+        return false;
+      });
   });
   return pendingSellerSave;
 }
@@ -1287,7 +1356,7 @@ async function flushSellerSaves() {
   for (;;) {
     clearTimeout(sellerSaveTimer);
     const before = state();
-    const saving = autosaveSeller();
+    const saving = autosaveSeller(true);
     const queued = pendingSellerSave;
     if (!(await saving)) return false;
     if (queued === pendingSellerSave && before === state()) return true;
@@ -1295,7 +1364,11 @@ async function flushSellerSaves() {
 }
 
 let customerSaveTimer;
+let customerDeletionPending = false;
+let customerSwitchPending = false;
+let pendingCustomerSave = Promise.resolve();
 function autosaveCustomer() {
+  if (customerDeletionPending || customerSwitchPending) return pendingCustomerSave;
   const form = document.getElementById("invoice-form");
   if (!form || !window.CUSTOMER_AUTOSAVE_URL) return;
   const nameEl = form.querySelector('[name="buyer_name"]');
@@ -1303,14 +1376,29 @@ function autosaveCustomer() {
   const fd = new FormData();
   form.querySelectorAll('[name^="buyer_"]').forEach((el) => fd.append(el.name, el.value));
   fd.append("prev_name", lastSavedCustomerName);
-  fetch(window.CUSTOMER_AUTOSAVE_URL, { method: "POST", body: fd })
-    .then((r) => r.json())
+  pendingCustomerSave = pendingCustomerSave.then(() => {
+    if (customerDeletionPending || customerSwitchPending) return null;
+    return changeFetch(window.CUSTOMER_AUTOSAVE_URL, { method: "POST", body: fd }, false)
+    .then((r) => { showPendingChange("customer", r.status === 428); return r.json(); })
     .then((d) => {
-      if (d && d.name) lastSavedCustomerName = d.name;
+      if (d && d.name) {
+        lastSavedCustomerName = d.name;
+        if (d.customer) {
+          const list = window.CUSTOMERS || (window.CUSTOMERS = []);
+          const oldName = fd.get("prev_name") || d.name;
+          const saved = list.find(c => c.name.toLowerCase() === oldName.toLowerCase())
+            || list.find(c => c.name.toLowerCase() === d.name.toLowerCase());
+          if (saved) Object.assign(saved, d.customer);
+          else list.push(d.customer);
+        }
+      }
     })
     .catch(() => {});
+  });
+  return pendingCustomerSave;
 }
 function scheduleCustomerSave() {
+  if (customerDeletionPending || customerSwitchPending) return;
   clearTimeout(customerSaveTimer);
   customerSaveTimer = setTimeout(autosaveCustomer, 700);
 }
@@ -1523,9 +1611,8 @@ document.addEventListener("change", (e) => {
 document.addEventListener("click", (e) => {
   const langLink = e.target.closest(".langswitch a");
   if (langLink) {
-    const form = document.getElementById("invoice-form");
-    if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
-    return; // Navigation zum Sprachwechsel zulassen
+    e.preventDefault();
+    return switchLanguage(langLink.href);
   }
   if (e.target.closest("#format-trigger")) {
     const m = document.getElementById("format-menu");
@@ -1542,17 +1629,21 @@ document.addEventListener("click", (e) => {
   // Toast; die Combobox-Datenbasis (window.CUSTOMERS) wird aus der Antwort erneuert.
   if (e.target.id === "cust-save-btn") {
     e.preventDefault();
+    if (customerSwitchPending) return;
     const form = document.getElementById("invoice-form");
     const btn = e.target;
     btn.disabled = true;
-    fetch(btn.getAttribute("formaction"), {
+    const body = new FormData(form);
+    body.append("prev_name", lastSavedCustomerName);
+    changeFetch(btn.getAttribute("formaction"), {
       method: "POST",
-      body: new FormData(form),
+      body,
       headers: { "X-Requested-With": "fetch" },
     })
       .then((r) => r.json())
       .then((d) => {
         if (d.ok) {
+          showPendingChange("customer", false);
           if (d.customers) window.CUSTOMERS = d.customers;
           const nameEl = form.querySelector('[name="buyer_name"]');
           lastSavedCustomerName = nameEl ? nameEl.value.trim() : "";
@@ -1561,14 +1652,19 @@ document.addEventListener("click", (e) => {
           flashError(d.message);
         }
       })
-      .catch(() => flashError())
+      .catch(changeError)
       .finally(() => { btn.disabled = false; });
     return;
   }
   if (e.target.id === "cust-delete-btn") {
+    if (customerSwitchPending) return;
     const nameEl = document.querySelector("[name='buyer_name']");
     const name = nameEl ? nameEl.value.trim() : "";
     if (!name) return;
+    if (window.ChangeConfirmation) {
+      document.getElementById("cust-delete-confirm").click();
+      return;
+    }
     const m = document.getElementById("cust-delete-modal");
     const n = document.getElementById("cust-del-name");
     if (n) n.textContent = name;
@@ -1582,11 +1678,16 @@ document.addEventListener("click", (e) => {
   }
   // Kunde löschen ohne Reload: fetch -> Toast, Felder leeren, Liste aktualisieren.
   if (e.target.id === "cust-delete-confirm") {
+    if (customerDeletionPending) return;
+    customerDeletionPending = true;
+    clearTimeout(customerSaveTimer);
     const form = document.getElementById("invoice-form");
     const fd = new FormData();
     fd.append("buyer_name", (form.querySelector('[name="buyer_name"]') || {}).value || "");
     e.target.disabled = true;
-    fetch(e.target.dataset.url, { method: "POST", body: fd, headers: { "X-Requested-With": "fetch" } })
+    pendingCustomerSave.then(() => changeFetch(e.target.dataset.url, {
+      method: "POST", body: fd, headers: { "X-Requested-With": "fetch" },
+    }))
       .then((r) => r.json())
       .then((d) => {
         const m = document.getElementById("cust-delete-modal");
@@ -1600,8 +1701,8 @@ document.addEventListener("click", (e) => {
           schedulePreview();
         } else { flashError(d.message); }
       })
-      .catch(() => flashError())
-      .finally(() => { e.target.disabled = false; });
+      .catch(changeError)
+      .finally(() => { customerDeletionPending = false; e.target.disabled = false; });
     return;
   }
   // Logo entfernen.
@@ -1781,7 +1882,7 @@ if (settingsFormEl) {
   settingsFormEl.addEventListener("submit", (e) => {
     e.preventDefault();
     clearTimeout(sellerSaveTimer);
-    autosaveSeller().then((ok) => { if (ok) flashOk(window.MSG_MASTER_SAVED); });
+    autosaveSeller(true).then((ok) => { if (ok) flashOk(window.MSG_MASTER_SAVED); });
   });
 }
 
@@ -1816,6 +1917,10 @@ if (issuerDefaultButton) issuerDefaultButton.addEventListener("click", () => set
 const issuerDeleteDialog = document.getElementById("issuer-delete-dialog");
 if (issuerDeleteDialog) {
   document.getElementById("issuer-delete-button").addEventListener("click", () => {
+    if (window.ChangeConfirmation) {
+      deleteIssuer(document.getElementById("issuer-delete-form"));
+      return;
+    }
     const form = document.getElementById("settings-form");
     const label = form.querySelector('[name="profile_label"]')?.value.trim()
       || form.querySelector('[name="name"]')?.value.trim();
@@ -1839,7 +1944,7 @@ async function deleteIssuer(form) {
   try {
     // Drain already queued writes before deletion and suppress any new autosave.
     await pendingSellerSave;
-    const response = await fetch(form.action, {method: "POST", body: new FormData(form)});
+    const response = await changeFetch(form.action, {method: "POST", body: new FormData(form)});
     const data = await response.json();
     if (!response.ok || !data.ok) {
       document.getElementById("issuer-delete-dialog").close();
@@ -1851,7 +1956,7 @@ async function deleteIssuer(form) {
     return true;
   } catch (error) {
     document.getElementById("issuer-delete-dialog").close();
-    flashError();
+    changeError(error);
     return false;
   } finally {
     if (!deleted) {
@@ -1923,6 +2028,24 @@ function languageDraftKey() {
   return "erechnung:lang:" + (window.ISSUER_SCOPE || "legacy") + ":" + (window.ISSUER_ID || "default");
 }
 
+let languageSwitchPending = false;
+async function switchLanguage(url) {
+  if (languageSwitchPending || issuerSwitchPending || issuerDeletionPending) return;
+  languageSwitchPending = true;
+  try {
+    // Existing master-data edits are only saved after explicit confirmation.
+    // Cancelling or a failed save leaves the current form open with all edits.
+    if (!(await flushSellerSaves())) return;
+    const form = document.getElementById("invoice-form");
+    if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
+    window.location.assign(url);
+  } catch (error) {
+    changeError(error);
+  } finally {
+    languageSwitchPending = false;
+  }
+}
+
 // Restoration from either the creation dialog or archive keeps the same identity.
 // Like any issuer switch, it waits for saves and asks before discarding a draft.
 document.addEventListener("submit", (event) => {
@@ -1943,6 +2066,7 @@ let restoredFromLang = false;
   try {
     const parsed = window.SUBMITTED_FORM || JSON.parse(raw);
     restoreForm(document.getElementById("invoice-form"), parsed);
+    lastSavedCustomerName = (parsed.buyer_name || [""])[0];
     updateStateField((parsed.buyer_state || [])[0]); // Staat-Auswahl nach Sprachwechsel wiederherstellen
     restoredFromLang = true;
   } catch (e) {
@@ -2411,12 +2535,14 @@ function closeSettings() {
     if (del) {
       e.preventDefault();
       const fn = del.dataset.filename;
-      if (!confirm(fn + "\n\n" + (window.MSG_CONFIRM_DELETE || ""))) return;
+      if (!window.ChangeConfirmation && !confirm(fn + "\n\n" + (window.MSG_CONFIRM_DELETE || ""))) return;
       const fd = new FormData();
       fd.append("filename", fn);
-      fetch(del.dataset.url, { method: "POST", body: fd })
+      del.disabled = true;
+      changeFetch(del.dataset.url, { method: "POST", body: fd })
         .then((r) => { if (!r.ok) throw new Error("delete failed"); return loadSettingsPanel(); })
-        .catch(() => flashError());
+        .catch(changeError)
+        .finally(() => { del.disabled = false; });
       return;
     }
     // Im Finder zeigen (Desktop-App): die Datei liegt schon im output/-Ordner.
