@@ -455,6 +455,32 @@ test("reloading the archive initializes a fresh selection for its current filter
   assert.deepEqual(initialized, [pane]);
 });
 
+test("sorting the in-place archive restores the latest selection after a successful response", async () => {
+  const {app, pane} = settingsView();
+  app.URL = URL;
+  app.URLSearchParams = URLSearchParams;
+  app.window.location = {href: "http://localhost/"};
+  app.showNoPreview = () => {};
+  const sort = {name: "sort", value: "number", options: [{value: "created", defaultSelected: true}, {value: "number"}]};
+  const form = {action: "/settings/panel", querySelectorAll: () => [sort]};
+  app.FormData = class { constructor() { return new URLSearchParams({issuer: "all", year: "2026", sort: sort.value}); } };
+  let selection = {entries: ["first"]};
+  const restored = [];
+  app.window.ArchiveSelection = {
+    isSortChange: actual => { assert.equal(actual, form); assert.equal(sort.value, "number"); return true; },
+    capture: root => { assert.equal(root, pane); assert.equal(pane.innerHTML, "Current archive"); return selection; },
+    init: (root, state) => restored.push({root, state}),
+  };
+  let finish;
+  app.fetch = () => new Promise(resolve => { finish = resolve; });
+  const loading = app.switchArchive(form);
+  selection = {entries: ["changed while loading"]};
+  finish({ok: true, text: async () => "Sorted archive"});
+  await loading;
+  assert.equal(pane.innerHTML, "Sorted archive");
+  assert.deepEqual(restored, [{root: pane, state: selection}]);
+});
+
 test("data folder conflicts are shown without reloading the archive or changing draft scope", async () => {
   const {app, pane} = settingsView();
   app.window.ISSUER_SCOPE = "old";

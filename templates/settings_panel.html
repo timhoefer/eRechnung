@@ -57,7 +57,7 @@
 </div>
 {% endif %}
 
-<div class="card archive-card" data-archive-select-label="{{ t.archive_select }}" data-archive-done-label="{{ t.archive_done }}" data-archive-count-label="{{ t.archive_selected }}" data-export-failed="{{ t.action_failed }}" data-desktop="{{ 'true' if is_desktop else 'false' }}">
+<div class="card archive-card" data-archive-scope="{{ [archive_scope, 'all' if archive_all else issuer_id, archive_year]|tojson|forceescape }}" data-archive-select-label="{{ t.archive_select }}" data-archive-done-label="{{ t.archive_done }}" data-archive-count-label="{{ t.archive_selected }}" data-export-failed="{{ t.action_failed }}" data-desktop="{{ 'true' if is_desktop else 'false' }}">
   <form method="get" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=None) }}" id="archive-issuer-form" novalidate>
     <div class="archive-header">
       <h2>{{ t.archive }} ({{ archive|length }})</h2>
@@ -101,7 +101,7 @@
   </form>
   {% endif %}
   {% if archive %}
-  {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
+  {% if inplace %}<p class="hint" style="margin:0 0 10px" data-archive-hint data-preview-label="{{ t.archive_preview_hint }}" data-select-label="{{ t.archive_select_hint }}">{{ t.archive_preview_hint }}</p>{% endif %}
   <form method="post" action="{{ url_for('export_csv', issuer='all' if archive_all else issuer_id) }}" id="archive-selection" class="archive-selection-bar" hidden>
     <div class="archive-selection-actions">
       <label class="check"><input type="checkbox" data-archive-all>{{ t.archive_select_all }}</label>

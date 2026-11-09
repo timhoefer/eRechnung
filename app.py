@@ -1842,6 +1842,7 @@ def _settings_context() -> dict:
     return {
         "archive": archive,
         "archive_quarters": quarters,
+        "archive_scope": issuer_store.issuer_scope(DATA_DIR),
         "archive_all": all_issuers,
         "archive_year": year,
         "archive_years": years,

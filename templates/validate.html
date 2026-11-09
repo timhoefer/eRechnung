@@ -54,7 +54,10 @@
 <script>
   (function () {
     document.querySelectorAll("#archive-issuer-form select").forEach(select => {
-      select.addEventListener("change", () => select.form.requestSubmit());
+      select.addEventListener("change", () => {
+        window.ArchiveSelection?.rememberSort(select.form);
+        select.form.requestSubmit();
+      });
     });
     const modal = document.getElementById("delete-modal");
     const nameEl = document.getElementById("del-filename");

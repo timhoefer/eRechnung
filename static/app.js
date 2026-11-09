@@ -2359,7 +2359,7 @@ function loadDepsAsync() {
 
 let settingsPanelUrl;
 let settingsPanelLoadId = 0;
-async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options) {
+async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options, keepSelection = false) {
   const pane = document.getElementById("settings-pane");
   if (!pane || !url) return false;
   const loadId = ++settingsPanelLoadId;
@@ -2368,9 +2368,10 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     if (!response.ok) throw new Error("archive load failed");
     const html = await response.text();
     if (loadId !== settingsPanelLoadId) return false;
+    const selection = keepSelection ? window.ArchiveSelection?.capture(pane) : null;
     settingsPanelUrl = url;
     pane.innerHTML = html;
-    window.ArchiveSelection?.init(pane);
+    window.ArchiveSelection?.init(pane, selection);
     loadDepsAsync();
     return true;
   } catch (error) {
@@ -2384,6 +2385,7 @@ async function switchArchive(form) {
   const url = new URL(form.action, window.location.href);
   url.search = new URLSearchParams(new FormData(form)).toString();
   const selects = form.querySelectorAll("select");
+  const keepSelection = window.ArchiveSelection?.isSortChange(form);
   form.ariaBusy = "true";
   // Until loading succeeds, the label must still describe the visible invoices.
   // Lock both controls so a second change cannot submit the rolled-back issuer.
@@ -2392,7 +2394,7 @@ async function switchArchive(form) {
     select.disabled = true;
   });
   try {
-    if (await loadSettingsPanel(url.toString())) {
+    if (await loadSettingsPanel(url.toString(), undefined, keepSelection)) {
       lastPreviewUrl = null;
       showNoPreview(window.MSG_LIVE_PREVIEW);
     }

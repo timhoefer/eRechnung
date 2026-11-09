@@ -40,8 +40,11 @@ Aussteller** auch die Belege deaktivierter Profile zusammen; jede Rechnung zeigt
 ihren Aussteller. Dateiaktionen bleiben an diesen Aussteller gebunden.
 
 **Auswählen** blendet Checkboxen für einzelne Rechnungen, ganze Quartale und alle
-angezeigten Belege ein. **CSV exportieren** exportiert genau diese Auswahl. Beim
-Wechsel von Jahr, Aussteller oder Sortierung wird die Auswahl geleert. Ohne
+angezeigten Belege ein. Im Auswahlmodus markiert ein Klick auf die Rechnungszeile
+(oder Enter/Leertaste auf der fokussierten Zeile) den Beleg; die Aktionsbuttons
+bleiben separat bedienbar. **CSV exportieren** exportiert genau diese Auswahl. Beim
+Sortieren bleiben Auswahlmodus und markierte Rechnungen erhalten. Beim Wechsel
+von Jahr oder Aussteller wird die Auswahl geleert. Ohne
 Buchungsdaten bleibt eine Datei sichtbar, kann aber nicht als CSV ausgewählt werden.
 Die bisherigen CSV-Links je Rechnung und der Export per Datumsbereich bleiben
 technisch verfügbar.
