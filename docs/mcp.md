@@ -157,6 +157,16 @@ Vorschauen und neue Rechnungen werden serverseitig geprüft. Ein erratener
 Dateiname oder ein gleichlautender Kundenname genügt nicht. Die Prüfung erfolgt
 erneut beim Ausführen einer bestätigten Anfrage.
 
+PDF-/XML-Downloads bei **Nur ausgewählte Kunden** prüfen zusätzlich, ob die
+tatsächlich gelesene Datei unverändert dem beim Archivieren gespeicherten
+Prüfwert entspricht. Extern geänderte Dateien und Belege ohne diesen Nachweis
+bleiben gesperrt. Eine erneute erfolgreiche XML-Prüfung hebt diese Sperre nicht
+auf: Technische Gültigkeit bestätigt keine Kundenzuordnung. Bei ZUGFeRD gilt
+der Abgleich für das gesamte PDF, auch wenn nur dessen XML abgerufen wird;
+bei XRechnung für die jeweils angeforderte PDF- oder XML-Datei. Eine inhaltlich
+identische Dateikopie bleibt zugänglich. **Alle Kunden** erlaubt weiterhin auch
+das Lesen geänderter Belege innerhalb der freigegebenen Aussteller.
+
 Bei der Auswahl erhalten die Kundendatensätze eine feste interne Kennung.
 `list_customers` liefert sie als `customer_id`; eingeschränkte Verbindungen müssen
 diese bei Kunden- und Rechnungsaktionen mitsenden. Namens- und Adressänderungen

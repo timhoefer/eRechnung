@@ -1,4 +1,5 @@
 """Customer grants must cover every data path, not just the customer picker."""
+import hashlib
 import json
 
 import pytest
@@ -52,6 +53,9 @@ def seed_archive(name, buyer, customer_id=None):
         original["customer_id"] = customer_id
     stem = m.OUTPUT_DIR / ("Rechnung_" + name)
     stem.with_suffix(".pdf").write_bytes(b"fictional archived PDF")
+    original["_archive"] = {"sha256": {
+        stem.with_suffix(".pdf").name: hashlib.sha256(b"fictional archived PDF").hexdigest(),
+    }}
     stem.with_suffix(".json").write_text(json.dumps(original))
     return stem.with_suffix(".pdf").name
 

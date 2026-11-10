@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import secrets
@@ -388,6 +389,16 @@ def register(m):
             if path.is_symlink() or not path.is_file() or path.stat().st_size > 20_000_000:
                 raise ValueError("File unavailable or too large.")
             content = path.read_bytes()
+            if customer_scope.mode(connection) != "all":
+                # Bind the bytes actually returned to the original customer
+                # assignment, not to a mutable validation receipt. Revalidating
+                # an externally replaced file must never grant its new contents.
+                receipt = original.get("_archive")
+                checksums = receipt.get("sha256") if isinstance(receipt, dict) else None
+                expected = checksums.get(path.name) if isinstance(checksums, dict) else None
+                if expected != hashlib.sha256(content).hexdigest():
+                    raise AccessError("File changed or archive checksum unavailable; "
+                                      "download denied for customer-restricted access.")
             if embedded_xml:
                 from pypdf.errors import PyPdfError
                 try:

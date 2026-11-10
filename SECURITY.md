@@ -60,7 +60,18 @@ It does not cover direct file access or separate command-line tools.
 MCP is off by default, hidden behind `ERECHNUNG_MCP=1`, and additionally requires
 explicit opt-in in the app. Each connection has a revocable bearer credential,
 selected issuer IDs and read-only or write-request permission. Customer data and
-saved items are shared across issuers; there is no per-customer restriction.
+saved items are shared across issuers, but each connection additionally grants
+no customers (the default), selected customers by stable ID, or all customers.
+Selected-customer grants also restrict invoice access; old invoices without a
+customer ID remain unavailable. New customers are included only by all-customer
+grants. Existing connections without a customer scope retain their original
+all-customer access; recreate them to restrict it.
+For customer-restricted PDF/XML downloads, the exact bytes read must match the
+checksum recorded when the invoice was archived. Missing or malformed archive
+checksums and externally changed files are denied. A later successful XML
+validation does not change this original binding or authorize new file contents.
+This checks the complete PDF before extracting embedded ZUGFeRD XML, or the
+requested XRechnung file, independently of its companion files.
 Credentials are bound to the selected data directory. A directory change denies
 those credentials until the original directory is selected again or a new
 connection is granted. Newly created issuers are never automatically granted.

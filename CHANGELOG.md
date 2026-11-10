@@ -6,6 +6,7 @@
 - Eingerichtete MCP-Verbindungen öffnen eRechnung bei Bedarf automatisch und verwenden eine laufende App weiter. Opt-in, Widerruf und Bestätigungen gelten unverändert; Testinstanzen starten nicht automatisch neu.
 - Gleichzeitige manuelle und automatische Starts teilen eine App-Instanz. Ist der alte Port inzwischen anderweitig belegt, öffnet sich eRechnung auf einem neuen Port, ohne Zugangsdaten an das andere Programm zu senden.
 - Die MCP-Archivliste umfasst alle Jahre und undatierte Belege innerhalb der Freigaben. Reine XML-/XRechnung-Belege mit gespeichertem Rechnungsschnappschuss können abgerufen, für Korrekturen verwendet und nach Bestätigung gelöscht werden; gespeicherte XML-Prüfergebnisse werden mit angezeigt.
+- Bei Kundenbeschränkungen werden PDF-/XML-Dateien nur ausgeliefert, wenn ihr Inhalt dem ursprünglichen Archivstand entspricht. Extern ersetzte Dateien oder fehlende Prüfnachweise bleiben gesperrt, auch nach erneuter erfolgreicher XML-Prüfung.
 
 ## 1.3.0
 
