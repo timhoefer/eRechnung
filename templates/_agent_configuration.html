@@ -1,9 +1,44 @@
 <p id="configuration-security">{{ 'Kopiere diese Konfiguration in die MCP-Einstellungen deines Agenten. Der Zugangsschlüssel wird nur jetzt angezeigt. Behandle ihn wie ein Passwort.' if de else 'Copy this configuration into your agent’s MCP settings. The credential is shown only now. Treat it like a password.' }}</p>
 <p>{{ ('eRechnung öffnet sich bei Bedarf automatisch. Deine Zugriffsrechte und Bestätigungen gelten weiterhin.' if autostart else 'Für diese Verbindung muss eRechnung bereits geöffnet sein. Testinstanzen starten nicht automatisch neu.') if de else ('eRechnung opens automatically when needed. Your access permissions and approvals still apply.' if autostart else 'Keep eRechnung open for this connection. Test instances do not restart automatically.') }}</p>
-<pre id="mcp-configuration">{{ configuration|tojson(indent=2) }}</pre>
-<div class="agent-actions">
-  <button type="button" data-copy-configuration hidden
-          data-success="{{ 'Konfiguration kopiert.' if de else 'Configuration copied.' }}"
-          data-failure="{{ 'Kopieren nicht möglich. Bitte den Text oben markieren und manuell kopieren.' if de else 'Unable to copy. Select the text above and copy it manually.' }}">{{ 'Konfiguration kopieren' if de else 'Copy configuration' }}</button>
-  <span class="hint" id="configuration-copy-status" role="status" aria-live="polite"></span>
+{% macro copy_button(target, label, compact=false) -%}
+<button type="button" class="secondary configuration-copy" data-copy-target="{{ target }}" hidden
+        aria-label="{{ label }}" title="{{ label }}"
+        data-success="{{ 'Kopiert.' if de else 'Copied.' }}"
+        data-failure="{{ 'Kopieren nicht möglich. Bitte den gewünschten Text markieren und manuell kopieren.' if de else 'Unable to copy. Select the text you need and copy it manually.' }}">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>
+  {% if not compact %}<span>{{ label }}</span>{% endif %}
+</button>
+{%- endmacro %}
+{% macro configuration_field(label, value, identifier, copy_name=false) -%}
+<div class="configuration-field">
+  <div class="configuration-field-label">
+    <label for="{{ identifier }}" id="{{ identifier }}-label">{{ label }}</label>
+    {% if copy_name %}{{ copy_button(identifier ~ '-label', ('Namen kopieren: ' if de else 'Copy name: ') ~ label, true) }}{% endif %}
+  </div>
+  <div class="configuration-field-value">
+    <input id="{{ identifier }}" type="text" value="{{ value }}" readonly autocomplete="off" spellcheck="false">
+    {{ copy_button(identifier, ('Wert kopieren: ' if de else 'Copy value: ') ~ label, true) }}
+  </div>
 </div>
+{%- endmacro %}
+<div class="configuration-tabs" id="configuration-tabs" role="tablist" aria-label="{{ 'Konfigurationsansicht' if de else 'Configuration view' }}" hidden>
+  <button type="button" id="configuration-json-tab" role="tab" aria-controls="configuration-json-panel" aria-selected="true">{{ 'Gesamte Konfiguration' if de else 'Complete configuration' }}</button>
+  <button type="button" id="configuration-values-tab" role="tab" aria-controls="configuration-values-panel" aria-selected="false" tabindex="-1">{{ 'Einzelne Werte' if de else 'Individual values' }}</button>
+</div>
+<div id="configuration-json-panel" role="tabpanel" aria-labelledby="configuration-json-tab" tabindex="0">
+  <pre id="mcp-configuration">{{ configuration|tojson(indent=2) }}</pre>
+  {{ copy_button('mcp-configuration', 'Konfiguration kopieren' if de else 'Copy configuration') }}
+</div>
+<div id="configuration-values-panel" role="tabpanel" aria-labelledby="configuration-values-tab" tabindex="0">
+  <p class="hint">{{ 'Typ: STDIO. Übernimm den Befehl, jedes Argument und jede Umgebungsvariable einzeln in die entsprechenden Felder deines Agenten.' if de else 'Type: STDIO. Enter the command, each argument and each environment variable separately in the corresponding fields of your agent.' }}</p>
+  {% set server = configuration.mcpServers.erechnung %}
+  {{ configuration_field('Befehl zum Starten' if de else 'Startup command', server.command, 'configuration-command') }}
+  {% for argument in server.args %}
+  {{ configuration_field('Argument ' ~ loop.index, argument, 'configuration-argument-' ~ loop.index) }}
+  {% endfor %}
+  <h3>{{ 'Umgebungsvariablen' if de else 'Environment variables' }}</h3>
+  {% for name, value in server.env.items() %}
+  {{ configuration_field(name, value, 'configuration-env-' ~ loop.index, true) }}
+  {% endfor %}
+</div>
+<p class="hint" id="configuration-copy-status" role="status" aria-live="polite"></p>

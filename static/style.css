@@ -867,3 +867,17 @@ dialog.agent-connection-dialog, dialog.agent-disable-dialog { width: 680px; max-
 .agent-permissions dd { margin: 0; color: var(--ink); font-size: var(--text-base); }
 .agent-permissions ul { list-style: none; margin: 0; padding: 0; }
 .agent-permissions li + li { margin-top: 4px; }
+.configuration-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; margin: 24px 0 20px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.configuration-tabs[hidden] { display: none; }
+.configuration-tabs button { flex: 1; background: transparent; color: var(--muted); border-radius: 7px; padding: 10px 14px; }
+.configuration-tabs button[aria-selected="true"] { background: var(--surface-hi); color: var(--ink); }
+.configuration-field { margin: 16px 0; }
+.configuration-field-label { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.configuration-field-label label { min-width: 0; overflow-wrap: anywhere; }
+.configuration-field-label .configuration-copy { padding: 5px; background: transparent; color: var(--muted); }
+.configuration-field-value { display: flex; align-items: center; gap: 12px; }
+.configuration-field-value input { min-width: 0; flex: 1; font-family: ui-monospace, monospace; font-size: var(--text-sm); }
+.configuration-copy { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none; }
+.configuration-copy[hidden] { display: none; }
+#configuration-values-panel h3 { margin-top: 28px; }
+#configuration-copy-status { min-height: 1.5em; margin: 16px 0 0; }

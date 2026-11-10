@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Agentenzugriff lässt sich direkt in den Einstellungen ein- und ausschalten. Neue Verbindungen werden über „+“ in einem Dialog angelegt; Konfiguration und Löschen stehen nebeneinander. Aktionsfreigaben und der Hinweis zur Datenverarbeitung sind klarer beschrieben.
+- Die einmalig angezeigte MCP-Konfiguration bietet zwei Ansichten: den vollständigen Konfigurationsblock und einzeln kopierbare Befehle, Argumente sowie Namen und Werte der Umgebungsvariablen.
 
 - Experimentelle lokale MCP-Anbindung, standardmäßig verborgen und ausgeschaltet: ausdrückliches Opt-in, getrennte widerrufbare Verbindungen und Ausstellerfreigaben. Lesen und Vorschauen sind getrennt von Änderungsanfragen. Löschen, Überschreiben und endgültiges Erstellen von Rechnungen warten auf eine einmalige Bestätigung der konkreten Aktion in der App.
 - Eingerichtete MCP-Verbindungen öffnen eRechnung bei Bedarf automatisch und verwenden eine laufende App weiter. Opt-in, Widerruf und Bestätigungen gelten unverändert; Testinstanzen starten nicht automatisch neu.

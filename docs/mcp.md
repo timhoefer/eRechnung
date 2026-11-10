@@ -44,7 +44,10 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 4. Optional **Rechnungen erstellen und Datenänderungen anfragen** erlauben.
 5. Die einmalig angezeigte Konfiguration in den MCP-Client übernehmen. Manche
    Clients benötigen statt des `mcpServers`-Blocks ein eigenes Konfigurationsformat;
-   Befehl, Argumente und Umgebungsvariablen bleiben dieselben.
+   Befehl, Argumente und Umgebungsvariablen bleiben dieselben. Der Tab **Einzelne
+   Werte** bietet dafür Kopierbuttons für den Startbefehl, jedes Argument sowie
+   die Namen und Werte aller Umgebungsvariablen. Beide Ansichten enthalten denselben
+   Schlüssel und sind nur unmittelbar nach dem Anlegen oder Erneuern verfügbar.
 6. In der App unter **Aktionsfreigaben → Aktualisieren** offene Aktionen prüfen.
    Diese stammen von bereits eingerichteten MCP-Verbindungen und geben keinem
    weiteren Agenten Zugang. Lesen, Prüfen und Vorschauen benötigen keine einzelne
