@@ -852,6 +852,7 @@ body.drawer-open { overflow: hidden; }
 
 .agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
 .agent-actions form { margin: 0; }
+.agent-connection .agent-actions > .abtn { display: inline-flex; align-items: center; justify-content: center; min-height: 37px; box-sizing: border-box; }
 .agent-section-header { margin-bottom: 20px; }
 .agent-section-header h2 { margin: 0; }
 .agent-add { display: inline-flex; align-items: center; justify-content: center; padding: 10px; }
