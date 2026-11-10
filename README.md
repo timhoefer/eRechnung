@@ -32,6 +32,53 @@ Zugriffskontrolle gegen Programme mit direktem Datei- oder Bedienzugriff. Die
 Prüfung und Schreiben verwenden die gemeinsame lokale Prozesssperre. Bestätigungen
 sind an die laufende App gebunden; mehrere Macs bleiben unkoordiniert.
 
+## Archiv und CSV-Auswahl
+
+Das Archiv zeigt zunächst das aktuelle Jahr. Über die Jahresauswahl lassen sich
+ältere Jahre oder alle Jahre anzeigen. Bei mehreren Ausstellern führt **Alle
+Aussteller** auch die Belege deaktivierter Profile zusammen; jede Rechnung zeigt
+ihren Aussteller. Dateiaktionen bleiben an diesen Aussteller gebunden.
+
+**Auswählen** blendet Checkboxen für einzelne Rechnungen, ganze Quartale und alle
+angezeigten Belege ein. Im Auswahlmodus markiert ein Klick auf die Rechnungszeile
+(oder Enter/Leertaste auf der fokussierten Zeile) den Beleg; die Aktionsbuttons
+bleiben separat bedienbar. **CSV exportieren** exportiert genau diese Auswahl
+mit bis zu 10.000 Belegen pro Export. Beim
+Sortieren bleiben Auswahlmodus und markierte Rechnungen erhalten. Beim Wechsel
+von Jahr oder Aussteller wird die Auswahl geleert. Ohne
+Buchungsdaten bleibt eine Datei sichtbar, kann aber nicht als CSV ausgewählt werden.
+Die bisherigen CSV-Links je Rechnung und der Export per Datumsbereich bleiben
+technisch verfügbar.
+
+Vor jedem CSV-Export werden die gespeicherten Buchungsdaten mit der tatsächlichen
+Rechnungs-XML abgeglichen: bei ZUGFeRD mit dem eingebetteten XML, bei XRechnung
+mit der eigenständigen XML. Abweichende Beträge, Kunde, Nummer, Datum, Währung
+oder Belegart sowie fehlende oder unlesbare Daten brechen den gesamten Export
+ab. Reine PDF-Metadatenänderungen verhindern den Export nicht, wenn die XML-Werte
+weiterhin übereinstimmen. Eine erneute erfolgreiche XML-Prüfung repariert keine
+Abweichung zwischen Rechnung und Buchungsdaten. Der CSV-Abgleich selbst ist keine
+neue XSD-/Schematron-Prüfung und ändert den gespeicherten Prüfstatus nicht.
+Beim Export per Datumsbereich erfolgt der Abgleich vor dem Filtern. Widersprüche
+auch bei scheinbar außerhalb liegenden Belegen brechen den Export ab, damit ein
+veraltetes gespeichertes Datum keine Rechnung unbemerkt ausschließt.
+
+Ändern sich die Quelldateien während des Exports, wird keine CSV ausgegeben.
+Nach einem Datenordnerwechsel muss eine ältere Archivansicht vor dem Export neu
+geladen werden. Beim Sprachwechsel bleiben die Einstellungen mit ihren
+Archivfiltern und ausgewählten Rechnungen geöffnet, auch wenn das Archiv gerade
+nachlädt. In diesem Fall wird die noch sichtbare Ansicht wiederhergestellt.
+
+Die Liste bleibt durchgehend und wird insgesamt nach Erstellung, Nummer oder
+Kunde sortiert. Die Quartalsauswahl erscheint nur im Auswahlmodus. Quartale richten
+sich nach dem Rechnungsdatum; fehlt es bei einer älteren Datei, wird der angezeigte
+Erstellungszeitpunkt verwendet. Ein Export aus der Ansicht **Alle Aussteller** enthält
+eine zusätzliche Aussteller-Spalte. In der macOS-App werden solche Exporte im
+Unterordner `exports` des Datenordners gespeichert und im Finder angezeigt.
+Beim Wechsel des Datenordners werden diese CSV-Dateien mitgenommen. Abweichende
+gleichnamige CSV-Dateien im Zielordner brechen den Umzug ab; keine Datei wird
+überschrieben. Die Originale werden erst nach erfolgreichem Kopieren und Speichern
+des neuen Speicherorts entfernt.
+
 ## Sicherer Entwicklungs-Testmodus
 
 Für manuelle Tests ausschließlich `ERECHNUNG_TEST_MODE=1 ./run.sh` verwenden.
@@ -49,6 +96,34 @@ Es wird keine externe Agentenschnittstelle aktiviert.
 Ein Beleg wird nur nach erfolgreicher XSD- und Schematron-Prüfung archiviert.
 Fehlt die Prüfung oder schlägt sie fehl, zeigt die App die Fehler; Belegdateien,
 Kundendaten und Rechnungsnummernstand bleiben unverändert.
+
+Das Archiv zeigt einen grünen **✓ XML**-Chip, wenn die technische XML-Prüfung für die aktuelle
+Datei mit den aktuellen Prüfregeln bestanden wurde. Der Tooltip nennt die Prüfung
+gegen XSD und Geschäftsregeln sowie den
+Prüfzeitpunkt und die geprüfte Datei (bei XRechnung die XML, sonst das PDF mit
+eingebettetem XML). Geänderte Dateien oder Prüfregeln erhalten einen neutralen
+Hinweis auf eine nötige Neuprüfung; fehlgeschlagene Prüfungen erscheinen rot.
+Über **⋯ → Prüfen / Erneut prüfen** ist die manuelle Prüfung jederzeit möglich.
+Altbelege ohne gespeichertes Prüfergebnis erhalten erst nach einer Prüfung einen
+Status. Ein gewöhnliches App-Update ohne geänderte Prüfregeln setzt ihn nicht zurück.
+Prüfergebnisse werden separat gespeichert; die Belegdateien bleiben unverändert.
+Die erneute Archivprüfung berücksichtigt das Dateiformat: Eine PDF-Datei muss
+das XML eingebettet enthalten, eine XML-Datei wird direkt geprüft. Auch das
+hinterlegte Rechnungsprofil wird berücksichtigt: Eine XRechnung darf nicht durch
+eine normale EN-16931-Datei ersetzt werden und danach wieder einen grünen Haken
+erhalten. Profilabweichungen werden angezeigt; der gespeicherte Status ist an das
+geprüfte Archivprofil gebunden. Beschädigte Prüfzeitpunkte werden ignoriert und
+blockieren das Archiv nicht. Beim Umzug
+in einen Datenordner mit identischen Belegen werden die separaten Prüfergebnisse
+des aktiven Ordners übernommen; unterschiedliche Prüfzeitpunkte sind kein
+Rechnungsdatenkonflikt. Abweichende Belege blockieren den Umzug weiterhin.
+
+Kann ein Prüfergebnis nicht gespeichert werden, zeigt die App einen Hinweis.
+Das aktuelle Ergebnis bleibt während der laufenden Sitzung auch nach Neuladen
+sichtbar; ein nicht gespeicherter Erfolg erhält keinen grünen Haken. Die App
+entfernt nach Möglichkeit den älteren Status. Ist auch das wegen fehlender
+Schreibrechte unmöglich, gilt die Anzeige des neuen Ergebnisses nur bis zum
+App-Neustart. Nach Beheben des Speicherproblems bitte erneut prüfen.
 
 Die Nummer gehört weiterhin zu einem Aussteller. Eine identische Wiederholung
 verwendet die ursprünglichen Dateien. Abweichende Inhalte mit derselben Nummer

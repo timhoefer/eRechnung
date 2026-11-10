@@ -28,9 +28,16 @@
 {% endif %}
 
 {% if result %}
-<div class="card status {{ 'ok' if result.ok else 'err' }}">
-  <strong>{{ '✓' if result.ok else '✗' }} {{ result.label }}</strong>
+<div class="card status validation-result {{ 'ok' if result.ok else 'err' }}">
+  <div class="validation-result-header">
+    <strong>{{ '✓' if result.ok else '✗' }} {{ result.label }}</strong>
+    <button type="button" class="validation-result-close" data-dismiss-result aria-label="{{ t.dismiss_validation_result }}" title="{{ t.dismiss_validation_result }}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
   {% if result.ok %}<p>{{ t.validate_ok_text }}</p>{% endif %}
+  {% if result.profile_message %}<p role="alert">{{ result.profile_message }}</p>{% endif %}
+  {% if result.save_failed and not archive_validation_unsaved %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
   {% if result.xsd_messages %}
     <p style="margin:10px 0 2px"><strong>{{ t.val_xsd }}: ✗</strong></p>
     <ul>{% for m in result.xsd_messages %}<li>{{ m }}</li>{% endfor %}</ul>
@@ -57,10 +64,17 @@
 </div>
 {% endif %}
 
-<div class="card">
+<div class="card archive-card" data-archive-scope="{{ [archive_scope, 'all' if archive_all else issuer_id, archive_year]|tojson|forceescape }}" data-archive-select-label="{{ t.archive_select }}" data-archive-done-label="{{ t.archive_done }}" data-archive-count-label="{{ t.archive_selected }}" data-export-failed="{{ t.action_failed }}" data-desktop="{{ 'true' if is_desktop else 'false' }}">
   <form method="get" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=None) }}" id="archive-issuer-form" novalidate>
     <div class="archive-header">
       <h2>{{ t.archive }} ({{ archive|length }})</h2>
+      <label class="archive-sort"><span>{{ t.archive_year }}</span>
+        <select name="year" id="archive-year-select">
+          {% for year in archive_years %}<option value="{{ year }}" {{ 'selected' if archive_year == year|string else '' }}>{{ year }}</option>{% endfor %}
+          <option value="all" {{ 'selected' if archive_year == 'all' else '' }}>{{ t.archive_all_years }}</option>
+          {% if archive_undated or archive_year == 'unknown' %}<option value="unknown" {{ 'selected' if archive_year == 'unknown' else '' }}>{{ t.archive_undated }}</option>{% endif %}
+        </select>
+      </label>
       <label class="archive-sort"><span>{{ t.archive_sort }}</span>
         <select name="sort" id="archive-sort-select">
           <option value="created" {{ 'selected' if archive_sort == 'created' else '' }}>{{ t.archive_sort_created }}</option>
@@ -68,11 +82,16 @@
           <option value="customer" {{ 'selected' if archive_sort == 'customer' else '' }}>{{ t.archive_sort_customer }}</option>
         </select>
       </label>
+      <button type="button" class="secondary small archive-select-toggle" data-archive-select aria-pressed="false" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect class="archive-select-box" x="3" y="3" width="18" height="18" rx="3"/><path d="m7 12 3.5 3.5L17 9"/></svg>
+        <span data-archive-select-text>{{ t.archive_select }}</span>
+      </button>
     </div>
     {% if archive_issuers|length > 1 %}
     <div class="archive-issuer-choice"><label>{{ t.issuer }}
       <select name="issuer" id="archive-issuer-select">
-        {% for p in archive_issuers %}<option value="{{ p.id }}" {{ 'selected' if p.id == issuer_id else '' }}>{{ p.label }}{{ ' · ' ~ t.issuer_archived if p.deleted else '' }}</option>{% endfor %}
+        <option value="all" {{ 'selected' if archive_all else '' }}>{{ t.archive_all_issuers }}</option>
+        {% for p in archive_issuers %}<option value="{{ p.id }}" {{ 'selected' if not archive_all and p.id == issuer_id else '' }}>{{ p.label }}{{ ' · ' ~ t.issuer_archived if p.deleted else '' }}</option>{% endfor %}
       </select>
     </label></div>
     {% else %}
@@ -80,7 +99,7 @@
     <p class="hint">{{ t.issuer }}: <strong>{{ issuer_name }}</strong></p>
     {% endif %}
   </form>
-  {% if issuer_deleted %}
+  {% if issuer_deleted and not archive_all %}
   <p class="hint">{{ t.issuer_archive_hint }}</p>
   <form method="post" action="{{ url_for('issuer_restore') }}" class="issuer-restore-form">
     <input type="hidden" name="issuer" value="{{ issuer_id }}">
@@ -90,53 +109,89 @@
   </form>
   {% endif %}
   {% if archive %}
-  {% if inplace %}<p class="hint" style="margin:0 0 10px">{{ t.archive_preview_hint }}</p>{% endif %}
+  {% if inplace %}<p class="hint" style="margin:0 0 10px" data-archive-hint data-preview-label="{{ t.archive_preview_hint }}" data-select-label="{{ t.archive_select_hint }}">{{ t.archive_preview_hint }}</p>{% endif %}
+  <form method="post" action="{{ url_for('export_csv', issuer='all' if archive_all else issuer_id, scope=archive_scope) }}" id="archive-selection" class="archive-selection-bar" hidden>
+    <div class="archive-selection-actions">
+      <label class="check"><input type="checkbox" data-archive-all>{{ t.archive_select_all }}</label>
+      <span class="hint" data-archive-count role="status" aria-live="polite"></span>
+    </div>
+    <div class="archive-quarter-selection" role="group" aria-label="{{ t.archive_select_quarters }}" title="{{ t.archive_period_hint }}">
+      <span class="hint">{{ t.archive_select_quarters }}</span>
+      {% for period in archive_quarters %}
+      <label class="check"><input type="checkbox" data-archive-quarter="{{ period.key }}">{% if archive_year == 'all' %}{{ period.year }} · {% endif %}{{ t.archive_quarter.format(n=period.quarter) }}</label>
+      {% endfor %}
+    </div>
+    <div class="archive-selection-export">
+      <button type="submit" class="secondary" disabled>{{ t.export_csv }}</button>
+    </div>
+    <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
+  </form>
+  {% if archive_validation_unsaved %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
   <table class="archive">
-    <thead><tr><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th>{{ t.created }}</th><th></th></tr></thead>
+    <thead><tr><th class="archive-selection-cell"><span class="sr-only">{{ t.archive_select }}</span></th><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th class="arch-status">{{ t.archive_validation_heading }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
       {% for a in archive %}
-      <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename) }}" data-preview-url="{{ url_for('archive_preview', filename=a.filename) }}">
+      <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if archive_all %}, {{ a.issuer_label }}{% endif %}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename, issuer=a.issuer_id) }}" data-preview-url="{{ url_for('archive_preview', filename=a.filename, issuer=a.issuer_id) }}" data-preview-type="{{ 'xml' if a.filename.lower().endswith('.xml') else 'pdf' }}">
+        <td class="archive-selection-cell"><input type="checkbox" name="entry" form="archive-selection" value="{{ [a.issuer_id, a.filename]|tojson|forceescape }}" data-archive-entry data-quarter="{{ a.year }}-Q{{ a.quarter }}" aria-label="{{ t.archive_select_invoice }} {{ a.number or a.filename }} · {{ a.issuer_label }}" {% if not a.can_export %}disabled title="{{ t.archive_no_csv }}"{% endif %}></td>
         {# Primär die Rechnungsnummer (der Dateiname ist Implementierungsdetail —
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
-        <td class="arch-file" title="{{ a.filename }}"><span class="arch-id">{{ a.number or a.filename }}</span></td>
+        <td class="arch-file" title="{{ a.filename }}">
+          <span class="arch-id">{{ a.number or a.filename }}</span>
+          {% if archive_all %}<span class="arch-issuer" title="{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}">{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}</span>{% endif %}
+        </td>
         <td class="arch-buyer">
           <div class="arch-line">
             <span class="arch-name">{{ a.buyer or "" }}</span>
             {% if a.amount is not none %}<span class="arch-amt">{{ a.currency }} {{ a.amount|money(lang) }}</span>{% endif %}
           </div>
         </td>
-        <td class="arch-date">{{ a.modified }}</td>
+        <td class="arch-status">
+            {% set status_state = a.validation.state if a.validation else 'unchecked' %}
+            {% if a.validation %}
+            {% set status_text = t['archive_validation_' ~ a.validation.state].format(date=a.validation.checked_at) ~ ' · ' ~ a.validation_file %}
+            {% if not a.validation.saved %}{% set status_text = status_text ~ ' · ' ~ t.validation_save_failed %}{% endif %}
+            {% else %}
+            {% set status_text = t.archive_validation_unchecked ~ ' · ' ~ a.validation_file %}
+            {% endif %}
+            <span class="arch-validation {{ status_state }}" role="img" aria-label="{{ status_text }}" title="{{ status_text }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                {% if status_state == 'valid' %}<path d="m5 12 4 4L19 6"/>
+                {% elif status_state == 'invalid' %}<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>
+                {% else %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>{% endif %}
+              </svg>
+              <span aria-hidden="true">XML</span>
+            </span>
+        </td>
+        <td class="arch-date" title="{{ t['archive_date_' ~ a.created_source].format(date=a.created_time) }}">{{ a.created or t.archive_date_unknown }}{% if a.created_source == 'invoice' %} *{% endif %}</td>
         <td class="r arch-actions">
           {% if is_desktop %}
-          <button type="button" class="secondary small reveal-btn" data-url="{{ url_for('reveal', filename=a.filename) }}">{{ t.reveal_finder }}</button>
+          <button type="button" class="secondary small reveal-btn" data-url="{{ url_for('reveal', filename=a.filename, issuer=a.issuer_id) }}">{{ t.reveal_finder }}</button>
           {% else %}
-          <a href="{{ url_for('download', filename=a.filename) }}" class="abtn">{{ t.act_download }}</a>
+          <a href="{{ url_for('download', filename=a.filename, issuer=a.issuer_id) }}" class="abtn">{{ t.act_download }}</a>
           {% endif %}
-          {# Prüfen: bei XRechnung die einreichbare .xml prüfen, nicht das Sicht-PDF
-             (das PDF ist dort nur Beilage und enthält kein eingebettetes XML). #}
-          <form method="post" action="{{ url_for('settings_panel') if inplace else '' }}" class="check-file-form">
-            <input type="hidden" name="filename" value="{{ a.xml_filename or a.filename }}">
-            <button type="submit" class="secondary small" {% if a.xml_filename %}title="{{ t.check_xml_title }}"{% endif %}>{{ t.act_check }}</button>
-          </form>
           <details class="row-menu">
             <summary role="button" aria-haspopup="menu" aria-label="{{ t.act_more }}" title="{{ t.act_more }}">⋯</summary>
             <div class="row-menu-list" role="menu">
-              <a href="{{ url_for('view', filename=a.filename) }}" target="_blank" role="menuitem">{{ t.act_view }}</a>
-              {% if a.has_draft and not issuer_deleted %}<a href="{{ url_for('index', **{'from': a.filename}) }}" role="menuitem">{{ t.act_edit }}</a>{% endif %}
-              {% if issuer_deleted and a.can_correct %}
-              <a href="{{ url_for('index', correction_source=a.filename, doc_type='381') }}" role="menuitem">{{ t.issuer_cancel_invoice }}</a>
-              <a href="{{ url_for('index', correction_source=a.filename, doc_type='384') }}" role="menuitem">{{ t.issuer_correct_invoice }}</a>
+              <form method="post" action="{{ url_for('settings_panel' if inplace else 'validate', issuer=a.issuer_id, archive='all' if archive_all else None, year=archive_year, sort=archive_sort) }}" class="check-file-form">
+                <input type="hidden" name="filename" value="{{ a.validation_file }}">
+                <button type="submit" role="menuitem" {% if a.validation_file.endswith('.xml') %}title="{{ t.check_xml_title }}"{% endif %}>{{ t.archive_recheck if a.validation else t.check }}</button>
+              </form>
+              <a href="{{ url_for('view', filename=a.filename, issuer=a.issuer_id) }}" target="_blank" role="menuitem">{{ t.act_view }}</a>
+              {% if a.has_draft and not a.issuer_deleted %}<a href="{{ url_for('index', issuer=a.issuer_id, **{'from': a.filename}) }}" role="menuitem">{{ t.act_edit }}</a>{% endif %}
+              {% if a.issuer_deleted and a.can_correct %}
+              <a href="{{ url_for('index', issuer=a.issuer_id, correction_source=a.filename, doc_type='381') }}" role="menuitem">{{ t.issuer_cancel_invoice }}</a>
+              <a href="{{ url_for('index', issuer=a.issuer_id, correction_source=a.filename, doc_type='384') }}" role="menuitem">{{ t.issuer_correct_invoice }}</a>
               {% endif %}
               {% if a.has_draft %}
                 {% if is_desktop %}
-                <button type="button" class="csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename) }}" role="menuitem">CSV</button>
+                <button type="button" class="csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename, issuer=a.issuer_id, scope=archive_scope) }}" role="menuitem">CSV</button>
                 {% else %}
-                <a href="{{ url_for('export_csv', file=a.filename) }}" role="menuitem">CSV</a>
+                <a href="{{ url_for('export_csv', file=a.filename, issuer=a.issuer_id, scope=archive_scope) }}" role="menuitem">CSV</a>
                 {% endif %}
               {% endif %}
-              {% if not is_desktop and a.xml_filename %}<a href="{{ url_for('download', filename=a.xml_filename) }}" role="menuitem">XML</a>{% endif %}
-              {% if not issuer_deleted %}<button type="button" class="js-delete danger-item" data-url="{{ url_for('archive_delete') }}" data-filename="{{ a.filename }}" role="menuitem">{{ t.act_delete }}</button>{% endif %}
+              {% if not is_desktop and a.xml_filename and a.xml_filename != a.filename %}<a href="{{ url_for('download', filename=a.xml_filename, issuer=a.issuer_id) }}" role="menuitem">XML</a>{% endif %}
+              {% if not a.issuer_deleted %}<button type="button" class="js-delete danger-item" data-url="{{ url_for('archive_delete', issuer=a.issuer_id) }}" data-filename="{{ a.filename }}" role="menuitem">{{ t.act_delete }}</button>{% endif %}
             </div>
           </details>
         </td>
@@ -144,35 +199,17 @@
       {% endfor %}
     </tbody>
   </table>
+  {% if archive|selectattr('created_source', 'equalto', 'invoice')|list %}<p class="hint">{{ t.archive_date_legacy_hint }}</p>{% endif %}
   {% else %}
   <p class="hint">{{ t.no_invoices }}</p>
   {% endif %}
-  {# CSV-Export als Innen-Box des Archivs (Optik wie die Positions-Boxen) #}
-  {# Keep the form controls when empty so issuer switches retain the date range. #}
-  <div class="export-box" {{ 'hidden' if not archive else '' }}>
-    <h3>{{ t.export_title }}</h3>
-    <p class="hint">{{ t.export_hint }}</p>
-    <div class="export-bar">
-      <label>{{ t.export_from }}<input type="date" id="export-from" name="export_from" form="archive-issuer-form" value="{{ request.args.get('export_from', '') }}"></label>
-      <label>{{ t.export_to }}<input type="date" id="export-to" name="export_to" form="archive-issuer-form" value="{{ request.args.get('export_to', '') }}"></label>
-      <button type="button" class="secondary" id="export-csv" data-url="{{ url_for('export_csv') }}">{{ t.export_csv }}</button>
-    </div>
-    <div class="export-presets">
-      <button type="button" class="link" data-preset="thisyear">{{ t.export_this_year }}</button>
-      <button type="button" class="link" data-preset="lastyear">{{ t.export_last_year }}</button>
-      <button type="button" class="link" data-preset="q1">Q1</button>
-      <button type="button" class="link" data-preset="q2">Q2</button>
-      <button type="button" class="link" data-preset="q3">Q3</button>
-      <button type="button" class="link" data-preset="q4">Q4</button>
-    </div>
-  </div>
 </div>
 
 <div class="card">
   <h2>{{ t.check_file }}</h2>
   <form method="post" enctype="multipart/form-data" class="check-file-form"
-        action="{{ url_for('settings_panel') if inplace else '' }}">
-    <p class="hint">{{ t.check_file_hint }}</p>
+        action="{{ url_for('settings_panel' if inplace else 'validate', issuer='all' if archive_all else issuer_id, year=archive_year, sort=archive_sort) }}">
+    <p class="hint settings-description">{{ t.check_file_hint }}</p>
     <input type="file" name="file" accept=".pdf,.xml" required>
     <div style="margin-top:12px"><button type="submit">{{ t.check }}</button></div>
   </form>
@@ -180,12 +217,12 @@
 
 <div class="card">
   <h2>{{ t.datadir_title }}</h2>
-  <p class="hint">{{ t.datadir_hint }}</p>
+  <p class="hint settings-description">{{ t.datadir_hint }}</p>
   <form method="post" action="{{ url_for('data_dir_set') }}" class="datadir-form">
     <label class="wide">{{ t.datadir_label }}
       <input name="data_dir" id="data-dir-input" value="{{ data_dir if data_dir_custom else '' }}" placeholder="{{ data_dir }}">
     </label>
-    <div style="margin-top:12px">
+    <div class="settings-actions">
       {% if can_browse %}<button type="button" class="secondary" id="dd-browse">{{ t.datadir_browse }}</button>{% endif %}
       <button type="submit" class="secondary">{{ t.datadir_save }}</button>
     </div>
@@ -204,7 +241,7 @@
   <table class="summary" style="margin-top:8px">
     <tr><td>{{ t.app_version_current }}</td><td>{{ app_version }}</td></tr>
   </table>
-  <div style="margin-top:12px">
+  <div class="settings-actions">
     <button type="button" class="secondary" id="check-updates-btn">{{ t.app_check_updates }}</button>
     {% if whats_new %}<button type="button" class="secondary" data-open-whats-new>{{ t.whats_new_open }}</button>{% endif %}
   </div>

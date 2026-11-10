@@ -57,7 +57,7 @@ jobs:
         # ignore_missing_imports (mypy.ini) -> Dritt-Libs müssen nicht installiert sein.
         run: |
           pip install mypy==2.1.0
-          mypy app.py change_confirmation.py invoice_core.py invoice_archive.py issuer_store.py zugferd.py i18n.py countries.py desktop.py scripts/check_macos_release.py scripts/build_dmg.py
+          mypy app.py change_confirmation.py invoice_core.py invoice_archive.py issuer_store.py validation_status.py zugferd.py i18n.py countries.py desktop.py scripts/check_macos_release.py scripts/build_dmg.py
 
   js:
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
         with:
           node-version: "20"
       - name: Syntax-Check
-        run: node --check static/calc.js && node --check static/app.js && node --check static/change_confirmation.js
+        run: node --check static/calc.js && node --check static/app.js && node --check static/change_confirmation.js && node --check static/archive_selection.js
       - name: JS-Tests (Rechenlogik und Formularwiederherstellung)
         run: node --test tests/*.test.js
 

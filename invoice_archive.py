@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 from invoice_core import safe_name
@@ -144,12 +145,43 @@ def archived_number_files(output: Path, *, strict: bool = False) -> dict[str, li
         except (OSError, ValueError, ArchiveError) as exc:
             if strict:
                 raise ArchiveError("invalid_archive", f"Cannot check invoice numbers in {path.name}.") from exc
-    for path in output.glob("Rechnung_*.pdf"):
-        if not path.with_suffix(".json").exists():
+    for path in archive_documents(output):
+        if path.stem.startswith("Rechnung_") and not path.with_suffix(".json").exists():
             # Older app versions used " (2)", " (3)" for duplicate filenames.
             number = re.sub(r" \(\d+\)$", "", path.stem[len("Rechnung_"):])
             numbers.setdefault(number, []).append(path.name)
     return numbers
+
+
+def archive_documents(output: Path) -> list[Path]:
+    """One entry per invoice: PDF if present, otherwise the standalone XML.
+
+    Do not expose XML published by an unfinished archive transaction before its
+    PDF/sidecar are complete. Linked files are never archive entries.
+    """
+    # Snapshot candidates before checking pending transactions: a transaction
+    # starting during the scan must not expose its XML before publishing the PDF.
+    files = sorted(output.glob("*"), key=lambda p: (p.suffix.lower() != ".pdf", p.name))
+    pending = output / ".archive-pending"
+    try:
+        pending_names = {p.name for p in pending.iterdir()} if pending.is_dir() and not pending.is_symlink() else set()
+    except FileNotFoundError:
+        pending_names = set()  # The transaction completed while listing.
+    documents: dict[str, Path] = {}
+    for path in files:
+        if (path.suffix.lower() in {".pdf", ".xml"} and not path.is_symlink() and path.is_file()
+                and not (path.suffix.lower() == ".xml" and path.name in pending_names)):
+            documents.setdefault(path.stem, path)
+    return list(documents.values())
+
+
+def archive_created_at(data: dict) -> datetime | None:
+    """Read a persisted creation time without guessing from file timestamps."""
+    try:
+        created = datetime.fromisoformat(data["_archive"]["created_at"])
+        return created.astimezone() if created.tzinfo is not None else None
+    except (KeyError, ValueError, TypeError, AttributeError, OverflowError, OSError):
+        return None
 
 
 def archived_numbers(output: Path, *, strict: bool = False) -> set[str]:
@@ -249,6 +281,7 @@ def archive_invoice(data: dict, pdf: bytes, xml: bytes, output: Path,
         if data["invoice"]["profile"] == "xrechnung":
             payloads[stem + ".xml"] = xml
         sidecar["_archive"] = {"fingerprint": fingerprint,
+                               "created_at": datetime.now(UTC).isoformat(),
                                "sha256": {name: digest(content) for name, content in payloads.items()}}
         payloads[stem + ".json"] = canonical(sidecar)
         staging = Path(tempfile.mkdtemp(prefix=".archive-stage-", dir=output))

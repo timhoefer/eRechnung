@@ -639,9 +639,37 @@ def schematron_available() -> bool:
     return True
 
 
+def validation_ruleset() -> str | None:
+    """Fingerprint the shipped rules and validators, independent of UI releases."""
+    import hashlib
+    from pathlib import Path
+
+    try:
+        import pypdf
+        import saxonche
+        from lxml import etree
+
+        schema = Path(_xsd_path())
+        rules = Path(_schematron_dir())
+        if not all(p.is_file() for p in (schema, rules / _SCH_EN16931, rules / _SCH_XRECHNUNG)):
+            return None
+        # Bump this revision when the validation/extraction policy changes.
+        engine = (3, pypdf.__version__, saxonche.__version__, etree.LXML_VERSION, etree.LIBXML_VERSION)
+        digest = hashlib.sha256(repr(engine).encode())
+        for root, pattern in ((schema.parent, "*.xsd"), (rules, "*.xsl*")):
+            for path in sorted(root.rglob(pattern)):
+                digest.update(str(path.relative_to(root)).encode())
+                digest.update(hashlib.sha256(path.read_bytes()).digest())
+        return digest.hexdigest()
+    except (OSError, ImportError):
+        return None
+
+
 def _run_schematron(xslt_path: str, xml: bytes):
     """Ein Stylesheet ausführen -> (errors:list[str], warnings:list[str])."""
+    import hashlib
     import threading
+    from pathlib import Path
 
     from lxml import etree
     from saxonche import PySaxonProcessor
@@ -654,12 +682,14 @@ def _run_schematron(xslt_path: str, xml: bytes):
         if "proc" not in _SCH_STATE:
             _SCH_STATE["proc"] = PySaxonProcessor(license=False)
         proc = _SCH_STATE["proc"]
-        if xslt_path not in _SCH_STATE:
-            _SCH_STATE[xslt_path] = proc.new_xslt30_processor().compile_stylesheet(
+        fingerprint = hashlib.sha256(Path(xslt_path).read_bytes()).hexdigest()
+        cached = _SCH_STATE.get(xslt_path)
+        if cached is None or cached[0] != fingerprint:
+            _SCH_STATE[xslt_path] = (fingerprint, proc.new_xslt30_processor().compile_stylesheet(
                 stylesheet_file=xslt_path
-            )
+            ))
         node = proc.parse_xml(xml_text=xml.decode("utf-8"))
-        svrl = _SCH_STATE[xslt_path].transform_to_string(xdm_node=node)
+        svrl = _SCH_STATE[xslt_path][1].transform_to_string(xdm_node=node)
 
     root = etree.fromstring(svrl.encode("utf-8"))
     ns = {"svrl": "http://purl.oclc.org/dsdl/svrl"}

@@ -59,7 +59,30 @@
 .archive-issuer-choice label { flex: 1; min-width: 0; }
 #archive-issuer-form { margin-bottom: 12px; }
 .archive-header { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 12px; }
-.archive-header h2 { margin: 0; }
+.archive-header h2 { margin: 0 auto 0 0; }
+.archive-select-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.archive-select-toggle svg { flex: none; }
+.archive-select-toggle[aria-pressed="true"] .archive-select-box { display: none; }
+.archive-card { container-type: inline-size; }
+.archive-selection-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "selection export" "quarters export"; gap: 12px 24px; padding: 16px; margin: 16px 0; background: var(--panel-2, var(--bg)); border-radius: 9px; }
+.archive-selection-actions, .archive-quarter-selection { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.archive-selection-actions { grid-area: selection; }
+.archive-quarter-selection { grid-area: quarters; gap: 12px 20px; }
+.archive-selection-export { grid-area: export; align-self: center; display: grid; gap: 8px; justify-items: end; max-width: 240px; }
+.archive-selection-export button { padding: 14px 22px; white-space: nowrap; }
+.archive-selection-bar [data-archive-export-status] { grid-column: 1 / -1; }
+.archive-selection-bar [data-archive-export-status]:empty { display: none; }
+@container (max-width: 660px) {
+  .archive-selection-bar { grid-template-columns: minmax(0, 1fr); grid-template-areas: "selection" "quarters" "export"; }
+  .archive-selection-export { justify-self: end; }
+}
+.archive-selection-bar label.check { padding-bottom: 0; align-self: center; }
+.archive-selection-bar .hint { margin: 0; }
+.archive-selection-cell { display: none; }
+[data-selecting="true"] .archive-selection-cell { display: table-cell; width: 28px; }
+.archive-card input[type="checkbox"] { width: auto; cursor: pointer; }
+.archive-card input[type="checkbox"]:disabled { cursor: default; }
+.arch-issuer { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; margin-top: 4px; font-size: var(--text-sm); color: var(--muted); }
 .archive-sort { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; max-width: 100%; }
 .archive-sort span { white-space: nowrap; }
 .archive-sort select { width: auto; max-width: 100%; font-size: var(--text-sm); }
@@ -438,6 +461,7 @@ button:hover { background: var(--accent-d); }
 button.secondary { background: var(--surface-2); color: var(--ink); }
 button.secondary:hover { background: var(--surface-2-h); }
 .hint { color: var(--muted); font-size: var(--text-sm); margin: 8px 0 0; }
+.hint.settings-description { margin-bottom: 16px; }
 .hint code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 .discount-row { display: flex; gap: 12px; align-items: flex-end; margin: 10px 0 4px; }
 .discount-row label:first-child { flex: 0 0 140px; }
@@ -490,6 +514,7 @@ button.secondary:hover { background: var(--surface-2-h); }
 .actions { display: flex; align-items: center; gap: 12px; margin: 20px auto; }
 .result-note { max-width: 1080px; margin: 0 auto 10px; padding: 0 23px; box-sizing: border-box; }
 .actions .spacer { flex: 1; }
+.settings-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
 /* Einstellungen/Archiv als In-Place-Panel in der linken Spalte */
 #settings-toggle.active { background: var(--surface-2-h); }
 .arch-row { cursor: pointer; }
@@ -580,6 +605,10 @@ a.link:hover { text-decoration: underline; }
 .actions a { display: inline-flex; }
 
 .card.status { border-width: 1px; }
+.validation-result-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.validation-result-header strong { min-width: 0; overflow-wrap: anywhere; }
+.validation-result-close { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 30px; height: 30px; padding: 0; color: var(--ink); background: transparent; border: 1px solid currentColor; border-radius: 8px; opacity: .7; }
+.validation-result-close:hover { background: transparent; opacity: 1; }
 .card.status.ok { border-color: var(--ok); background: var(--ok-bg); }
 .card.status.err { border-color: var(--err); background: var(--err-bg); }
 .card.status.warn { border-color: var(--warn-border); background: var(--warn-bg); }
@@ -598,12 +627,17 @@ table.archive td { padding: 8px 4px; border-bottom: 1px solid var(--line); font-
 table.archive td.r { text-align: right; white-space: nowrap; }
 table.archive td.r .link { margin-left: 12px; }
 table.archive form { margin-left: 12px; }
-/* Archiv: Nummer | Kunde | Summe | Erstellt — einzeilig */
+/* Archiv: Nummer | Kunde + Summe | Prüfstatus | Erstellt — einzeilig */
 /* width:1% + nowrap: Spalte schrumpft auf Inhaltsbreite, Kunde bekommt den Rest.
    Lange Fallback-Dateinamen (Einträge ohne Sidecar) werden ellipsiert, damit sie
    die Spalte nicht aufspannen — der volle Name steht im Tooltip. */
 table.archive td.arch-file { white-space: nowrap; width: 1%; padding-right: 18px; }
 .arch-id { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+table.archive .arch-status { width: 1%; padding-left: 12px; padding-right: 18px; white-space: nowrap; }
+.arch-validation { display: inline-flex; flex: none; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.4; }
+.arch-validation svg { width: 13px; height: 13px; flex: none; }
+.arch-validation.valid { color: var(--ok); background: var(--ok-bg); }
+.arch-validation.invalid { color: var(--err); background: var(--err-bg); }
 /* Kunde in Volltonfarbe, Summe klein/gedämpft dahinter, Datum gedämpft.
    width:99% + max-width:0: die Kunden-Spalte bekommt den Restplatz und kann
    unter Druck schrumpfen — auch in WebKit (das sonst die Tabelle über die
@@ -616,9 +650,9 @@ table.archive td.arch-buyer { width: 99%; max-width: 0; }
   font-variant-numeric: tabular-nums; }
 table.archive td.arch-date { color: var(--muted); white-space: nowrap;
   font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
-/* Archiv-Aktionen: zwei sichtbare Buttons + Overflow-Menü (⋯) */
+/* Archiv-Aktionen: Datei öffnen/zeigen + Overflow-Menü (⋯) */
 .arch-actions > * + * { margin-left: 8px; }
-.arch-actions form.check-file-form { display: inline; margin-left: 8px; }
+.arch-actions .row-menu form.check-file-form { margin: 0; }
 .abtn { /* Link in Button-Optik (sekundär, klein) */
   display: inline-block; padding: 5px 11px; border-radius: 8px;
   background: var(--surface-2); color: var(--ink); font-size: var(--text-sm);

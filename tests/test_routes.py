@@ -4,9 +4,10 @@ echten seller/customers/output-Dateien werden NICHT angefasst.
 Der volle /generate-Roundtrip ruft build_pdf (WeasyPrint/Pango) auf und wird
 übersprungen, wenn WeasyPrint nicht verfügbar ist (z. B. in der CI)."""
 import json
+from datetime import UTC, datetime
 
 import pytest
-from helpers import confirmed_post, export_invoice
+from helpers import confirmed_post, export_invoice, write_invoice_pdf
 
 import app as appmod
 
@@ -92,6 +93,7 @@ def test_export_csv(client):
         "items": [{"description": "Leistung", "quantity": "2",
                    "unit": "C62", "unit_price": "100"}],
     }), encoding="utf-8")
+    write_invoice_pdf(out / "Rechnung_2026-001.pdf")
     r = client.get("/export/csv?from=2026-01-01&to=2026-12-31")
     assert r.status_code == 200
     assert "text/csv" in r.headers["Content-Type"]
@@ -135,6 +137,7 @@ def test_generate_creates_pdf_and_sidecar(client):
     pdfs = list(appmod.OUTPUT_DIR.glob("*.pdf"))
     assert len(pdfs) == 1
     assert (appmod.OUTPUT_DIR / "Rechnung_2026-001.json").exists()  # Sidecar
+    assert appmod.validation_status.read(pdfs[0], appmod.validation_ruleset())["state"] == "valid"
 
 
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
@@ -151,6 +154,8 @@ def test_xrechnung_writes_standalone_xml(client):
     xml = out / "Rechnung_2026-001.xml"
     assert xml.exists()  # einreichbare XRechnung
     assert b"xrechnung_3.0" in xml.read_bytes()  # korrekte CIUS-Spec-ID
+    assert appmod.validation_status.read(xml, appmod.validation_ruleset())["state"] == "valid"
+    assert appmod.validation_status.read(out / "Rechnung_2026-001.pdf", appmod.validation_ruleset()) is None
     d = client.get("/download/Rechnung_2026-001.xml")
     assert d.status_code == 200 and "xml" in d.headers["Content-Type"]
     assert "PDF + XML" in r.get_data(as_text=True)  # kombinierter Download angeboten
@@ -166,11 +171,18 @@ def test_xrechnung_writes_standalone_xml(client):
 @pytest.mark.skipif(not HAS_WEASYPRINT, reason="braucht WeasyPrint/Pango (Rendering)")
 def test_generate_retry_reuses_original_and_conflict_is_rejected(client):
     export_invoice(client, data=dict(_FORM))
-    original = (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").read_bytes()
+    path = appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf"
+    original = path.read_bytes()
+    receipt = appmod.validation_status.receipt_path(path)
+    record = json.loads(receipt.read_text())
+    record["ruleset"] = "old-rules"
+    receipt.write_text(json.dumps(record))
     retry = export_invoice(client, data=dict(_FORM))
     assert retry.status_code == 200
     assert len(list(appmod.OUTPUT_DIR.glob("*.pdf"))) == 1
     assert "bereits unverändert" in retry.get_data(as_text=True)
+    # Reuse returns the original file, not the newly rendered/checked bytes.
+    assert appmod.validation_status.read(path, appmod.validation_ruleset())["state"] == "rules_changed"
     conflict = export_invoice(client, data=dict(_FORM, unit_price="200"), follow_redirects=True)
     import re
     flashes = json.loads(re.search(r"window.FLASHES = (.*);", conflict.get_data(as_text=True)).group(1))
@@ -192,6 +204,7 @@ def _make_archive_entry(out, number="2026-001"):
         "items": [{"description": "Leistung", "quantity": "1",
                    "unit": "C62", "unit_price": "100"}],
     }), encoding="utf-8")
+    write_invoice_pdf(out / f"{stem}.pdf")
     return f"{stem}.pdf"
 
 
@@ -232,7 +245,7 @@ def test_archive_rows_offer_original_pdf_preview(client, has_sidecar):
     filename = _make_archive_entry(appmod.OUTPUT_DIR)
     if not has_sidecar:
         (appmod.OUTPUT_DIR / filename).with_suffix(".json").unlink()
-    doc = html.fromstring(client.get("/settings/panel").data)
+    doc = html.fromstring(client.get("/settings/panel?year=all").data)
     rows = doc.xpath('//tr[@class="arch-row"]')
     assert len(rows) == 1
     assert rows[0].get("data-preview-url") == "/archive/preview/" + filename + "?issuer=default"
@@ -298,6 +311,7 @@ def test_csv_export_escapes_formula_injection(client):
         "buyer": {"name": "=SUM(A1:A9)", "country": "DE"},
         "items": [{"description": "L", "quantity": "1", "unit": "C62", "unit_price": "100"}],
     }), encoding="utf-8")
+    write_invoice_pdf(out / "Rechnung_2026-001.pdf")
     body = client.get("/export/csv").get_data(as_text=True)
     assert "'=SUM(A1:A9)" in body          # mit ' entschärft
     assert ";=SUM(A1:A9)" not in body      # nicht roh als Formel
@@ -542,7 +556,7 @@ def test_archive_check_targets_xml_for_xrechnung(client):
     }), encoding="utf-8")
     # Hybrid-Eintrag ohne .xml daneben: prüft weiterhin das PDF.
     (out / "Rechnung_2026-002.pdf").write_bytes(b"%PDF-1.4")
-    html = client.get("/settings/panel").get_data(as_text=True)
+    html = client.get("/settings/panel?year=all").get_data(as_text=True)
     assert 'value="Rechnung_2026-001.xml"' in html
     assert 'value="Rechnung_2026-002.pdf"' in html
     # Die Prüfung der XML läuft direkt über den XML-Pfad (kein PDF-Extrakt).
@@ -564,14 +578,15 @@ def test_archive_shows_buyer_and_amount(client):
     }), encoding="utf-8")
     # Eintrag ohne Sidecar: Zeile bleibt ohne Kunde/Betrag, Panel rendert trotzdem.
     (out / "Rechnung_2026-004.pdf").write_bytes(b"%PDF-1.4")
-    html = client.get("/settings/panel").get_data(as_text=True)
+    html = client.get("/settings/panel?year=all").get_data(as_text=True)
     assert "Muster GmbH" in html
     assert "238,00" in html  # 2x100 netto + 19 %
     # Angezeigt wird die Rechnungsnummer (Datei nur als Tooltip) ...
-    import re as _re
-    assert _re.search(r'arch-file" title="Rechnung_2026-003\.pdf"><span class="arch-id">\s*2026-003\b', html)
+    from lxml.html import fromstring
+    page = fromstring(html)
+    assert page.xpath('//td[@title="Rechnung_2026-003.pdf"]//span[@class="arch-id"]/text()') == ["2026-003"]
     # ... ohne Sidecar wird die Nummer aus dem Tool-Namensschema abgeleitet.
-    assert _re.search(r'arch-file" title="Rechnung_2026-004\.pdf"><span class="arch-id">\s*2026-004\b', html)
+    assert page.xpath('//td[@title="Rechnung_2026-004.pdf"]//span[@class="arch-id"]/text()') == ["2026-004"]
 
 
 def test_check_updates_compares_version(client, monkeypatch):
@@ -618,6 +633,7 @@ def test_csv_storno_offsets_original(client):
                         "tax_treatment": "de_19"},
             "items": [{"quantity": "2", "unit_price": "100"}],
         }))
+        write_invoice_pdf(appmod.OUTPUT_DIR / f"{name}.pdf")
     rows = list(csv.DictReader(io.StringIO(client.get('/export/csv').get_data(as_text=True).lstrip('\ufeff')), delimiter=';'))
     assert [r['Brutto'] for r in rows] == ['238,00', '-238,00']
     assert rows[1]['Belegart'] == '381'
@@ -632,6 +648,19 @@ def _mock_generation(monkeypatch):
     monkeypatch.setattr(appmod, 'validate_schematron', lambda xml: {
         'available': True, 'ok': True, 'errors': [], 'error': None,
     })
+
+
+def test_generation_warns_when_only_validation_receipt_cannot_be_saved(client, monkeypatch):
+    _mock_generation(monkeypatch)
+    def fail_save(*args):
+        raise OSError('Disk full')
+    monkeypatch.setattr(appmod.validation_status, 'save', fail_save)
+    response = export_invoice(client, data=_FORM)
+    assert response.status_code == 200
+    assert appmod.translate('de')['validation_save_failed'] in response.text
+    pdf = appmod.OUTPUT_DIR / 'Rechnung_2026-001.pdf'
+    assert pdf.is_file() and pdf.with_suffix('.json').is_file()
+    assert appmod.validation_status.read(pdf, appmod.validation_ruleset())['state'] == 'unsaved'
 
 
 @pytest.mark.parametrize('sch', [
@@ -699,7 +728,7 @@ def test_uploaded_validation_requires_schematron(client, monkeypatch):
 
 @pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
 @pytest.mark.parametrize('with_sidecars', [False, True])
-def test_archive_orders_by_displayed_timestamp_not_number(client, endpoint, with_sidecars):
+def test_archive_orders_by_recorded_time_or_stable_number_when_unknown(client, endpoint, with_sidecars):
     import os
 
     from lxml import html
@@ -713,11 +742,12 @@ def test_archive_orders_by_displayed_timestamp_not_number(client, endpoint, with
         os.utime(pdf, (stamp, stamp))
         if with_sidecars:
             pdf.with_suffix('.json').write_text(json.dumps({
+                '_archive': {'created_at': datetime.fromtimestamp(stamp, UTC).isoformat()},
                 'invoice': {'number': number, 'issue_date': '2026-01-01'},
                 'buyer': {'name': 'Example Client'}, 'items': [],
             }))
     before = {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()}
-    page = html.fromstring(client.get(endpoint).data)
+    page = html.fromstring(client.get(endpoint + '?year=all').data)
     ordered = page.xpath('//button[contains(@class, "js-delete")]/@data-filename')
     assert ordered == [f'Rechnung_{n}.pdf' for n in reversed(numbers)]
     assert {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()} == before
@@ -735,7 +765,10 @@ def test_archive_sort_choices_use_numeric_numbers_and_customer_names(client, end
         # Creation order deliberately differs from number and customer order.
         stamp = 1_780_000_000 - index
         os.utime(pdf, (stamp, stamp))
-        pdf.with_suffix('.json').write_text(json.dumps({'invoice': {'number': number}, 'buyer': {'name': customer}}))
+        pdf.with_suffix('.json').write_text(json.dumps({
+            '_archive': {'created_at': datetime.fromtimestamp(stamp, UTC).isoformat()},
+            'invoice': {'number': number}, 'buyer': {'name': customer},
+        }))
 
     def numbers(url):
         page = html.fromstring(client.get(url).data)
@@ -749,15 +782,14 @@ def test_archive_sort_choices_use_numeric_numbers_and_customer_names(client, end
 
 
 @pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
-def test_archive_sort_keeps_csv_dates(client, endpoint):
+def test_archive_sort_keeps_year_filter(client, endpoint):
     from lxml import html
 
     (appmod.OUTPUT_DIR / 'Rechnung_2026-001.pdf').write_bytes(b'%PDF-1.4')
     page = html.fromstring(client.get(endpoint, query_string={
-        'sort': 'customer', 'export_from': '2026-07-01', 'export_to': '2026-09-30',
+        'sort': 'customer', 'year': 'all',
     }).data)
-    assert page.get_element_by_id('export-from').value == '2026-07-01'
-    assert page.get_element_by_id('export-to').value == '2026-09-30'
+    assert page.get_element_by_id('archive-year-select').value == 'all'
     assert page.get_element_by_id('archive-sort-select').value == 'customer'
 
 
