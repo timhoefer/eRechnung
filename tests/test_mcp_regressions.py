@@ -45,12 +45,19 @@ def test_invalid_session_cannot_enable_or_approve(client, action, session_state)
 
 @pytest.mark.parametrize("document_type", ["381", "384"])
 @pytest.mark.parametrize("source_changed", [False, True])
-def test_correction_review_matches_effective_archived_invoice(client, document_type, source_changed):
+@pytest.mark.parametrize("source_format", ["pdf", "xml"])
+def test_correction_review_matches_effective_archived_invoice(client, document_type, source_changed, source_format):
     token = grant(client)
     arguments = invoice_args()
+    if source_format == "xml":
+        arguments["invoice"]["profile"] = "xrechnung"
     original = call(token, "create_invoice", **arguments)
     assert decide(client, original["request_id"]).status_code == 303
     filename = call(token, "request_status", request_id=original["request_id"])["result"]["filename"]
+    if source_format == "xml":
+        pdf = m.OUTPUT_DIR / filename
+        pdf.unlink()
+        filename = pdf.with_suffix(".xml").name
     add_other()
     retired = call(token, "deactivate_issuer", issuer="default")
     assert decide(client, retired["request_id"]).status_code == 303

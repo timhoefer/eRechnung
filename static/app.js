@@ -1124,7 +1124,7 @@ function scaleMiniPreview() {
   const wrap = inner && inner.parentElement;
   if (!frame || !inner || !wrap) return;
   const wrapW = wrap.clientWidth;
-  const isPdf = frame.dataset.previewType === "pdf";
+  const isPdf = !!frame.dataset.previewType; // Archived PDFs and XML text size themselves.
   // Nur bei tatsächlicher Breitenänderung neu skalieren -> verhindert eine
   // ResizeObserver-Rückkopplung (Zittern beim Öffnen, bevor das Layout steht).
   if (wrapW <= 0 || (wrapW === scaleMiniPreview._lastW && isPdf === scaleMiniPreview._lastPdf)) return;
@@ -1176,7 +1176,7 @@ function checkMiniPages() {
   const hint = document.getElementById("preview-pages-hint");
   if (!frame || !hint) return;
   const measure = () => {
-    if (settingsOpen || frame.dataset.previewType === "pdf") {
+    if (settingsOpen || frame.dataset.previewType) {
       hint.textContent = "";
       hint.hidden = true;
       return;
@@ -2038,6 +2038,22 @@ async function switchLanguage(url) {
     if (!(await flushSellerSaves())) return;
     const form = document.getElementById("invoice-form");
     if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
+    if (settingsOpen) {
+      const pane = document.getElementById("settings-pane");
+      const archiveForm = pane.querySelector("#archive-issuer-form");
+      const panelUrl = new URL(archiveForm?.action || settingsPanelUrl || window.SETTINGS_PANEL_URL, window.location.href);
+      if (archiveForm) {
+        panelUrl.search = new URLSearchParams(new FormData(archiveForm)).toString();
+        // Loading locks the filters at the currently visible archive values.
+        // FormData omits disabled controls; retain them for language restoration.
+        for (const select of archiveForm.querySelectorAll("select:disabled")) {
+          panelUrl.searchParams.set(select.name, select.value);
+        }
+      }
+      sessionStorage.setItem(languageDraftKey() + ":settings", JSON.stringify({
+        url: panelUrl.href, selection: window.ArchiveSelection?.capture(pane),
+      }));
+    }
     window.location.assign(url);
   } catch (error) {
     changeError(error);
@@ -2297,12 +2313,12 @@ function setPreviewHead(label) {
 
 // Original-PDF direkt laden: Layout, Seitenumbrüche und Daten bleiben erhalten.
 // Beim Zeilenwechsel verwirft der Browser die vorherige iframe-Navigation.
-function showInvoicePreview(url, label) {
+function showInvoicePreview(url, label, type = "pdf") {
   const frame = document.getElementById("preview-frame");
   if (!frame) return;
-  frame.dataset.previewType = "pdf";
+  frame.dataset.previewType = type;
   frame.removeAttribute("srcdoc");
-  frame.src = url + "#toolbar=0&navpanes=0&view=FitH";
+  frame.src = url + (type === "pdf" ? "#toolbar=0&navpanes=0&view=FitH" : "");
   scaleMiniPreview();
   checkMiniPages();
   setPreviewHead(label);
@@ -2313,9 +2329,9 @@ function previewRow(row) {
   const key = row.dataset.previewUrl || row.dataset.viewUrl;
   if (!key || key === lastPreviewUrl) return;
   lastPreviewUrl = key;
-  const fileCell = row.querySelector("td");
+  const fileCell = row.querySelector(".arch-id");
   const label = fileCell ? fileCell.textContent.trim() : "";
-  if (row.dataset.previewUrl) showInvoicePreview(row.dataset.previewUrl, label);
+  if (row.dataset.previewUrl) showInvoicePreview(row.dataset.previewUrl, label, row.dataset.previewType);
   else showNoPreview(label);
 }
 
@@ -2359,7 +2375,7 @@ function loadDepsAsync() {
 
 let settingsPanelUrl;
 let settingsPanelLoadId = 0;
-async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options) {
+async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options, keepSelection = false, initialSelection = null) {
   const pane = document.getElementById("settings-pane");
   if (!pane || !url) return false;
   const loadId = ++settingsPanelLoadId;
@@ -2368,14 +2384,10 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     if (!response.ok) throw new Error("archive load failed");
     const html = await response.text();
     if (loadId !== settingsPanelLoadId) return false;
-    // Read just before replacement, so edits made during loading also survive.
-    const csvDates = ["export-from", "export-to"].map(id => [id, document.getElementById(id)?.value]);
+    const selection = keepSelection ? window.ArchiveSelection?.capture(pane) : initialSelection;
     settingsPanelUrl = url;
     pane.innerHTML = html;
-    for (const [id, value] of csvDates) {
-      const input = document.getElementById(id);
-      if (input && value !== undefined) input.value = value;
-    }
+    window.ArchiveSelection?.init(pane, selection);
     loadDepsAsync();
     return true;
   } catch (error) {
@@ -2389,6 +2401,7 @@ async function switchArchive(form) {
   const url = new URL(form.action, window.location.href);
   url.search = new URLSearchParams(new FormData(form)).toString();
   const selects = form.querySelectorAll("select");
+  const keepSelection = window.ArchiveSelection?.isSortChange(form);
   form.ariaBusy = "true";
   // Until loading succeeds, the label must still describe the visible invoices.
   // Lock both controls so a second change cannot submit the rolled-back issuer.
@@ -2397,7 +2410,7 @@ async function switchArchive(form) {
     select.disabled = true;
   });
   try {
-    if (await loadSettingsPanel(url.toString())) {
+    if (await loadSettingsPanel(url.toString(), undefined, keepSelection)) {
       lastPreviewUrl = null;
       showNoPreview(window.MSG_LIVE_PREVIEW);
     }
@@ -2422,7 +2435,7 @@ async function saveDataDirectory(form) {
   }
 }
 
-function openSettings() {
+function openSettings(initialSelection = null) {
   const pane = document.getElementById("settings-pane");
   const content = document.getElementById("form-content");
   const btn = document.getElementById("settings-toggle");
@@ -2430,7 +2443,7 @@ function openSettings() {
   settingsOpen = true;
   if (_previewAbort) _previewAbort.abort();
   checkMiniPages();
-  const loading = loadSettingsPanel();
+  const loading = loadSettingsPanel(undefined, undefined, false, initialSelection);
   const loadId = settingsPanelLoadId;
   if (btn) {
     btn.textContent = btn.dataset.close;
@@ -2473,7 +2486,7 @@ function closeSettings() {
   if (!pane || !toggle) return;
   toggle.addEventListener("click", () => (settingsOpen ? closeSettings() : openSettings()));
   pane.addEventListener("change", (e) => {
-    if (["archive-issuer-select", "archive-sort-select"].includes(e.target.id)) e.target.form.requestSubmit();
+    if (["archive-issuer-select", "archive-sort-select", "archive-year-select"].includes(e.target.id)) e.target.form.requestSubmit();
   });
 
   // Archiv-Zeile in der Vorschau zeigen – bei Hover UND bei Tastaturfokus.
@@ -2496,6 +2509,11 @@ function closeSettings() {
   });
 
   pane.addEventListener("click", (e) => {
+    const dismissResult = e.target.closest("[data-dismiss-result]");
+    if (dismissResult) {
+      dismissResult.closest(".validation-result").remove();
+      return;
+    }
     // Aktion im Overflow-Menü (⋯) gewählt -> Menü schließen, Aktion läuft weiter.
     if (e.target.closest(".row-menu-list")) {
       const menu = e.target.closest("details.row-menu");
@@ -2557,7 +2575,11 @@ function closeSettings() {
     const csvBtn = e.target.closest(".csv-export-btn");
     if (csvBtn) {
       e.preventDefault();
-      fetch(csvBtn.dataset.url).catch(() => flashError());
+      fetch(csvBtn.dataset.url, {headers: {"X-Requested-With": "fetch"}})
+        .then(async response => {
+          const data = await response.json();
+          if (!response.ok || !data.ok) flashError(data.message);
+        }).catch(() => flashError());
       return;
     }
     // Datenordner durchsuchen (nativer Dialog).
@@ -2566,44 +2588,8 @@ function closeSettings() {
       browseDataDir(browse, pane.querySelector("#data-dir-input"));
       return;
     }
-    // Export-Preset (Jahr/Quartal) -> Datumsfelder füllen.
-    const preset = e.target.closest("[data-preset]");
-    if (preset) {
-      const from = pane.querySelector("#export-from");
-      const to = pane.querySelector("#export-to");
-      if (from && to) {
-        const y = new Date().getFullYear();
-        const iso = (yy, m, d) => `${yy}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-        const ranges = {
-          thisyear: [iso(y, 1, 1), iso(y, 12, 31)],
-          lastyear: [iso(y - 1, 1, 1), iso(y - 1, 12, 31)],
-          q1: [iso(y, 1, 1), iso(y, 3, 31)],
-          q2: [iso(y, 4, 1), iso(y, 6, 30)],
-          q3: [iso(y, 7, 1), iso(y, 9, 30)],
-          q4: [iso(y, 10, 1), iso(y, 12, 31)],
-        };
-        const r = ranges[preset.dataset.preset];
-        if (r) { from.value = r[0]; to.value = r[1]; }
-      }
-      return;
-    }
-    // CSV-Export (Bulk, gefiltert über Datumsbereich).
-    if (e.target.closest("#export-csv")) {
-      const from = (pane.querySelector("#export-from") || {}).value || "";
-      const to = (pane.querySelector("#export-to") || {}).value || "";
-      const qs = new URLSearchParams();
-      if (from) qs.set("from", from);
-      if (to) qs.set("to", to);
-      const q = qs.toString();
-      const baseUrl = e.target.closest("#export-csv").dataset.url;
-      const url = baseUrl + (q ? (baseUrl.includes("?") ? "&" : "?") + q : "");
-      // Desktop: Server schreibt die CSV + zeigt sie im Finder (kein Download).
-      if (window.IS_DESKTOP) fetch(url).catch(() => flashError());
-      else window.location = url;
-      return;
-    }
     // Klick auf die Zeile (nicht auf Links/Buttons) -> PDF im Tab öffnen.
-    if (e.target.closest("a, button")) return;
+    if (e.target.closest("a, button, input, label, summary, details")) return;
     const row = e.target.closest(".arch-row");
     if (row && row.dataset.viewUrl) window.open(row.dataset.viewUrl, "_blank");
   });
@@ -2622,6 +2608,22 @@ function closeSettings() {
     }
   });
 })();
+
+async function restoreSettingsAfterLanguage() {
+  const key = languageDraftKey() + ":settings";
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return;
+    sessionStorage.removeItem(key);
+    const saved = JSON.parse(raw);
+    const url = new URL(saved.url, window.location.href);
+    // Restore only this app's settings, once, in the same tab and data scope.
+    if (url.origin !== window.location.origin || url.pathname !== "/settings/panel") return;
+    settingsPanelUrl = url.href;
+    await openSettings(saved.selection);
+  } catch { /* A stale view must not prevent using the invoice form. */ }
+}
+restoreSettingsAfterLanguage();
 
 // === Hinweis bei bereits vergebener Rechnungsnummer (blockiert NICHT) ========
 // Doppelte Nummern bleiben erlaubt (z. B. Korrekturrechnungen) – wir weisen nur hin.

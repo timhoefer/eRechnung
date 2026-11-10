@@ -7,32 +7,32 @@ manuell erreichbar. ANNOUNCEMENT = None deaktiviert auch den Menüeintrag.
 from typing import Any
 
 ANNOUNCEMENT: dict[str, Any] | None = {
-    "id": "issuer-profiles-1.2.0",
-    "version": "1.2.0",
+    "id": "archive-and-csv-1.3.0",
+    "version": "1.3.0",
     "auto_open": True,
     "items": [
         {
-            "icon": "invoice",
-            "title": {"de": "Mehrere Rechnungsaussteller", "en": "Multiple invoice issuers"},
-            "text": {
-                "de": "Lege weitere Stammdaten an, etwa für deine freiberufliche Tätigkeit und deine Firma. Jedes Profil hat eigene Bankdaten, Rechnungsnummern und ein eigenes Archiv.",
-                "en": "Add issuer profiles for your freelance work and your company. Each profile has its own bank details, invoice numbering and archive.",
-            },
-        },
-        {
-            "icon": "globe",
-            "title": {"de": "Einfach wechseln", "en": "Switch with ease"},
-            "text": {
-                "de": "Bei mehreren Profilen wechselst du direkt in der Stammdaten-Kopfzeile und legst einen Standard für den App-Start fest. Kunden bleiben gemeinsam nutzbar.",
-                "en": "With multiple profiles, switch directly in the issuer header and choose a default for app startup. Your customer list stays shared.",
-            },
-        },
-        {
             "icon": "archive",
-            "title": {"de": "Archive bleiben erhalten", "en": "Keep your archives"},
+            "title": {"de": "Dein Archiv im Überblick", "en": "Your archive at a glance"},
             "text": {
-                "de": "Entfernte Profile bleiben mit ihren Belegen im Archiv. Dort kannst du Stornos und Korrekturen erstellen oder das Profil mit seiner bisherigen Nummernfolge reaktivieren.",
-                "en": "Removed profiles and their invoices remain in the archive. Create cancellations and corrections there, or reactivate a profile with its existing invoice sequence.",
+                "de": "Filtere Rechnungen nach Jahr und Aussteller oder zeige alle Aussteller gemeinsam an. Auch reine XML-Rechnungen findest du jetzt im Archiv.",
+                "en": "Filter invoices by year and issuer, or view all issuers together. XML-only invoices now appear in the archive too.",
+            },
+        },
+        {
+            "icon": "invoice",
+            "title": {"de": "CSV-Export nach deiner Auswahl", "en": "Export your selection to CSV"},
+            "text": {
+                "de": "Wähle einzelne Rechnungen, alle angezeigten Belege oder ganze Quartale aus. Vor dem Export gleicht eRechnung die Werte mit der archivierten XML ab.",
+                "en": "Select individual invoices, all displayed invoices or entire quarters. Before exporting, eRechnung checks the values against the archived XML.",
+            },
+        },
+        {
+            "icon": "invoice",
+            "title": {"de": "XML-Prüfstatus direkt sichtbar", "en": "See the XML validation status"},
+            "text": {
+                "de": "Der XML-Chip zeigt die technische Prüfung der unveränderten Rechnungsdaten. Über das Zeilenmenü kannst du jederzeit erneut prüfen. Der Status bewertet nicht die steuerliche Richtigkeit.",
+                "en": "The XML badge shows technical validation of unchanged invoice data. Run another check at any time from the row menu. This status does not assess tax correctness.",
             },
         },
     ],

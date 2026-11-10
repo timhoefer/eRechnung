@@ -11,7 +11,7 @@ from mcp.client.stdio import StdioServerParameters
 from test_mcp_access import BUYER, call, configure, decide, disable, grant
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
-from test_mcp_customer_scope import PRIVATE, scoped_grant
+from test_mcp_customer_scope import PRIVATE, scoped_grant, seed_archive
 from test_mcp_key_rotation import configured_token, setup_form
 from werkzeug.serving import make_server
 
@@ -32,6 +32,11 @@ def test_real_stdio_client_discovery_scopes_approval_and_revocation(client, entr
     credential = scoped_grant(client) if customer_mode == "selected" else grant(client)
     m._write_json(m.CUSTOMERS_FILE, [*m.load_customers(), PRIVATE])
     original_customers = m.load_customers()
+    filename = seed_archive("UNDATED", BUYER, original_customers[0].get("_customer_id"))
+    sidecar = (m.OUTPUT_DIR / filename).with_suffix(".json")
+    archived = json.loads(sidecar.read_text())
+    archived["invoice"]["issue_date"] = None
+    sidecar.write_text(json.dumps(archived))
     server = make_server("127.0.0.1", 0, m.app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -60,6 +65,10 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             result = await agent.call_tool("list_issuers", {})
             assert result.structured_content["issuers"][0]["id"] == "default"
             customers = (await agent.call_tool("list_customers", {})).structured_content["customers"]
+            archive = await agent.call_tool("list_invoices", {"issuer": "default"})
+            assert not archive.is_error
+            assert [row["filename"] for row in archive.structured_content["invoices"]] == [filename]
+            json.dumps(archive.structured_content, allow_nan=False)
             deletion = {"issuer": "default", "name": BUYER["name"]}
             if customer_mode == "selected":
                 assert len(customers) == 1 and customers[0]["name"] == BUYER["name"]

@@ -4,7 +4,7 @@ from datetime import date
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from helpers import confirmed_post, export_invoice
+from helpers import confirmed_post, export_invoice, pdf_with_xml
 from lxml import html
 
 import app as appmod
@@ -63,10 +63,8 @@ def revision(client, issuer="default"):
 
 @pytest.fixture
 def fast_generation(monkeypatch):
-    monkeypatch.setattr(appmod, "build_xml", lambda data: b"<xml/>")
-    monkeypatch.setattr(appmod, "build_pdf", lambda markup, xml: b"%PDF-test")
-    monkeypatch.setattr(appmod, "render_html_pdf", lambda markup: b"%PDF-test")
-    monkeypatch.setattr(appmod, "extract_xml_from_pdf", lambda pdf: b"<xml/>")
+    monkeypatch.setattr(appmod, "build_pdf", lambda markup, xml: pdf_with_xml(xml))
+    monkeypatch.setattr(appmod, "render_html_pdf", lambda markup: pdf_with_xml(None))
     monkeypatch.setattr(appmod, "validate_xml_bytes", lambda xml: (True, []))
     monkeypatch.setattr(appmod, "validate_schematron",
                         lambda xml: {"available": True, "ok": True, "errors": [], "warnings": []})
@@ -232,6 +230,11 @@ def test_retired_issuer_archive_is_accessible_but_cannot_issue_or_edit(client, f
     monkeypatch.setattr(appmod, "reveal_in_finder", lambda path: path.parent == archive)
     assert confirmed_post(client, f"/reveal/{filename}?issuer={target}").json["ok"]
     assert confirmed_post(client, f"/settings/panel?issuer={target}", data={"filename": filename[:-4] + ".xml"}).status_code == 200
+    # Manual checks may refresh their disposable receipt, never the documents.
+    assert {p.name: p.read_bytes() for p in archive.iterdir() if p.suffix != ".validation"} == {
+        name: raw for name, raw in before.items() if not name.endswith(".validation")
+    }
+    before = {p.name: p.read_bytes() for p in archive.iterdir()}
     monkeypatch.setattr(appmod, "drafthorse_version_info", lambda: {})
     page = html.fromstring(client.get(f"/validate?issuer={target}").data)
     back = page.xpath('//p[@class="back-link"]/a/@href')[0]
@@ -272,10 +275,10 @@ def test_default_change_cannot_retarget_existing_legacy_archive_links(client):
     filename = "same.pdf"
     (appmod.OUTPUT_DIR / filename).write_bytes(b"Legacy original")
     (directory / "output" / filename).write_bytes(b"Company original")
-    page = html.fromstring(client.get("/settings/panel?issuer=default").data)
+    page = html.fromstring(client.get("/settings/panel?issuer=default&year=all").data)
     view = page.xpath('//tr[@class="arch-row"]/@data-preview-url')[0]
     delete = page.xpath('//button[contains(@class, "js-delete")]/@data-url')[0]
-    export = page.get_element_by_id("export-csv").get("data-url")
+    export = page.get_element_by_id("archive-selection").get("action")
     assert confirmed_post(client, "/issuers/default", data={"issuer": issuer}).json["ok"]
     assert client.get(view).data == b"Legacy original"
     assert parse_qs(urlparse(export).query)["issuer"] == ["default"]
@@ -444,32 +447,19 @@ def test_archive_preview_download_csv_template_and_delete_are_scoped(client, fas
 
 
 @pytest.mark.parametrize("endpoint", ["/settings/panel", "/validate"])
-@pytest.mark.parametrize("dates", [
-    ("2026-07-01", "2026-09-30"), ("2026-07-01", ""), ("", ""),
-])
-def test_csv_dates_survive_empty_archive_issuer_roundtrip(client, endpoint, dates):
+@pytest.mark.parametrize("year", [str(YEAR), str(YEAR - 1), "all", "unknown"])
+def test_archive_year_survives_empty_issuer_roundtrip(client, endpoint, year):
     empty_issuer, _ = add_issuer(client, "Empty Company")
     (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").write_bytes(b"%PDF-test")
-    page = html.fromstring(client.get(endpoint, query_string={"issuer": "default", "sort": "customer"}).data)
-    for field_id, value in zip(("export-from", "export-to"), dates, strict=True):
-        page.get_element_by_id(field_id).value = value
-
-    def switch_issuer(page, issuer):
+    page = html.fromstring(client.get(endpoint, query_string={"issuer": "default", "sort": "customer", "year": year}).data)
+    for issuer in (empty_issuer, empty_issuer, "default", "all"):
         form = page.get_element_by_id("archive-issuer-form")
-        values = dict(form.form_values())
-        # Include controls outside the form that belong to it via form="...".
-        values.update((el.name, el.value) for el in page.xpath('//input[@form="archive-issuer-form"]'))
-        values["issuer"] = issuer
-        return html.fromstring(client.get(form.action, query_string=values).data)
-
-    # Also sort and reload while the archive is empty before returning.
-    for issuer in (empty_issuer, empty_issuer, "default"):
-        page = switch_issuer(page, issuer)
-        assert page.get_element_by_id("export-from").value == dates[0]
-        assert page.get_element_by_id("export-to").value == dates[1]
+        values = dict(form.form_values(), issuer=issuer)
+        page = html.fromstring(client.get(form.action, query_string=values).data)
+        assert page.get_element_by_id("archive-year-select").value == year
         assert page.get_element_by_id("archive-issuer-select").value == issuer
-        export_box = page.xpath('//div[@class="export-box"]')[0]
-        assert ("hidden" in export_box.attrib) == (issuer == empty_issuer)
+        assert page.get_element_by_id("archive-sort-select").value == values["sort"]
+        assert bool(page.xpath('//form[@id="archive-selection"]')) == (issuer != empty_issuer and year in {"all", "unknown"})
         page.get_element_by_id("archive-sort-select").value = "number"
 
 

@@ -63,6 +63,8 @@ def test_interrupted_commit_is_completed_on_retry(setup, monkeypatch, failure):
         with pytest.raises(OSError):
             publish(source, data)
     assert (output / ".archive-pending/manifest.json").exists()
+    staged_sidecar = next((output / ".archive-pending").glob("Rechnung_*.json"))
+    original_created_at = json.loads(staged_sidecar.read_text())["_archive"]["created_at"]
     if failure != "number":
         assert not list(output.glob("*.pdf"))
     # A PDF, if visible, already has every associated invoice file.
@@ -72,6 +74,7 @@ def test_interrupted_commit_is_completed_on_retry(setup, monkeypatch, failure):
     retry = publish(source, data)
     assert retry["reused"]
     assert len(list(output.glob("*.pdf"))) == 1
+    assert json.loads((output / staged_sidecar.name).read_text())["_archive"]["created_at"] == original_created_at
     assert not (output / ".archive-pending").exists()
     assert read_seller(source)["last_invoice_number"] == data["invoice"]["number"]
 

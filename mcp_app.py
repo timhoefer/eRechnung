@@ -370,7 +370,10 @@ def register(m):
             if customer_scope.mode(connection) == "none":
                 return {"ok": True, "invoices": []}
             customers = customer_records()
-            return {"ok": True, "invoices": [entry for entry in m._settings_context()["archive"]
+            # The UI defaults to the current year; MCP promises the full granted
+            # archive. Its internal sort sentinel (-inf for undated rows) is not JSON.
+            return {"ok": True, "invoices": [{k: v for k, v in entry.items() if k != "created_sort"}
+                    for entry in m._settings_context(archive_year="all")["archive"]
                     if customer_scope.permitted_invoice(connection, m.correction_original(entry["filename"]), customers)]}
         if operation in {"get_invoice", "get_invoice_file"}:
             filename = arguments["filename"]

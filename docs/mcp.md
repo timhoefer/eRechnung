@@ -112,7 +112,7 @@ Rechnungen, öffentlichen Repositories oder Fehlerberichten teilen.
 | Format | `invoice_schema` | Felder, Einheiten und Steuerarten abfragen |
 | Stammdaten | `list_issuers`, `get_issuer` | Nur explizit freigegebene Aussteller, einschließlich deaktivierter Profile |
 | Kunden | `list_customers` | Nur freigegebene Kunden inklusive ihrer gespeicherten Positionen durchsuchen |
-| Archiv | `list_invoices`, `get_invoice`, `get_invoice_file` | Nur Belege innerhalb der Aussteller- und Kundenfreigabe lesen, einschließlich unveränderter PDF-/XML-Dateien |
+| Archiv | `list_invoices`, `get_invoice`, `get_invoice_file` | Nur Belege innerhalb der Aussteller- und Kundenfreigabe lesen, über alle Jahre einschließlich undatierter und reiner XML-Belege |
 | Vorbereitung | `next_number`, `check_invoice`, `preview_invoice` | Nummer vorschlagen, XML prüfen, als Entwurf markiertes PDF erzeugen; ohne Nummernreservierung oder Archivänderung |
 | Erstellen | `create_invoice` | Endgültige Rechnung erst nach Prüfung und App-Bestätigung erstellen |
 | Bearbeiten | `save_customer`, `save_customer_items`, `save_issuer` | Neue Kundendaten speichern; Änderungen bestehender Daten benötigen App-Bestätigung |
@@ -123,6 +123,13 @@ Rechnungen, öffentlichen Repositories oder Fehlerberichten teilen.
 Beim XML-Abruf wird für ZUGFeRD das unveränderte XML aus dem archivierten PDF
 ausgelesen, für XRechnung die archivierte XML-Datei. Die App erzeugt dafür kein
 neues XML aus aktuellen Stammdaten.
+
+Die MCP-Archivliste verwendet keinen Jahresfilter der Oberfläche. Sie liefert auch
+den gespeicherten XML-Prüfstatus; dieser gilt nur für die geprüften Dateiinhalte und
+Prüfregeln, nicht für die steuerliche Richtigkeit. Für Dateiabrufe, Vorlagen und
+Korrekturen ist weiterhin ein gespeicherter Rechnungsschnappschuss erforderlich.
+Reine XRechnungen mit Schnappschuss können über ihren XML-Dateinamen gelesen,
+als Korrekturgrundlage verwendet und nach App-Bestätigung gelöscht werden.
 
 Schreibende Werkzeuge benötigen die zusätzliche Änderungsberechtigung. Neue
 Kundendatensätze erfordern zusätzlich **Alle Kunden**. Neue Datensätze und Reaktivierungen sind keine destruktiven Änderungen und
@@ -238,6 +245,11 @@ stdio mit einer isolierten App und prüft Widerruf sowie die fehlende Möglichke
 unveränderte Kundenfreigaben/Rechte/Pausen, gesperrte alte Schlüssel und veraltete
 oder parallele Bestätigungen. Ein echter SDK-Test prüft zusätzlich den nötigen
 Schlüsselwechsel im Client und die weiter geltenden Kunden- und Bestätigungsregeln.
+`tests/test_mcp_archive_integration.py` prüft die Verbindung mit dem Archiv ab
+Version 1.3: alle Jahre, undatierte Belege, reine XML-Rechnungen, gespeicherte
+Prüfergebnisse und erneute Löschbestätigung nach einer externen Dateiänderung.
+Die Kunden- und Ausstellerfreigaben gelten dabei unverändert. Die Protokolltests
+prüfen auch undatierte Archivzeilen über einen echten MCP-Client.
 Die macOS-CI startet zusätzlich die gebündelte App mit `--mcp` und prüft
 Protokollinitialisierung, Werkzeugliste und Ablehnung ohne Freigabe.
 Sie prüft auch den tatsächlichen App-Start aus dem ZIP in einem neuen temporären

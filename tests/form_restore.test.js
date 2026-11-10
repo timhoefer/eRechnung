@@ -445,28 +445,40 @@ test("archive controls block overlapping switches until the chosen issuer is loa
   assert.equal(sort.disabled, false);
 });
 
-test("sorting preserves CSV dates, including edits made while the archive is loading", async () => {
+test("reloading the archive initializes a fresh selection for its current filters", async () => {
   const {app, pane} = settingsView();
-  let from = {value: "2026-07-01"};
-  let to = {value: "2026-09-30"};
-  const getElement = app.document.getElementById;
-  app.document.getElementById = id => ({"export-from": from, "export-to": to}[id] || getElement(id));
-  let html = pane.innerHTML;
-  Object.defineProperty(pane, "innerHTML", {
-    get() { return html; },
-    set(value) { html = value; from = {value: "2026-07-01"}; to = {value: "2026-09-30"}; },
-  });
+  const initialized = [];
+  app.window.ArchiveSelection = {init: root => initialized.push(root)};
+  app.fetch = async () => ({ok: true, text: async () => "Filtered archive"});
+  await app.loadSettingsPanel("/settings/panel?issuer=all&year=2025");
+  assert.equal(pane.innerHTML, "Filtered archive");
+  assert.deepEqual(initialized, [pane]);
+});
+
+test("sorting the in-place archive restores the latest selection after a successful response", async () => {
+  const {app, pane} = settingsView();
+  app.URL = URL;
+  app.URLSearchParams = URLSearchParams;
+  app.window.location = {href: "http://localhost/"};
+  app.showNoPreview = () => {};
+  const sort = {name: "sort", value: "number", options: [{value: "created", defaultSelected: true}, {value: "number"}]};
+  const form = {action: "/settings/panel", querySelectorAll: () => [sort]};
+  app.FormData = class { constructor() { return new URLSearchParams({issuer: "all", year: "2026", sort: sort.value}); } };
+  let selection = {entries: ["first"]};
+  const restored = [];
+  app.window.ArchiveSelection = {
+    isSortChange: actual => { assert.equal(actual, form); assert.equal(sort.value, "number"); return true; },
+    capture: root => { assert.equal(root, pane); assert.equal(pane.innerHTML, "Current archive"); return selection; },
+    init: (root, state) => restored.push({root, state}),
+  };
   let finish;
   app.fetch = () => new Promise(resolve => { finish = resolve; });
-  const loading = app.loadSettingsPanel("/settings/panel?sort=number");
-  // The latest input, not the range captured by the request, must survive.
-  from.value = "2026-10-01";
-  to.value = "";
+  const loading = app.switchArchive(form);
+  selection = {entries: ["changed while loading"]};
   finish({ok: true, text: async () => "Sorted archive"});
   await loading;
   assert.equal(pane.innerHTML, "Sorted archive");
-  assert.equal(from.value, "2026-10-01");
-  assert.equal(to.value, "");
+  assert.deepEqual(restored, [{root: pane, state: selection}]);
 });
 
 test("data folder conflicts are shown without reloading the archive or changing draft scope", async () => {
@@ -515,6 +527,112 @@ function masterForm() {
   app.FormData = class extends Map { constructor() { super([["name", fields.name], ["seller_revision", revision.value]]); } };
   app.updatePreview = app.flashError = () => {};
   return {app, revision, fields, notice, details};
+}
+
+for (const language of ['en', 'de']) {
+  test(`switching to ${language} restores settings, archive filters and selection once`, async () => {
+    const {app, pane, content, button} = settingsView();
+    app.URL = URL;
+    app.URLSearchParams = URLSearchParams;
+    const selected = {scope: 'same-folder:all:2025', entries: ['["other","Invoice.xml"]']};
+    const restored = [];
+    app.window.ArchiveSelection = {capture: () => selected, init: (root, state) => restored.push(state)};
+    const archiveForm = {action: '/settings/panel', querySelectorAll: () => []};
+    pane.querySelector = () => archiveForm;
+    app.FormData = class extends URLSearchParams {
+      constructor() { super({issuer: 'all', year: '2025', sort: 'customer'}); }
+    };
+    const storage = new Map();
+    app.sessionStorage = {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)};
+    let destination;
+    app.window.location = {href: 'http://localhost/?issuer=current', origin: 'http://localhost', assign: url => { destination = url; }};
+    app.flushSellerSaves = async () => true;
+    const requests = [];
+    app.fetch = async url => { requests.push(url); return {ok: true, text: async () => 'Translated archive'}; };
+    await app.openSettings();
+    await app.switchLanguage('/setlang/' + language);
+    assert.equal(destination, '/setlang/' + language);
+    app.closeSettings(); // Simulate the initial invoice screen after navigation.
+    await app.restoreSettingsAfterLanguage();
+    assert.equal(requests.at(-1), 'http://localhost/settings/panel?issuer=all&year=2025&sort=customer');
+    assert.equal(pane.hidden, false);
+    assert.equal(content.hidden, true);
+    assert.equal(button.textContent, 'Close');
+    assert.deepEqual(JSON.parse(JSON.stringify(restored.at(-1))), selected);
+    const count = requests.length;
+    await app.restoreSettingsAfterLanguage();
+    assert.equal(requests.length, count);
+  });
+}
+
+for (const language of ['en', 'de']) {
+  for (const [field, value] of [['issuer', 'current'], ['year', '2026'], ['sort', 'number']]) {
+    test(`switching to ${language} during archive ${field} loading preserves visible filters and selection`, async () => {
+      const {app, pane, content} = settingsView();
+      app.URL = URL;
+      app.URLSearchParams = URLSearchParams;
+      const controls = Object.entries({issuer: 'all', year: '2025', sort: 'customer'}).map(([name, value]) => ({
+        name, value, disabled: false, options: [{value, defaultSelected: true}],
+      }));
+      const form = {
+        action: '/settings/panel',
+        querySelectorAll: selector => selector === 'select:disabled' ? controls.filter(c => c.disabled) : controls,
+      };
+      pane.querySelector = () => form;
+      // Like browser FormData, exclude temporarily disabled archive filters.
+      app.FormData = class extends URLSearchParams {
+        constructor() { super(controls.filter(c => !c.disabled).map(c => [c.name, c.value])); }
+      };
+      const selected = {scope: 'same-folder:all:2025', entries: ['["other","Invoice.xml"]']};
+      const restored = [];
+      app.window.ArchiveSelection = {
+        isSortChange: () => field === 'sort', capture: () => selected,
+        init: (root, state) => restored.push(state),
+      };
+      const storage = new Map();
+      app.sessionStorage = {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)};
+      let destination;
+      app.window.location = {href: 'http://localhost/?issuer=current', origin: 'http://localhost', assign: url => { destination = url; }};
+      app.flushSellerSaves = async () => true;
+      app.fetch = async () => ({ok: true, text: async () => 'Current archive'});
+      await app.openSettings();
+
+      controls.find(c => c.name === field).value = value;
+      let finish;
+      app.fetch = () => new Promise(resolve => { finish = resolve; });
+      const loading = app.switchArchive(form);
+      assert.ok(controls.every(c => c.disabled));
+      await app.switchLanguage('/setlang/' + language);
+      assert.equal(destination, '/setlang/' + language);
+      // Navigation interrupts the pending load; it must not be needed for restoration.
+      finish({ok: false});
+      await loading;
+      app.closeSettings();
+      let restoredUrl;
+      app.fetch = async url => { restoredUrl = url; return {ok: true, text: async () => 'Translated archive'}; };
+      await app.restoreSettingsAfterLanguage();
+      const params = new URL(restoredUrl).searchParams;
+      assert.equal(params.get('issuer'), 'all');
+      assert.equal(params.get('year'), '2025');
+      assert.equal(params.get('sort'), 'customer');
+      assert.deepEqual(JSON.parse(JSON.stringify(restored.at(-1))), selected);
+      assert.equal(pane.hidden, false);
+      assert.equal(content.hidden, true);
+    });
+  }
+}
+
+for (const destination of ['https://other.example/settings/panel', '/generate']) {
+  test(`language restoration ignores an invalid settings destination: ${destination}`, async () => {
+    const {app, pane, content} = settingsView();
+    app.URL = URL;
+    app.window.location = {href: 'http://localhost/', origin: 'http://localhost'};
+    app.sessionStorage = {getItem: () => JSON.stringify({url: destination}), removeItem() {}};
+    app.fetch = () => { throw new Error('Must not request an invalid destination'); };
+    await app.restoreSettingsAfterLanguage();
+    assert.equal(pane.hidden, true);
+    assert.equal(content.hidden, false);
+  });
 }
 
 function languageView() {
