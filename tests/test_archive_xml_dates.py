@@ -17,12 +17,13 @@ from test_validation_status import validator as validator
 import app as m
 import invoice_archive as storage
 import validation_status
+from zugferd import extract_xml_from_pdf
 
 
 def xml_only(folder, *, sidecar=True):
     pdf = folder / FILE
     xml = pdf.with_suffix(".xml")
-    xml.write_bytes(b"<invoice/>")
+    xml.write_bytes(extract_xml_from_pdf(pdf.read_bytes()))
     pdf.unlink()
     if not sidecar:
         xml.with_suffix(".json").unlink()

@@ -529,6 +529,55 @@ function masterForm() {
   return {app, revision, fields, notice, details};
 }
 
+for (const language of ['en', 'de']) {
+  test(`switching to ${language} restores settings, archive filters and selection once`, async () => {
+    const {app, pane, content, button} = settingsView();
+    app.URL = URL;
+    app.URLSearchParams = URLSearchParams;
+    const selected = {scope: 'same-folder:all:2025', entries: ['["other","Invoice.xml"]']};
+    const restored = [];
+    app.window.ArchiveSelection = {capture: () => selected, init: (root, state) => restored.push(state)};
+    const archiveForm = {action: '/settings/panel'};
+    pane.querySelector = () => archiveForm;
+    app.FormData = class extends URLSearchParams {
+      constructor() { super({issuer: 'all', year: '2025', sort: 'customer'}); }
+    };
+    const storage = new Map();
+    app.sessionStorage = {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)};
+    let destination;
+    app.window.location = {href: 'http://localhost/?issuer=current', origin: 'http://localhost', assign: url => { destination = url; }};
+    app.flushSellerSaves = async () => true;
+    const requests = [];
+    app.fetch = async url => { requests.push(url); return {ok: true, text: async () => 'Translated archive'}; };
+    await app.openSettings();
+    await app.switchLanguage('/setlang/' + language);
+    assert.equal(destination, '/setlang/' + language);
+    app.closeSettings(); // Simulate the initial invoice screen after navigation.
+    await app.restoreSettingsAfterLanguage();
+    assert.equal(requests.at(-1), 'http://localhost/settings/panel?issuer=all&year=2025&sort=customer');
+    assert.equal(pane.hidden, false);
+    assert.equal(content.hidden, true);
+    assert.equal(button.textContent, 'Close');
+    assert.deepEqual(JSON.parse(JSON.stringify(restored.at(-1))), selected);
+    const count = requests.length;
+    await app.restoreSettingsAfterLanguage();
+    assert.equal(requests.length, count);
+  });
+}
+
+for (const destination of ['https://other.example/settings/panel', '/generate']) {
+  test(`language restoration ignores an invalid settings destination: ${destination}`, async () => {
+    const {app, pane, content} = settingsView();
+    app.URL = URL;
+    app.window.location = {href: 'http://localhost/', origin: 'http://localhost'};
+    app.sessionStorage = {getItem: () => JSON.stringify({url: destination}), removeItem() {}};
+    app.fetch = () => { throw new Error('Must not request an invalid destination'); };
+    await app.restoreSettingsAfterLanguage();
+    assert.equal(pane.hidden, true);
+    assert.equal(content.hidden, false);
+  });
+}
+
 function languageView() {
   const h = masterForm();
   const {app, fields, revision} = h;

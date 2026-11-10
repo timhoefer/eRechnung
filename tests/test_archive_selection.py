@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from helpers import confirmed_post
+from helpers import confirmed_post, write_invoice_pdf
 from lxml import html
 from werkzeug.datastructures import MultiDict
 
@@ -44,9 +44,12 @@ def archive(tmp_path, monkeypatch):
             "invoice": {"number": f"{YEAR}-001", "issue_date": f"{YEAR}-0{quarter * 3}-15", "tax_treatment": "de_19"},
             "items": [{"description": "Test", "quantity": "1", "unit_price": "100"}],
         }))
+        write_invoice_pdf(folder / "output" / FILE)
     old = folders["default"] / "Rechnung_OLD.pdf"
     old.write_bytes(b"old")
-    old.with_suffix(".json").write_text(json.dumps({"invoice": {"number": "OLD", "issue_date": f"{YEAR-1}-12-20"}, "items": [], "buyer": {}}))
+    old.with_suffix(".json").write_text(json.dumps({"invoice": {"number": "OLD", "issue_date": f"{YEAR-1}-12-20"},
+        "items": [{"quantity": "1", "unit_price": "0"}], "buyer": {}}))
+    write_invoice_pdf(old)
     orphan = folders["default"] / "legacy.pdf"
     orphan.write_bytes(b"no accounting data")
     return m.app.test_client(), folders
@@ -54,7 +57,7 @@ def archive(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("endpoint", ["/settings/panel", "/validate"])
 def test_all_issuers_years_and_retired_actions(archive, endpoint):
-    client, _ = archive
+    client, folders = archive
     page = html.fromstring(client.get(endpoint + "?issuer=all").data)
     assert page.get_element_by_id("archive-issuer-select").value == "all"
     assert page.get_element_by_id("archive-year-select").value == str(YEAR)
@@ -64,7 +67,7 @@ def test_all_issuers_years_and_retired_actions(archive, endpoint):
     assert undated.xpath('//input[@data-archive-entry and @disabled]')
     for row in rows:
         issuer = parse_qs(urlparse(row.get("data-view-url")).query)["issuer"][0]
-        assert client.get(row.get("data-view-url")).data in {issuer.encode(), b"no accounting data"}
+        assert client.get(row.get("data-view-url")).data == (folders[issuer] / FILE).read_bytes()
         for url in row.xpath('.//@href | .//@data-url | .//form/@action'):
             assert parse_qs(urlparse(url).query)["issuer"] == [issuer]
         if issuer == RETIRED:
@@ -107,7 +110,10 @@ def selected(client, pairs, issuer="all"):
 
 
 @pytest.mark.parametrize("count", [1001, 10000])
-def test_large_csv_selection_exports_every_invoice(archive, count):
+def test_large_csv_selection_exports_every_invoice(archive, count, monkeypatch):
+    # This transport/selection stress test uses placeholder files; document
+    # consistency is exercised with real PDF/XML in test_journal_consistency.
+    monkeypatch.setattr(m, "verify_csv_source", lambda *args: {})
     client, folders = archive
     template = json.loads((folders["default"] / FILE).with_suffix(".json").read_text())
     pairs = []
@@ -186,13 +192,13 @@ def test_all_filter_cannot_be_used_as_write_identity(archive, endpoint):
 
 
 def test_checking_a_row_keeps_all_filter_but_validates_exact_issuer(archive, monkeypatch):
-    client, _ = archive
+    client, folders = archive
     seen = []
     monkeypatch.setattr(m, "extract_xml_from_pdf", lambda raw: seen.append(raw))
     page = html.fromstring(client.get("/settings/panel?issuer=all&year=all&sort=number").data)
     form = next(f for f in page.xpath('//form[@class="check-file-form"]') if COMPANY in f.action)
     response = client.post(form.action, data=dict(form.form_values()))
-    assert response.status_code == 200 and seen == [COMPANY.encode()]
+    assert response.status_code == 200 and seen == [(folders[COMPANY] / FILE).read_bytes()]
     result = html.fromstring(response.data)
     assert result.get_element_by_id("archive-issuer-select").value == "all"
     assert result.get_element_by_id("archive-year-select").value == "all"
@@ -313,7 +319,8 @@ def test_export_folder_cannot_become_data_root(shared_export):
 
 
 @pytest.mark.parametrize("method", ["GET", "HEAD", "POST"])
-def test_desktop_export_waits_for_data_folder_move(shared_export, tmp_path, monkeypatch, method):
+@pytest.mark.parametrize("desktop", [False, True])
+def test_export_waits_for_data_folder_move(shared_export, tmp_path, monkeypatch, method, desktop):
     from concurrent.futures import ThreadPoolExecutor, TimeoutError
     from threading import Event
 
@@ -335,6 +342,7 @@ def test_desktop_export_waits_for_data_folder_move(shared_export, tmp_path, monk
             return client.open("/export/csv?issuer=all", method=method)
 
     monkeypatch.setattr(m, "_set_data_dir", delayed_move)
+    monkeypatch.setitem(m.app.config, "DESKTOP", desktop)
     with ThreadPoolExecutor(max_workers=2) as pool:
         move = pool.submit(m.set_data_dir, str(target))
         assert moving.wait(timeout=5)
@@ -348,8 +356,8 @@ def test_desktop_export_waits_for_data_folder_move(shared_export, tmp_path, monk
         assert move.result(timeout=5) == (True, "data_dir_ok")
         response = export_request.result(timeout=5)
     assert response.status_code == 200
-    if method != "HEAD":
+    if desktop and method != "HEAD":
         assert response.json["ok"]
         assert (target / "exports" / response.json["name"]).is_file()
     assert not list((old / "exports").glob("*.csv"))
-    assert len(list((target / "exports").glob("*.csv"))) == 2
+    assert len(list((target / "exports").glob("*.csv"))) == (2 if desktop else 1)

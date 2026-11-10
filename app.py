@@ -59,6 +59,7 @@ from invoice_core import (
 )
 from invoice_core import safe_name as safe_name
 from invoice_core import seller_accounts as seller_accounts
+from invoice_journal import JournalConflict, verify_csv_snapshots, verify_csv_source
 from issuer_store import seller_revision as seller_revision
 from version import __version__ as APP_VERSION
 from whats_new import ANNOUNCEMENT
@@ -576,8 +577,7 @@ def _lock_data_changes():
         "generate", "archive_delete", "data_dir_set", "whats_new_seen", "issuer_create", "issuer_delete",
         "issuer_set_default", "issuer_restore",
         "validate", "settings_panel",
-    }) or (request.method in {"GET", "HEAD", "POST"} and request.endpoint == "export_csv"
-           and app.config.get("DESKTOP") and sys.platform == "darwin"):
+    }) or (request.method in {"GET", "HEAD", "POST"} and request.endpoint == "export_csv"):
         DATA_LOCK.acquire()
         g.data_locked = True
         # Hold the shared process lock across the complete read/modify/write operation.
@@ -669,7 +669,8 @@ def _select_issuer():
     g.issuer_id = issuer
     g.issuer_seller_file = SELLER_FILE if issuer == "default" else directory / "seller.json"
     g.issuer_output_dir = OUTPUT_DIR if issuer == "default" else directory / "output"
-    if g.get("data_locked"):
+    # CSV reads a stable snapshot; it must not complete unfinished invoices.
+    if g.get("data_locked") and request.endpoint != "export_csv":
         try:
             recover_archive(output_dir(), seller_file())
         except (OSError, ValueError) as exc:
@@ -1987,6 +1988,9 @@ def export_csv():
     import csv
     import io
 
+    scope = request.args.get("scope")
+    if scope is not None and scope != issuer_store.issuer_scope(DATA_DIR):
+        raise JournalConflict("", "scope")
     lang = get_ui_lang(request)
     de = lang != "en"
     frm = (request.args.get("from") or "").strip()
@@ -2039,23 +2043,23 @@ def export_csv():
         s = f"{value:.2f}"
         return s.replace(".", ",") if de else s
 
+    if only and not sources:
+        raise JournalConflict(Path(only).name, "unreadable")
     rows = []
+    snapshots: dict[Path, str] = {}
     for identity, p in sources:
         sidecar = p.with_suffix(".json")
         if not p.is_file() or p.is_symlink() or not sidecar.is_file() or sidecar.is_symlink():
-            if selection:
-                abort(409)  # Do not silently omit a selected invoice that changed.
+            if selection or only:
+                raise JournalConflict(p.name, "unreadable")
             continue
         try:
-            d = json.loads(sidecar.read_text(encoding="utf-8"))
+            sidecar_bytes = sidecar.read_bytes()
+            d = json.loads(sidecar_bytes)
         except (ValueError, OSError):
-            if selection:
-                abort(409)
-            continue
+            raise JournalConflict(p.name, "unreadable") from None
         if not isinstance(d, dict):
-            if selection:
-                abort(409)
-            continue
+            raise JournalConflict(p.name, "unreadable")
         try:
             inv = d.get("invoice") or {}
             issue = inv.get("issue_date") or ""
@@ -2069,6 +2073,15 @@ def export_csv():
             buyer = d.get("buyer") or {}
             doc_type = inv.get("doc_type") or "380"
             sign = -1 if doc_type == "381" else 1
+            snapshots.update(verify_csv_source(p, d, sidecar_bytes, {
+                "number": inv.get("number", ""), "date": issue,
+                "buyer": buyer.get("name", ""), "country": buyer.get("country", ""),
+                "seller": (d.get("seller") or {}).get("name", ""),
+                "currency": inv.get("currency", "EUR"), "type": doc_type,
+                "reference": inv.get("ref_number") or "", "category": treatment["category"],
+                "rate": treatment["rate"], "net": net, "vat": vat, "gross": gross,
+                "tax_basis": net, "tax_amount": vat,
+            }, identity))
             rows.append([
                 inv.get("number", ""), issue, buyer.get("name", ""), buyer.get("country", ""),
                 loc(treatment["label"], lang), treatment["category"], str(treatment["rate"]),
@@ -2077,9 +2090,7 @@ def export_csv():
                 *([profiles[identity]["label"]] if all_issuers else []),
             ])
         except (ValueError, ArithmeticError, AttributeError, TypeError):
-            if selection:
-                abort(409)
-            continue
+            raise JournalConflict(p.name, "unreadable") from None
     rows.sort(key=lambda r: (r[1], r[0]))  # nach Datum, dann Nummer
 
     header = (
@@ -2102,6 +2113,7 @@ def export_csv():
     writer.writerows([[c if i in (7, 8, 9) else csv_safe(c)
                        for i, c in enumerate(r)] for r in rows])
     data = ("\ufeff" + buf.getvalue()).encode("utf-8")  # BOM -> Umlaute in Excel
+    verify_csv_snapshots(snapshots)
     if only:
         name = f"{Path(only).stem}.csv"
     else:
@@ -2143,6 +2155,16 @@ def export_csv():
         data, mimetype="text/csv",  # Flask ergänzt charset=utf-8 automatisch
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+
+@app.errorhandler(JournalConflict)
+def journal_conflict(error):
+    ui = translate(get_ui_lang(request))
+    message = ui["csv_conflict_" + error.reason].format(filename=error.filename)
+    if request.is_json or request.headers.get("X-Requested-With") == "fetch" or app.config.get("DESKTOP"):
+        return {"ok": False, "message": message}, 409
+    flash(message, "err")
+    return render_template("validate.html", result=None, depinfo={}, **_settings_context()), 409
 
 
 @app.route("/data-dir", methods=["POST"])

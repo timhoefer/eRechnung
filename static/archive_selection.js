@@ -103,6 +103,7 @@
         event.stopPropagation();
         if (busy || !entries.some(entry => entry.checked)) return;
         busy = true;
+        let failureMessage = card.dataset.exportFailed;
         status.textContent = '';
         update();
         try {
@@ -110,7 +111,11 @@
           const selected = entries.filter(entry => entry.checked).map(entry => JSON.parse(entry.value));
           const response = await fetch(form.action, {method: 'POST',
             headers: {'Content-Type': 'application/json'}, body: JSON.stringify({entries: selected})});
-          if (!response.ok) throw new Error('Export failed');
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            if (typeof error.message === 'string') failureMessage = error.message;
+            throw new Error('Export failed');
+          }
           if (card.dataset.desktop === 'true') {
             if (!(await response.json()).ok) throw new Error('Export failed');
           } else {
@@ -122,7 +127,7 @@
             setTimeout(() => URL.revokeObjectURL(url), 1000);
           }
         } catch {
-          status.textContent = card.dataset.exportFailed;
+          status.textContent = failureMessage;
         } finally {
           busy = false;
           update();

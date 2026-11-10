@@ -50,6 +50,20 @@ Buchungsdaten bleibt eine Datei sichtbar, kann aber nicht als CSV ausgewählt we
 Die bisherigen CSV-Links je Rechnung und der Export per Datumsbereich bleiben
 technisch verfügbar.
 
+Vor jedem CSV-Export werden die gespeicherten Buchungsdaten mit der tatsächlichen
+Rechnungs-XML abgeglichen: bei ZUGFeRD mit dem eingebetteten XML, bei XRechnung
+mit der eigenständigen XML. Abweichende Beträge, Kunde, Nummer, Datum, Währung
+oder Belegart sowie fehlende oder unlesbare Daten brechen den gesamten Export
+ab. Reine PDF-Metadatenänderungen verhindern den Export nicht, wenn die XML-Werte
+weiterhin übereinstimmen. Eine erneute erfolgreiche XML-Prüfung repariert keine
+Abweichung zwischen Rechnung und Buchungsdaten. Der CSV-Abgleich selbst ist keine
+neue XSD-/Schematron-Prüfung und ändert den gespeicherten Prüfstatus nicht.
+
+Ändern sich die Quelldateien während des Exports, wird keine CSV ausgegeben.
+Nach einem Datenordnerwechsel muss eine ältere Archivansicht vor dem Export neu
+geladen werden. Beim Sprachwechsel bleiben die Einstellungen mit ihren
+Archivfiltern und ausgewählten Rechnungen geöffnet.
+
 Die Liste bleibt durchgehend und wird insgesamt nach Erstellung, Nummer oder
 Kunde sortiert. Die Quartalsauswahl erscheint nur im Auswahlmodus. Quartale richten
 sich nach dem Rechnungsdatum; fehlt es bei einer älteren Datei, wird der angezeigte

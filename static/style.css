@@ -70,7 +70,8 @@
 .archive-quarter-selection { grid-area: quarters; gap: 12px 20px; }
 .archive-selection-export { grid-area: export; align-self: center; display: grid; gap: 8px; justify-items: end; max-width: 240px; }
 .archive-selection-export button { padding: 14px 22px; white-space: nowrap; }
-.archive-selection-export [data-archive-export-status]:empty { display: none; }
+.archive-selection-bar [data-archive-export-status] { grid-column: 1 / -1; }
+.archive-selection-bar [data-archive-export-status]:empty { display: none; }
 @container (max-width: 660px) {
   .archive-selection-bar { grid-template-columns: minmax(0, 1fr); grid-template-areas: "selection" "quarters" "export"; }
   .archive-selection-export { justify-self: end; }
@@ -513,6 +514,7 @@ button.secondary:hover { background: var(--surface-2-h); }
 .actions { display: flex; align-items: center; gap: 12px; margin: 20px auto; }
 .result-note { max-width: 1080px; margin: 0 auto 10px; padding: 0 23px; box-sizing: border-box; }
 .actions .spacer { flex: 1; }
+.settings-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
 /* Einstellungen/Archiv als In-Place-Panel in der linken Spalte */
 #settings-toggle.active { background: var(--surface-2-h); }
 .arch-row { cursor: pointer; }

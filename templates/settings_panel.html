@@ -110,7 +110,7 @@
   {% endif %}
   {% if archive %}
   {% if inplace %}<p class="hint" style="margin:0 0 10px" data-archive-hint data-preview-label="{{ t.archive_preview_hint }}" data-select-label="{{ t.archive_select_hint }}">{{ t.archive_preview_hint }}</p>{% endif %}
-  <form method="post" action="{{ url_for('export_csv', issuer='all' if archive_all else issuer_id) }}" id="archive-selection" class="archive-selection-bar" hidden>
+  <form method="post" action="{{ url_for('export_csv', issuer='all' if archive_all else issuer_id, scope=archive_scope) }}" id="archive-selection" class="archive-selection-bar" hidden>
     <div class="archive-selection-actions">
       <label class="check"><input type="checkbox" data-archive-all>{{ t.archive_select_all }}</label>
       <span class="hint" data-archive-count role="status" aria-live="polite"></span>
@@ -123,8 +123,8 @@
     </div>
     <div class="archive-selection-export">
       <button type="submit" class="secondary" disabled>{{ t.export_csv }}</button>
-      <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
     </div>
+    <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
   </form>
   {% if archive_validation_unsaved %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
   <table class="archive">
@@ -185,9 +185,9 @@
               {% endif %}
               {% if a.has_draft %}
                 {% if is_desktop %}
-                <button type="button" class="csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename, issuer=a.issuer_id) }}" role="menuitem">CSV</button>
+                <button type="button" class="csv-export-btn" data-url="{{ url_for('export_csv', file=a.filename, issuer=a.issuer_id, scope=archive_scope) }}" role="menuitem">CSV</button>
                 {% else %}
-                <a href="{{ url_for('export_csv', file=a.filename, issuer=a.issuer_id) }}" role="menuitem">CSV</a>
+                <a href="{{ url_for('export_csv', file=a.filename, issuer=a.issuer_id, scope=archive_scope) }}" role="menuitem">CSV</a>
                 {% endif %}
               {% endif %}
               {% if not is_desktop and a.xml_filename and a.xml_filename != a.filename %}<a href="{{ url_for('download', filename=a.xml_filename, issuer=a.issuer_id) }}" role="menuitem">XML</a>{% endif %}
@@ -222,7 +222,7 @@
     <label class="wide">{{ t.datadir_label }}
       <input name="data_dir" id="data-dir-input" value="{{ data_dir if data_dir_custom else '' }}" placeholder="{{ data_dir }}">
     </label>
-    <div style="margin-top:12px">
+    <div class="settings-actions">
       {% if can_browse %}<button type="button" class="secondary" id="dd-browse">{{ t.datadir_browse }}</button>{% endif %}
       <button type="submit" class="secondary">{{ t.datadir_save }}</button>
     </div>
@@ -241,7 +241,7 @@
   <table class="summary" style="margin-top:8px">
     <tr><td>{{ t.app_version_current }}</td><td>{{ app_version }}</td></tr>
   </table>
-  <div style="margin-top:12px">
+  <div class="settings-actions">
     <button type="button" class="secondary" id="check-updates-btn">{{ t.app_check_updates }}</button>
     {% if whats_new %}<button type="button" class="secondary" data-open-whats-new>{{ t.whats_new_open }}</button>{% endif %}
   </div>

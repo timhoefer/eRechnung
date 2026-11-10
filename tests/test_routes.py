@@ -7,7 +7,7 @@ import json
 from datetime import UTC, datetime
 
 import pytest
-from helpers import confirmed_post, export_invoice
+from helpers import confirmed_post, export_invoice, write_invoice_pdf
 
 import app as appmod
 
@@ -93,6 +93,7 @@ def test_export_csv(client):
         "items": [{"description": "Leistung", "quantity": "2",
                    "unit": "C62", "unit_price": "100"}],
     }), encoding="utf-8")
+    write_invoice_pdf(out / "Rechnung_2026-001.pdf")
     r = client.get("/export/csv?from=2026-01-01&to=2026-12-31")
     assert r.status_code == 200
     assert "text/csv" in r.headers["Content-Type"]
@@ -203,6 +204,7 @@ def _make_archive_entry(out, number="2026-001"):
         "items": [{"description": "Leistung", "quantity": "1",
                    "unit": "C62", "unit_price": "100"}],
     }), encoding="utf-8")
+    write_invoice_pdf(out / f"{stem}.pdf")
     return f"{stem}.pdf"
 
 
@@ -309,6 +311,7 @@ def test_csv_export_escapes_formula_injection(client):
         "buyer": {"name": "=SUM(A1:A9)", "country": "DE"},
         "items": [{"description": "L", "quantity": "1", "unit": "C62", "unit_price": "100"}],
     }), encoding="utf-8")
+    write_invoice_pdf(out / "Rechnung_2026-001.pdf")
     body = client.get("/export/csv").get_data(as_text=True)
     assert "'=SUM(A1:A9)" in body          # mit ' entschärft
     assert ";=SUM(A1:A9)" not in body      # nicht roh als Formel
@@ -630,6 +633,7 @@ def test_csv_storno_offsets_original(client):
                         "tax_treatment": "de_19"},
             "items": [{"quantity": "2", "unit_price": "100"}],
         }))
+        write_invoice_pdf(appmod.OUTPUT_DIR / f"{name}.pdf")
     rows = list(csv.DictReader(io.StringIO(client.get('/export/csv').get_data(as_text=True).lstrip('\ufeff')), delimiter=';'))
     assert [r['Brutto'] for r in rows] == ['238,00', '-238,00']
     assert rows[1]['Belegart'] == '381'

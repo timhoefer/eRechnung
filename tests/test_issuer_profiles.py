@@ -4,7 +4,7 @@ from datetime import date
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from helpers import confirmed_post, export_invoice
+from helpers import confirmed_post, export_invoice, pdf_with_xml
 from lxml import html
 
 import app as appmod
@@ -63,10 +63,8 @@ def revision(client, issuer="default"):
 
 @pytest.fixture
 def fast_generation(monkeypatch):
-    monkeypatch.setattr(appmod, "build_xml", lambda data: b"<xml/>")
-    monkeypatch.setattr(appmod, "build_pdf", lambda markup, xml: b"%PDF-test")
-    monkeypatch.setattr(appmod, "render_html_pdf", lambda markup: b"%PDF-test")
-    monkeypatch.setattr(appmod, "extract_xml_from_pdf", lambda pdf: b"<xml/>")
+    monkeypatch.setattr(appmod, "build_pdf", lambda markup, xml: pdf_with_xml(xml))
+    monkeypatch.setattr(appmod, "render_html_pdf", lambda markup: pdf_with_xml(None))
     monkeypatch.setattr(appmod, "validate_xml_bytes", lambda xml: (True, []))
     monkeypatch.setattr(appmod, "validate_schematron",
                         lambda xml: {"available": True, "ok": True, "errors": [], "warnings": []})

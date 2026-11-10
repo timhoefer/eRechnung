@@ -244,3 +244,21 @@ test('failed export retains selection and announces an error', async () => {
   assert.equal(f.entries[0].checked, true);
   assert.equal(f.submit.disabled, false);
 });
+
+test('invoice mismatch explains the failure without dropping the selection', async () => {
+  const f = fixture();
+  f.context.fetch = async () => ({ok: false, json: async () => ({message: 'Invoice XML and accounting data differ. No CSV created.'})});
+  f.entries[0].checked = true;
+  await f.form.listeners.submit({preventDefault() {}, stopPropagation() {}});
+  assert.equal(f.status.textContent, 'Invoice XML and accounting data differ. No CSV created.');
+  assert.equal(f.entries[0].checked, true);
+  assert.equal(f.submit.disabled, false);
+});
+
+test('a non-JSON export error shows the normal fallback message', async () => {
+  const f = fixture();
+  f.context.fetch = async () => ({ok: false, json: async () => { throw new Error('Bad gateway'); }});
+  f.entries[0].checked = true;
+  await f.form.listeners.submit({preventDefault() {}, stopPropagation() {}});
+  assert.equal(f.status.textContent, 'Failed');
+});

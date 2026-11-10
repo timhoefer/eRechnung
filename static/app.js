@@ -2038,6 +2038,15 @@ async function switchLanguage(url) {
     if (!(await flushSellerSaves())) return;
     const form = document.getElementById("invoice-form");
     if (form) sessionStorage.setItem(languageDraftKey(), JSON.stringify(snapshotForm(form)));
+    if (settingsOpen) {
+      const pane = document.getElementById("settings-pane");
+      const archiveForm = pane.querySelector("#archive-issuer-form");
+      const panelUrl = new URL(archiveForm?.action || settingsPanelUrl || window.SETTINGS_PANEL_URL, window.location.href);
+      if (archiveForm) panelUrl.search = new URLSearchParams(new FormData(archiveForm)).toString();
+      sessionStorage.setItem(languageDraftKey() + ":settings", JSON.stringify({
+        url: panelUrl.href, selection: window.ArchiveSelection?.capture(pane),
+      }));
+    }
     window.location.assign(url);
   } catch (error) {
     changeError(error);
@@ -2359,7 +2368,7 @@ function loadDepsAsync() {
 
 let settingsPanelUrl;
 let settingsPanelLoadId = 0;
-async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options, keepSelection = false) {
+async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL_URL, options, keepSelection = false, initialSelection = null) {
   const pane = document.getElementById("settings-pane");
   if (!pane || !url) return false;
   const loadId = ++settingsPanelLoadId;
@@ -2368,7 +2377,7 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     if (!response.ok) throw new Error("archive load failed");
     const html = await response.text();
     if (loadId !== settingsPanelLoadId) return false;
-    const selection = keepSelection ? window.ArchiveSelection?.capture(pane) : null;
+    const selection = keepSelection ? window.ArchiveSelection?.capture(pane) : initialSelection;
     settingsPanelUrl = url;
     pane.innerHTML = html;
     window.ArchiveSelection?.init(pane, selection);
@@ -2419,7 +2428,7 @@ async function saveDataDirectory(form) {
   }
 }
 
-function openSettings() {
+function openSettings(initialSelection = null) {
   const pane = document.getElementById("settings-pane");
   const content = document.getElementById("form-content");
   const btn = document.getElementById("settings-toggle");
@@ -2427,7 +2436,7 @@ function openSettings() {
   settingsOpen = true;
   if (_previewAbort) _previewAbort.abort();
   checkMiniPages();
-  const loading = loadSettingsPanel();
+  const loading = loadSettingsPanel(undefined, undefined, false, initialSelection);
   const loadId = settingsPanelLoadId;
   if (btn) {
     btn.textContent = btn.dataset.close;
@@ -2559,7 +2568,11 @@ function closeSettings() {
     const csvBtn = e.target.closest(".csv-export-btn");
     if (csvBtn) {
       e.preventDefault();
-      fetch(csvBtn.dataset.url).catch(() => flashError());
+      fetch(csvBtn.dataset.url, {headers: {"X-Requested-With": "fetch"}})
+        .then(async response => {
+          const data = await response.json();
+          if (!response.ok || !data.ok) flashError(data.message);
+        }).catch(() => flashError());
       return;
     }
     // Datenordner durchsuchen (nativer Dialog).
@@ -2588,6 +2601,22 @@ function closeSettings() {
     }
   });
 })();
+
+async function restoreSettingsAfterLanguage() {
+  const key = languageDraftKey() + ":settings";
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return;
+    sessionStorage.removeItem(key);
+    const saved = JSON.parse(raw);
+    const url = new URL(saved.url, window.location.href);
+    // Restore only this app's settings, once, in the same tab and data scope.
+    if (url.origin !== window.location.origin || url.pathname !== "/settings/panel") return;
+    settingsPanelUrl = url.href;
+    await openSettings(saved.selection);
+  } catch { /* A stale view must not prevent using the invoice form. */ }
+}
+restoreSettingsAfterLanguage();
 
 // === Hinweis bei bereits vergebener Rechnungsnummer (blockiert NICHT) ========
 // Doppelte Nummern bleiben erlaubt (z. B. Korrekturrechnungen) – wir weisen nur hin.
