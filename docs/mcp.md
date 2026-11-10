@@ -60,9 +60,12 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    **Zugang löschen** zeigt zuerst eine Warnung und widerruft den Schlüssel nach
    **Dauerhaft löschen** endgültig. Für einen späteren Zugriff ist dann eine neue
    Verbindung nötig. Rechnungen und gespeicherte Daten bleiben erhalten.
-8. **Konfiguration einrichten** an einer bestehenden Verbindung öffnet die
-   Einrichtung erneut. Eine funktionierende Verbindung benötigt keinen neuen
-   Schlüssel. Bei verlorener Konfiguration zuerst die Warnung lesen und dann
+8. **Konfiguration einrichten** öffnet einen Dialog direkt über der jeweiligen
+   Verbindung. **DE/EN** wechselt dort die Sprache, ohne den angezeigten Schlüssel
+   zu erneuern oder die gewählte Konfigurationsansicht zu verlassen. Nach dem
+   Schließen sind wieder die Verbindungen sichtbar. Eine funktionierende
+   Verbindung benötigt keinen neuen Schlüssel. Bei verlorener Konfiguration
+   zuerst die Warnung lesen und dann
    **Neuen Schlüssel erzeugen** bestätigen. Erst dann wird der bisherige Schlüssel
    ungültig und die vollständige neue Konfiguration einmalig angezeigt, mit einem
    Button zum Kopieren. Diese Konfiguration im Agenten ersetzen.

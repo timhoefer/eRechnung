@@ -148,6 +148,8 @@ header .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
   padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
 }
 .langswitch a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.langswitch button { font-size: var(--text-sm); color: var(--muted); padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; }
+.langswitch button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* Theme-Umschalter (Hell/Dunkel) */
 .header-controls { display: flex; align-items: center; gap: 8px; }
 
@@ -857,6 +859,10 @@ body.drawer-open { overflow: hidden; }
 .agent-section-header h2 { margin: 0; }
 .agent-add { display: inline-flex; align-items: center; justify-content: center; padding: 10px; }
 dialog.agent-connection-dialog, dialog.agent-disable-dialog { width: 680px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); box-sizing: border-box; overflow-y: auto; }
+dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); overflow-y: auto; }
+.agent-setup-dialog > .agent-section-header { position: sticky; top: -24px; z-index: 1; background: var(--card); padding: 16px 0; }
+.agent-setup-dialog .agent-section-header { flex-wrap: wrap; }
+.agent-setup-dialog .hint { color: var(--muted); }
 .agent-connection-dialog h3 { margin-top: 24px; }
 .agent-connection-dialog .hint { color: var(--muted); }
 .agent-page p[data-customer-mode] { margin-top: 12px; }

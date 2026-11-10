@@ -1,0 +1,5 @@
+<nav class="langswitch" aria-label="{{ 'Sprache' if de else 'Language' }}">
+  {% for code, name in languages.items() %}
+  <a href="{{ url_for('setlang', code=code, next=url_for('agents_settings'), issuer=None) }}" lang="{{ code }}" aria-label="{{ name }}" class="{{ 'active' if code == lang else '' }}"{% if code == lang %} aria-current="true"{% endif %}>{{ code|upper }}</a>
+  {% endfor %}
+</nav>

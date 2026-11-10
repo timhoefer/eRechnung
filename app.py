@@ -919,8 +919,8 @@ def setlang(code):
     target = request.args.get("next", "")
     parsed = urlparse(target)
     # A form returned after a rejected POST must go back to a GET-capable URL.
-    # Accept only this app's invoice form, never an external redirect target.
-    if parsed.scheme or parsed.netloc or parsed.path != "/":
+    # Accept only known GET pages, never an external redirect target.
+    if parsed.scheme or parsed.netloc or parsed.path not in {"/", "/agents"}:
         target = request.referrer or url_for("index")
     resp = redirect(target)
     if code in LANGUAGES:

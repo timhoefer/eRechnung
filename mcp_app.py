@@ -96,11 +96,26 @@ def register(m):
         state = access.load()
         customers = customer_records()
         access.prune()
+        configuration = configuration_context(token)
+        setup_context = None
+        if token:
+            setup_context = dict(connection=access.authenticate(token, m.DATA_DIR), new_connection=True,
+                                 csrf=csrf(), profiles=m.issuer_profiles(include_deleted=True),
+                                 customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customers},
+                                 **configuration)
         return render_template("agents.html", state=state, csrf=csrf(),
                                profiles=m.issuer_profiles(include_deleted=True),
                                customer_choices=customer_scope.choices(customers),
                                customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customers},
-                               requests=access.pending, error=error, **configuration_context(token))
+                               requests=access.pending, error=error, setup_context=setup_context,
+                               setup_views=configuration_views(setup_context) if setup_context else None,
+                               **configuration)
+
+    def configuration_views(context):
+        # Both languages travel only in this response. Credentials stay out of
+        # sessions/storage and language changes never replay key creation.
+        return {lang: render_template("_agent_setup_content.html", lang=lang, t=m.translate(lang),
+                                      dialog_mode=True, **context) for lang in ("de", "en")}
 
     def customer_records():
         if m.CUSTOMERS_FILE.is_symlink():
@@ -117,6 +132,16 @@ def register(m):
     def agents_status():
         # Readiness only: never expose grants, profile data or a CSRF session.
         return {"service": "eRechnung", "mcp_enabled": app.config["MCP_FEATURE"]}
+
+    @app.post("/agents/language")
+    def agents_language():
+        ui_guard()
+        language = request.form.get("language")
+        if language not in {"de", "en"}:
+            abort(400)
+        response = app.make_response({"language": language})
+        response.set_cookie("lang", language, max_age=365 * 86400, samesite="Lax")
+        return response
 
     @app.route("/agents/connections/<identifier>/setup", methods=["GET", "POST"])
     def agents_setup(identifier):
@@ -137,10 +162,13 @@ def register(m):
                     changed = True
                 else:
                     token = access.renew(identifier, connection)
-            return render_template("agent_setup.html", connection=connection, revision=revision,
-                                   profiles=m.issuer_profiles(include_deleted=True),
-                                   customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customer_records()},
-                                   changed=changed, csrf=csrf(), **configuration_context(token)), 409 if changed else 200
+            context = dict(connection=connection, revision=revision,
+                           profiles=m.issuer_profiles(include_deleted=True),
+                           customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customer_records()},
+                           changed=changed, csrf=csrf(), **configuration_context(token))
+            if request.headers.get("X-Requested-With") == "fetch":
+                return {"views": configuration_views(context)}, 409 if changed else 200
+            return render_template("agent_setup.html", **context), 409 if changed else 200
 
     @app.post("/agents/settings")
     def agents_update():

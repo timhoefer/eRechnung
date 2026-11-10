@@ -1,17 +1,11 @@
 {% extends "agent_base.html" %}
 {% block content %}
-<h1>{{ 'Agentenzugriff' if de else 'Agent access' }}</h1>
+<div class="agent-section-header"><h1>{{ 'Agentenzugriff' if de else 'Agent access' }}</h1>{% include '_agent_language_links.html' %}</div>
 <p class="hint">{{ 'Experimentell · Nur nach deiner Freigabe' if de else 'Experimental · Only with your permission' }}</p>
 {% if error %}<p class="flash err">{{ error }}</p>{% endif %}
 <section class="card">
   {% include '_agent_access_toggle.html' %}
 </section>
-{% if configuration %}
-<section class="card">
-  <h2>{{ 'Verbindung einrichten' if de else 'Set up the connection' }}</h2>
-  {% include '_agent_configuration.html' %}
-</section>
-{% endif %}
 {% if state.enabled %}
 <section class="card">
   <div class="agent-section-header">
@@ -23,7 +17,7 @@
   <p class="hint" id="agent-connection-effect">{{ 'Ausschalten pausiert nur diesen Zugang und verwirft seine offenen Anfragen. Du kannst ihn jederzeit wieder einschalten.' if de else 'Turning a connection off pauses only that connection and discards its pending requests. You can turn it back on at any time.' }}</p>
   {% for id, connection in state.connections.items() %}
   {% set active = connection.get('active', true) %}
-  <div class="export-box agent-connection{{ ' is-active' if active else '' }}">
+  <div class="export-box agent-connection{{ ' is-active' if active else '' }}" id="agent-connection-{{ id }}">
     {% include '_agent_circuit.html' %}
     <div class="agent-connection-header">
       <strong>{{ connection.name }}</strong>
@@ -41,7 +35,7 @@
     <div class="agent-connection-details">
       {% include '_agent_connection_permissions.html' %}
       <div class="agent-actions">
-        <a class="abtn" href="{{ url_for('agents_setup', identifier=connection.id) }}">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</a>
+        <a class="abtn" data-open-setup href="{{ url_for('agents_setup', identifier=connection.id) }}">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</a>
         <form method="post" action="{{ url_for('agents_update') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="connection" value="{{ id }}">
         <button type="submit" class="del" title="{{ 'Zugang löschen' if de else 'Delete connection' }}" aria-label="{{ ('Zugang löschen: ' if de else 'Delete connection: ') ~ connection.name }}">
@@ -91,6 +85,25 @@
   </form>
 </dialog>
 {% endif %}
+<dialog class="modal agent-setup-dialog" id="agent-setup-dialog" aria-labelledby="agent-setup-title"{% if configuration %} open{% endif %}
+        data-language-url="{{ url_for('agents_language', issuer=None) }}" data-csrf="{{ csrf }}"
+        data-return-url="{{ url_for('agents_settings') }}">
+  <div class="agent-section-header">
+    <h2 id="agent-setup-title">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</h2>
+    <div class="header-controls">
+      <nav class="langswitch" aria-label="{{ 'Sprache' if de else 'Language' }}">
+        <button type="button" data-setup-language="de" lang="de" aria-label="Deutsch" aria-pressed="{{ 'true' if de else 'false' }}">DE</button>
+        <button type="button" data-setup-language="en" lang="en" aria-label="English" aria-pressed="{{ 'false' if de else 'true' }}">EN</button>
+      </nav>
+      <button type="button" class="secondary" data-close-setup aria-label="{{ t.close }}">&times;</button>
+    </div>
+  </div>
+  <p class="hint" id="agent-setup-error" role="alert" hidden></p>
+  <div id="agent-setup-content">
+    {% if setup_context %}{% with connection=setup_context.connection, new_connection=true, dialog_mode=true %}{% include '_agent_setup_content.html' %}{% endwith %}{% endif %}
+  </div>
+</dialog>
+{% if setup_views %}<script type="application/json" id="agent-setup-initial">{{ setup_views|tojson }}</script>{% endif %}
 <section class="card">
   <h2>{{ 'Aktionsfreigaben' if de else 'Action approvals' }}</h2>
   <p>{{ 'Hier bestätigst du einzelne Aktionen bereits eingerichteter MCP-Verbindungen. Dadurch erhält kein weiterer Agent Zugang.' if de else 'Approve individual actions from existing MCP connections here. This does not grant access to another agent.' }}</p>
@@ -105,4 +118,7 @@
 {% set return_issuer = request.args.get('issuer') if request.args.get('issuer') in active_issuers else active_issuers|first %}
 <p><a href="{{ url_for('index', issuer=return_issuer, _anchor='agent-access-card') if active_issuers else url_for('validate') }}">{{ 'Zurück zu den Einstellungen' if de else 'Back to settings' }}</a></p>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='agent_settings.js') }}?v={{ asset_version('agent_settings.js') }}"></script>{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='agent_settings.js') }}?v={{ asset_version('agent_settings.js') }}"></script>
+<script src="{{ url_for('static', filename='agent_setup.js') }}?v={{ asset_version('agent_setup.js') }}"></script>
+{% endblock %}
