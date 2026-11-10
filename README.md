@@ -58,11 +58,15 @@ ab. Reine PDF-Metadatenänderungen verhindern den Export nicht, wenn die XML-Wer
 weiterhin übereinstimmen. Eine erneute erfolgreiche XML-Prüfung repariert keine
 Abweichung zwischen Rechnung und Buchungsdaten. Der CSV-Abgleich selbst ist keine
 neue XSD-/Schematron-Prüfung und ändert den gespeicherten Prüfstatus nicht.
+Beim Export per Datumsbereich erfolgt der Abgleich vor dem Filtern. Widersprüche
+auch bei scheinbar außerhalb liegenden Belegen brechen den Export ab, damit ein
+veraltetes gespeichertes Datum keine Rechnung unbemerkt ausschließt.
 
 Ändern sich die Quelldateien während des Exports, wird keine CSV ausgegeben.
 Nach einem Datenordnerwechsel muss eine ältere Archivansicht vor dem Export neu
 geladen werden. Beim Sprachwechsel bleiben die Einstellungen mit ihren
-Archivfiltern und ausgewählten Rechnungen geöffnet.
+Archivfiltern und ausgewählten Rechnungen geöffnet, auch wenn das Archiv gerade
+nachlädt. In diesem Fall wird die noch sichtbare Ansicht wiederhergestellt.
 
 Die Liste bleibt durchgehend und wird insgesamt nach Erstellung, Nummer oder
 Kunde sortiert. Die Quartalsauswahl erscheint nur im Auswahlmodus. Quartale richten

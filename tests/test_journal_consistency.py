@@ -99,6 +99,60 @@ def test_changed_xml_aborts_entire_export(invoice, field, value, method):
     assert not list(document.parent.glob("*.csv"))
 
 
+@pytest.mark.parametrize("format", ["pdf", "xml"])
+@pytest.mark.parametrize("changed_source", ["xml", "json"])
+@pytest.mark.parametrize("start,end", [("2026-07-01", "2026-09-30"), ("2026-10-01", "2026-12-31")])
+def test_date_range_checks_dates_before_including_or_excluding_invoices(invoice, format, changed_source, start, end):
+    client, document, data = invoice
+    if format == "xml":
+        document.unlink()
+        document = document.with_suffix(".xml")
+        data["invoice"]["profile"] = "xrechnung"
+    original = copy.deepcopy(data)
+    data["invoice"]["issue_date"] = "2026-09-30"
+    xml = build_xml(data if changed_source == "xml" else original)
+    document.write_bytes(pdf_with_xml(xml) if format == "pdf" else xml)
+    document.with_suffix(".json").write_text(json.dumps(data if changed_source == "json" else original))
+
+    response = client.get("/export/csv", query_string={"from": start, "to": end},
+                          headers={"X-Requested-With": "fetch"})
+
+    assert response.status_code == 409 and "stimmen nicht" in response.json["message"]
+    assert response.mimetype != "text/csv"
+
+
+@pytest.mark.parametrize("start,end,count", [
+    ("2026-07-01", "2026-09-30", 0),
+    ("2026-10-07", "2026-10-07", 1),
+    ("2026-10-08", "2026-12-31", 0),
+])
+def test_consistent_invoice_date_range_is_inclusive(invoice, start, end, count):
+    client, _, _ = invoice
+    response = client.get("/export/csv", query_string={"from": start, "to": end})
+    assert response.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(response.data.decode("utf-8-sig")), delimiter=";"))
+    assert len(rows) == count
+    if rows:
+        assert rows[0]["Datum"] == "2026-10-07"
+
+
+def test_excluded_invoice_is_rechecked_before_date_range_export(invoice, monkeypatch):
+    client, document, data = invoice
+    original = m.verify_csv_source
+
+    def move_into_range_after_check(*args):
+        snapshots = original(*args)
+        data["invoice"]["issue_date"] = "2026-09-30"
+        document.write_bytes(pdf_with_xml(build_xml(data)))
+        document.with_suffix(".json").write_text(json.dumps(data))
+        return snapshots
+
+    monkeypatch.setattr(m, "verify_csv_source", move_into_range_after_check)
+    response = client.get("/export/csv?from=2026-07-01&to=2026-09-30",
+                          headers={"X-Requested-With": "fetch"})
+    assert response.status_code == 409 and "während" in response.json["message"]
+
+
 @pytest.mark.parametrize("broken", ["missing-xml", "corrupt-pdf", "corrupt-xml", "doctype", "duplicate-total", "nonfinite"])
 def test_unreadable_or_ambiguous_documents_never_fall_back_to_json(invoice, broken):
     client, document, data = invoice

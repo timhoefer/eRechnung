@@ -2042,7 +2042,14 @@ async function switchLanguage(url) {
       const pane = document.getElementById("settings-pane");
       const archiveForm = pane.querySelector("#archive-issuer-form");
       const panelUrl = new URL(archiveForm?.action || settingsPanelUrl || window.SETTINGS_PANEL_URL, window.location.href);
-      if (archiveForm) panelUrl.search = new URLSearchParams(new FormData(archiveForm)).toString();
+      if (archiveForm) {
+        panelUrl.search = new URLSearchParams(new FormData(archiveForm)).toString();
+        // Loading locks the filters at the currently visible archive values.
+        // FormData omits disabled controls; retain them for language restoration.
+        for (const select of archiveForm.querySelectorAll("select:disabled")) {
+          panelUrl.searchParams.set(select.name, select.value);
+        }
+      }
       sessionStorage.setItem(languageDraftKey() + ":settings", JSON.stringify({
         url: panelUrl.href, selection: window.ArchiveSelection?.capture(pane),
       }));

@@ -2063,8 +2063,6 @@ def export_csv():
         try:
             inv = d.get("invoice") or {}
             issue = inv.get("issue_date") or ""
-            if (frm and issue < frm) or (to and issue > to):
-                continue
             treatment = TAX_TREATMENTS.get(inv.get("tax_treatment") or "de_19", TAX_TREATMENTS["de_19"])
             _c, _lt, _disc, net, vat, gross = compute_totals(
                 d.get("items") or [], cast(Decimal, treatment["rate"]),
@@ -2082,6 +2080,10 @@ def export_csv():
                 "rate": treatment["rate"], "net": net, "vat": vat, "gross": gross,
                 "tax_basis": net, "tax_amount": vat,
             }, identity))
+            # Check dates before filtering: stale JSON must not silently exclude
+            # an invoice. Keep excluded documents in the final snapshot recheck.
+            if (frm and issue < frm) or (to and issue > to):
+                continue
             rows.append([
                 inv.get("number", ""), issue, buyer.get("name", ""), buyer.get("country", ""),
                 loc(treatment["label"], lang), treatment["category"], str(treatment["rate"]),
