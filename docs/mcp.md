@@ -35,7 +35,7 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
 3. Direkt darunter zeigt **Verbindungen**, ob bereits ein Zugang eingerichtet ist.
    Mit **Verbindung hinzufügen** (später **+**) eine neue Verbindung
-   anlegen. Im Dialog einen Namen und die gewünschten aktiven Aussteller wählen.
+   anlegen. In Schritt **1 · Verbindung freigeben** einen Namen und die gewünschten aktiven Aussteller wählen.
    Deaktivierte Aussteller werden bei neuen Verbindungen nicht angeboten. Bereits
    erteilte Archivfreigaben bleiben für die Historie und Korrekturen erhalten.
    Unter **Kundenzugriff** zwischen **Keine Kundendaten**, **Nur ausgewählte Kunden**
@@ -43,7 +43,9 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
    Prüfen und Vorschau beschränkt.
 4. Optional **Rechnungen erstellen und Datenänderungen anfragen** erlauben.
-5. Die einmalig angezeigte Konfiguration in den MCP-Client übernehmen. Manche
+   **Freigeben und weiter** erstellt die Verbindung und öffnet Schritt 2.
+5. In Schritt **2 · Im Agenten einrichten** die einmalig angezeigte Konfiguration
+   in den MCP-Client übernehmen und den Dialog mit **Fertig** schließen. Manche
    Clients benötigen statt des `mcpServers`-Blocks ein eigenes Konfigurationsformat;
    Befehl, Argumente und Umgebungsvariablen bleiben dieselben. Der Tab **Einzelne
    Werte** bietet dafür Kopierbuttons für den Startbefehl, jedes Argument sowie
@@ -63,9 +65,9 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    **Dauerhaft löschen** endgültig. Für einen späteren Zugriff ist dann eine neue
    Verbindung nötig. Rechnungen und gespeicherte Daten bleiben erhalten.
 8. **Konfiguration einrichten** öffnet einen Dialog direkt über der jeweiligen
-   Verbindung. **DE/EN** wechselt dort die Sprache, ohne den angezeigten Schlüssel
-   zu erneuern oder die gewählte Konfigurationsansicht zu verlassen. Nach dem
-   Schließen sind wieder die Verbindungen sichtbar. Eine funktionierende
+   Verbindung. Der Dialog übernimmt die Sprache der App. Die Schrittanzeige
+   erscheint nur beim Anlegen einer neuen Verbindung. Nach dem Schließen sind
+   wieder die Verbindungen sichtbar. Eine funktionierende
    Verbindung benötigt keinen neuen Schlüssel. Bei verlorener Konfiguration
    zuerst die Warnung lesen und dann
    **Neuen Schlüssel erzeugen** bestätigen. Erst dann wird der bisherige Schlüssel

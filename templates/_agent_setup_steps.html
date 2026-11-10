@@ -1,0 +1,8 @@
+<ol class="agent-setup-steps" aria-label="{{ 'Verbindung einrichten' if de else 'Set up connection' }}">
+  {% for label in [('Verbindung freigeben' if de else 'Grant connection'), ('Im Agenten einrichten' if de else 'Set up in agent')] %}
+  <li{% if loop.index == step %} aria-current="step"{% elif loop.index < step %} class="is-complete"{% endif %}>
+    <span class="agent-step-number" aria-hidden="true">{{ loop.index }}</span>
+    <span>{{ label }}</span>
+  </li>
+  {% endfor %}
+</ol>

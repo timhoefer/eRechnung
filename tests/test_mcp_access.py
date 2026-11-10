@@ -752,7 +752,7 @@ def test_inline_settings_show_setup_state_and_manage_connections(client, languag
     config = json.loads(page.get_element_by_id("mcp-configuration").text)
     token = config["mcpServers"]["erechnung"]["env"]["ERECHNUNG_MCP_TOKEN"]
     connection = access.authenticate(token, m.DATA_DIR)
-    assert page.get_element_by_id("agent-setup-dialog").get("data-in-settings") == "true"
+    assert not page.get_element_by_id("agent-setup-dialog").xpath('.//*[@data-setup-language]')
     for form in page.xpath('//form'):
         assert form.xpath('./input[@name="return_to" and @value="settings"]')
     for endpoint in ("/settings/panel", "/validate", "/agents/panel"):

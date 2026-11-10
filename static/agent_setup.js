@@ -6,9 +6,7 @@
     initialized.add(dialog);
     const content = document.getElementById('agent-setup-content');
     const error = document.getElementById('agent-setup-error');
-    const title = document.getElementById('agent-setup-title');
-    const originalLanguage = document.documentElement.lang;
-    let language = originalLanguage;
+    const language = document.documentElement.lang;
     let views = null;
     let opener = null;
     let busy = false;
@@ -29,14 +27,6 @@
       const scroll = dialog.scrollTop;
       content.innerHTML = views[language];
       dialog.lang = language;
-      title.textContent = language === 'de' ? 'Konfiguration einrichten' : 'Set up configuration';
-      dialog.querySelector('nav.langswitch').setAttribute('aria-label', language === 'de' ? 'Sprache' : 'Language');
-      dialog.querySelectorAll('[data-setup-language]').forEach(button => {
-        button.setAttribute('aria-pressed', String(button.dataset.setupLanguage === language));
-      });
-      dialog.querySelectorAll('[data-close-setup]').forEach(button => {
-        if (button.textContent.trim() === '×') button.setAttribute('aria-label', language === 'de' ? 'Schließen' : 'Close');
-      });
       error.hidden = true;
       document.dispatchEvent(new Event('agent-setup-rendered'));
       if (selectedTab) document.getElementById(selectedTab)?.click();
@@ -79,42 +69,16 @@
       });
     });
 
-    dialog.addEventListener('click', async event => {
+    dialog.addEventListener('click', event => {
       const close = event.target.closest('[data-close-setup]');
-      if (close && !busy) { dialog.close(); return; }
-      const button = event.target.closest('[data-setup-language]');
-      if (!button || busy || button.dataset.setupLanguage === language || !views) return;
-      // Embedded settings use the main language switch on close. Until then the
-      // one-time credential stays in this dialog, without reloading the page.
-      if (dialog.dataset.inSettings) {
-        language = button.dataset.setupLanguage;
-        render();
-        return;
-      }
-      setBusy(true);
-      try {
-        const response = await fetch(dialog.dataset.languageUrl, {
-          method: 'POST', credentials: 'same-origin', cache: 'no-store',
-          body: new URLSearchParams({ csrf: dialog.dataset.csrf, language: button.dataset.setupLanguage }),
-        });
-        if (!response.ok) throw new Error('Language unavailable');
-        const result = await response.json();
-        if (result.language !== button.dataset.setupLanguage) throw new Error('Unexpected language');
-        language = result.language;
-        render();
-      } catch {
-        showError(language === 'de' ? 'Die Sprache konnte nicht geändert werden. Deine Konfiguration bleibt erhalten.'
-          : 'The language could not be changed. Your configuration is preserved.');
-      } finally {
-        setBusy(false);
-      }
+      if (close && !busy) dialog.close();
     });
 
     dialog.addEventListener('submit', event => {
       const form = event.target;
       event.preventDefault();
       if (busy) return;
-      // Only the reviewed renewal form is submitted, never on open/language change.
+      // Only the reviewed renewal form is submitted, never on open.
       load(form.action, { method: 'POST', body: new FormData(form) });
     });
     dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
@@ -122,14 +86,6 @@
       views = null;
       content.replaceChildren();
       opener?.focus();
-      if (language !== originalLanguage) {
-        if (dialog.dataset.inSettings) {
-          document.querySelector(`.langswitch a[href*="/setlang/${language}"]`)?.click();
-        } else {
-          const anchor = opener?.closest('.agent-connection')?.id;
-          window.location.assign(dialog.dataset.returnUrl + (anchor ? '#' + encodeURIComponent(anchor) : ''));
-        }
-      }
     });
 
     const initial = document.getElementById('agent-setup-initial');

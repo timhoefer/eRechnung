@@ -54,6 +54,7 @@
     <h2 id="agent-connection-title">{{ 'Neue Verbindung' if de else 'New connection' }}</h2>
     <button type="button" class="secondary" data-close-connection aria-label="{{ t.close }}">&times;</button>
   </div>
+  {% with step=1 %}{% include '_agent_setup_steps.html' %}{% endwith %}
   <form method="post" action="{{ url_for('agents_update') }}"{% if agent_settings %} class="agent-management-form"{% endif %}>
     {% if agent_settings %}<input type="hidden" name="return_to" value="settings">{% endif %}
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="connect">
@@ -83,23 +84,15 @@
     <p class="hint">{{ 'Endgültige Rechnungen, Löschungen und Änderungen an vorhandenen Daten warten auf deine ausdrückliche Bestätigung in eRechnung.' if de else 'Final invoices, deletions and changes to existing data wait for your explicit approval in eRechnung.' }}</p>
     <div class="agent-actions">
       <button type="button" class="secondary" data-close-connection>{{ t.cancel }}</button>
-      <button type="submit">{{ 'Verbindung freigeben' if de else 'Grant connection' }}</button>
+      <button type="submit">{{ 'Freigeben und weiter' if de else 'Grant and continue' }}</button>
     </div>
   </form>
 </dialog>
 {% endif %}
-<dialog class="modal agent-setup-dialog" id="agent-setup-dialog" aria-labelledby="agent-setup-title"{% if configuration %} open{% endif %}
-        data-language-url="{{ url_for('agents_language', issuer=None) }}" data-csrf="{{ csrf }}"
-        data-return-url="{{ url_for('agents_settings') }}"{% if agent_settings %} data-in-settings="true"{% endif %}>
+<dialog class="modal agent-setup-dialog" id="agent-setup-dialog" aria-labelledby="agent-setup-title"{% if configuration %} open{% endif %}>
   <div class="agent-section-header">
     <h2 id="agent-setup-title">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</h2>
-    <div class="header-controls">
-      <nav class="langswitch" aria-label="{{ 'Sprache' if de else 'Language' }}">
-        <button type="button" data-setup-language="de" lang="de" aria-label="Deutsch" aria-pressed="{{ 'true' if de else 'false' }}">DE</button>
-        <button type="button" data-setup-language="en" lang="en" aria-label="English" aria-pressed="{{ 'false' if de else 'true' }}">EN</button>
-      </nav>
-      <button type="button" class="secondary" data-close-setup aria-label="{{ t.close }}">&times;</button>
-    </div>
+    <button type="button" class="secondary" data-close-setup aria-label="{{ t.close }}">&times;</button>
   </div>
   <p class="hint" id="agent-setup-error" role="alert" hidden></p>
   <div id="agent-setup-content">

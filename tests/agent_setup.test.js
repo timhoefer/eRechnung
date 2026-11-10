@@ -9,16 +9,11 @@ const credential = { de: 'Konfiguration: FICTIONAL-KEY', en: 'Configuration: FIC
 const response = (views, status = 200) => ({ ok: status === 200, status, json: async () => ({ views }) });
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-function setup(initialViews, embedded = false) {
+function setup(initialViews, language = 'de') {
   const handlers = {};
   const requests = [];
   const navigation = [];
   const renders = [];
-  const languages = ['de', 'en'].map(language => ({
-    dataset: { setupLanguage: language },
-    setAttribute(name, value) { this[name] = value; },
-    closest(selector) { return selector === '[data-setup-language]' ? this : null; },
-  }));
   const close = {
     textContent: '×', setAttribute(name, value) { this[name] = value; },
     closest(selector) { return selector === '[data-close-setup]' ? this : null; },
@@ -30,15 +25,9 @@ function setup(initialViews, embedded = false) {
   };
   const dialog = {
     open: false, scrollTop: 0,
-    dataset: { languageUrl: '/agents/language', csrf: 'csrf-only', returnUrl: '/agents?issuer=default', inSettings: embedded ? 'true' : '' },
     setAttribute(name, value) { this[name] = value; },
     removeAttribute(name) { if (name === 'open') this.open = false; },
-    querySelector() { return { setAttribute() {} }; },
-    querySelectorAll(selector) {
-      if (selector === '[data-setup-language]') return languages;
-      if (selector === '[data-close-setup]') return [close];
-      return [...languages, close];
-    },
+    querySelectorAll() { return [close]; },
     addEventListener(name, handler) { handlers[name] = handler; },
     showModal() { this.open = true; },
     close() { this.open = false; handlers.close(); },
@@ -58,7 +47,7 @@ function setup(initialViews, embedded = false) {
   if (initial) elements['agent-setup-initial'] = initial;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_setup.js'), 'utf8'), {
     document: {
-      documentElement: { lang: 'de' }, getElementById: id => elements[id],
+      documentElement: { lang: language }, getElementById: id => elements[id],
       querySelectorAll: () => [link],
       querySelector: selector => ({ click: () => navigation.push(selector) }),
       dispatchEvent(event) {
@@ -75,7 +64,7 @@ function setup(initialViews, embedded = false) {
   });
   const event = target => ({ target, prevented: false, preventDefault() { this.prevented = true; } });
   return {
-    dialog, content, close, languages, link, elements, initial, requests, navigation, renders,
+    dialog, content, close, link, elements, initial, requests, navigation, renders,
     open(modifiers = {}) { const e = { ...event(link), button: 0, ...modifiers }; handlers.open(e); return e; },
     click(target) { return handlers.click(event(target)); },
     submit() { handlers.submit(event({ action: link.href, fields: { csrf: 'csrf-only', revision: 'reviewed-revision', confirm: 'renew' } })); },
@@ -122,40 +111,22 @@ test('renewal requires an explicit submit; double clicks and Escape cannot disca
   assert.equal(page.requests[2].options.method, undefined);
 });
 
-test('language switches preserve the credential and tab without submitting or storing the credential', async () => {
-  const page = setup(credential);
-  assert.equal(page.initial.removed, true);
-  assert.equal(page.dialog.open, true);
-  assert.equal(page.requests.length, 0);
-  page.content.selectedTab = 'configuration-values-tab';
-  page.dialog.scrollTop = 240;
-  const switching = page.click(page.languages[1]);
-  const request = page.requests[0];
-  assert.equal(request.url, '/agents/language');
-  assert.equal(request.options.method, 'POST');
-  assert.equal(request.options.body.toString(), 'csrf=csrf-only&language=en');
-  request.resolve({ ok: true, json: async () => ({ language: 'en' }) });
-  await switching;
-  assert.equal(page.dialog.lang, 'en');
-  assert.equal(page.content.innerHTML, credential.en);
-  assert.equal(page.content.selectedTab, 'configuration-values-tab');
-  assert.equal(page.dialog.scrollTop, 240);
-  assert.equal(page.close['aria-label'], 'Close');
-  await page.click(page.close);
-  assert.deepEqual(page.navigation, ['/agents?issuer=default']);
-  assert.equal(page.content.innerHTML, '');
-});
-
-test('language failure retains the one-time configuration and does not reload the page', async () => {
-  const page = setup(credential);
-  const switching = page.click(page.languages[1]);
-  page.requests[0].reject(new Error('Offline')); await switching;
-  assert.equal(page.content.innerHTML, credential.de);
-  assert.equal(page.elements['agent-setup-error'].hidden, false);
-  assert.equal(page.dialog['aria-busy'], 'false');
-  page.escape();
-  assert.deepEqual(page.navigation, []);
-});
+for (const language of ['de', 'en']) {
+  test(`initial configuration opens in ${language} without another request and clears on close`, async () => {
+    const page = setup(credential, language);
+    assert.equal(page.initial.removed, true);
+    assert.equal(page.dialog.open, true);
+    assert.equal(page.requests.length, 0);
+    assert.equal(page.dialog.lang, language);
+    assert.equal(page.content.innerHTML, credential[language]);
+    assert.equal(page.renders.length, 1);
+    await page.click(page.close);
+    assert.equal(page.dialog.open, false);
+    assert.equal(page.content.innerHTML, '');
+    assert.deepEqual(page.navigation, []);
+    assert.equal(page.requests.length, 0);
+  });
+}
 
 test('stale renewal displays the new warning and network errors never retry the destructive POST', async () => {
   const page = setup();
@@ -167,16 +138,4 @@ test('stale renewal displays the new warning and network errors never retry the 
   assert.equal(page.elements['agent-setup-error'].hidden, false);
   assert.match(page.elements['agent-setup-error'].textContent, /bisherige bereits ungültig/);
   assert.equal(page.escape().prevented, false);
-});
-
-
-test('embedded dialog preserves its credential while translating, then uses the draft-preserving main language switch', async () => {
-  const page = setup(credential, true);
-  await page.click(page.languages[1]);
-  assert.equal(page.content.innerHTML, credential.en);
-  assert.equal(page.requests.length, 0);
-  assert.deepEqual(page.navigation, []);
-  await page.click(page.close);
-  assert.deepEqual(page.navigation, ['.langswitch a[href*="/setlang/en"]']);
-  assert.equal(page.content.innerHTML, '');
 });
