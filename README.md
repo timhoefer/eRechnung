@@ -79,8 +79,9 @@ Ein Beleg wird nur nach erfolgreicher XSD- und Schematron-Prüfung archiviert.
 Fehlt die Prüfung oder schlägt sie fehl, zeigt die App die Fehler; Belegdateien,
 Kundendaten und Rechnungsnummernstand bleiben unverändert.
 
-Das Archiv zeigt einen grünen Haken, wenn die E-Rechnungsprüfung für die aktuelle
-Datei mit den aktuellen Prüfregeln bestanden wurde. Der Tooltip nennt den
+Das Archiv zeigt einen grünen **✓ XML**-Chip, wenn die technische XML-Prüfung für die aktuelle
+Datei mit den aktuellen Prüfregeln bestanden wurde. Der Tooltip nennt die Prüfung
+gegen XSD und Geschäftsregeln sowie den
 Prüfzeitpunkt und die geprüfte Datei (bei XRechnung die XML, sonst das PDF mit
 eingebettetem XML). Geänderte Dateien oder Prüfregeln erhalten einen neutralen
 Hinweis auf eine nötige Neuprüfung; fehlgeschlagene Prüfungen erscheinen rot.
@@ -89,7 +90,12 @@ Altbelege ohne gespeichertes Prüfergebnis erhalten erst nach einer Prüfung ein
 Status. Ein gewöhnliches App-Update ohne geänderte Prüfregeln setzt ihn nicht zurück.
 Prüfergebnisse werden separat gespeichert; die Belegdateien bleiben unverändert.
 Die erneute Archivprüfung berücksichtigt das Dateiformat: Eine PDF-Datei muss
-das XML eingebettet enthalten, eine XML-Datei wird direkt geprüft. Beim Umzug
+das XML eingebettet enthalten, eine XML-Datei wird direkt geprüft. Auch das
+hinterlegte Rechnungsprofil wird berücksichtigt: Eine XRechnung darf nicht durch
+eine normale EN-16931-Datei ersetzt werden und danach wieder einen grünen Haken
+erhalten. Profilabweichungen werden angezeigt; der gespeicherte Status ist an das
+geprüfte Archivprofil gebunden. Beschädigte Prüfzeitpunkte werden ignoriert und
+blockieren das Archiv nicht. Beim Umzug
 in einen Datenordner mit identischen Belegen werden die separaten Prüfergebnisse
 des aktiven Ordners übernommen; unterschiedliche Prüfzeitpunkte sind kein
 Rechnungsdatenkonflikt. Abweichende Belege blockieren den Umzug weiterhin.

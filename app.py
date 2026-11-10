@@ -1571,7 +1571,8 @@ def generate():
         xml_filename = str(Path(filename).with_suffix(".xml")) if is_xr else None
         if not reused:
             validation_save_failed = not _remember_validation(
-                output_dir() / (xml_filename or filename), xml if is_xr else pdf, ruleset, "valid")
+                output_dir() / (xml_filename or filename), xml if is_xr else pdf, ruleset, "valid",
+                data["invoice"]["profile"])
         # Only update customer data after a successful final archive operation.
         _write_json(CUSTOMERS_FILE, customers)
 
@@ -1845,7 +1846,7 @@ def _settings_context() -> dict:
                 ),
                 "has_draft": sidecar.is_file() and not sidecar.is_symlink(),
                 "can_export": exportable,
-                "validation": validation_status.read(checked_file, ruleset),
+                "validation": validation_status.read(checked_file, ruleset, profile_kind),
                 "validation_file": checked_file.name,
                 "issuer_id": identity,
                 "issuer_label": profile["label"],
@@ -2148,14 +2149,15 @@ def data_dir_browse():
     return {"ok": True, "path": r.stdout.strip() or None}
 
 
-def _remember_validation(path: Path, raw: bytes, ruleset: str | None, state: str) -> bool:
+def _remember_validation(path: Path, raw: bytes, ruleset: str | None, state: str,
+                         profile: str | None = None) -> bool:
     if not ruleset or ruleset != validation_ruleset():
         return False  # Rules changed during the check, or their version is unavailable.
     try:
-        return validation_status.save(path, raw, ruleset, state)
+        return validation_status.save(path, raw, ruleset, state, profile)
     except OSError:
         # A disposable receipt must not turn a successful invoice into a failure.
-        validation_status.remember_unsaved(path, raw, ruleset, state)
+        validation_status.remember_unsaved(path, raw, ruleset, state, profile)
         logger.warning("Could not save validation status for %s", path.name, exc_info=True)
         return False
 
@@ -2164,6 +2166,7 @@ def _validate_request():
     upload = request.files.get("file")
     filename = request.form.get("filename")
     archive_path = None
+    expected_profile = None
     if upload and upload.filename:
         raw = upload.read()
         label = upload.filename
@@ -2175,6 +2178,15 @@ def _validate_request():
         raw = path.read_bytes()
         label = filename
         archive_path = path
+        sidecar = path.with_suffix(".json")
+        if sidecar.is_file() and not sidecar.is_symlink():
+            try:
+                draft = json.loads(sidecar.read_text(encoding="utf-8"))
+                profile = (draft.get("invoice") or {}).get("profile")
+                if profile in ("en16931", "xrechnung"):
+                    expected_profile = profile
+            except (OSError, ValueError, AttributeError, TypeError):
+                pass  # Legacy files without usable metadata still allow a file check.
     else:
         return None
 
@@ -2186,7 +2198,7 @@ def _validate_request():
             sch = result.get("sch")
             if result.get("xsd_ok") and sch and (not sch["available"] or sch.get("error")):
                 state = "unavailable"
-            result["save_failed"] = not _remember_validation(archive_path, raw, ruleset, state)
+            result["save_failed"] = not _remember_validation(archive_path, raw, ruleset, state, expected_profile)
         return result
 
     # Archived files have a known container: an XML named .pdf (or vice versa)
@@ -2206,12 +2218,19 @@ def _validate_request():
     xsd_ok, xsd_messages = validate_xml_bytes(xml)
     sch = validate_schematron(xml)
     overall = bool(xsd_ok and sch["available"] and sch["ok"] and not sch.get("error"))
+    profile_message = None
+    if (xsd_ok and sch["available"] and not sch.get("error") and expected_profile is not None
+            and bool(sch.get("xrechnung")) != (expected_profile == "xrechnung")):
+        overall = False
+        profile_message = translate(get_ui_lang(request))["validation_profile_mismatch"].format(
+            profile="XRechnung" if expected_profile == "xrechnung" else "ZUGFeRD (EN 16931)")
     return finish({
         "label": label,
         "ok": overall,
         "xsd_ok": xsd_ok,
         "xsd_messages": xsd_messages,
         "sch": sch,
+        "profile_message": profile_message,
     })
 
 

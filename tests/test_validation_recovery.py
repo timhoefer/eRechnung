@@ -1,4 +1,5 @@
 """Regression cases for container checks, cache migration and failed writes."""
+import io
 import json
 import shutil
 
@@ -187,3 +188,90 @@ def test_unremovable_old_receipt_is_ignored_during_the_session(archive, validato
     monkeypatch.setattr(status, 'save', original_save)
     client.post('/settings/panel', data={'filename': FILE})
     assert status.read(path, 'rules-1')['state'] == 'valid'
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+@pytest.mark.parametrize('expected', ['xrechnung', 'en16931'])
+@pytest.mark.parametrize('lang', ['de', 'en'])
+def test_recheck_rejects_profile_switch_and_recovers(archive, endpoint, expected, lang):
+    client, folders = archive
+    client.set_cookie('lang', lang)
+    pdf = folders['default'] / FILE
+    sidecar = pdf.with_suffix('.json')
+    metadata = json.loads(sidecar.read_text())
+    metadata['invoice']['profile'] = expected
+    sidecar.write_text(json.dumps(metadata))
+    data = make_data()
+    data['buyer']['reference'] = 'TEST'
+    data['invoice']['profile'] = expected
+    document = pdf.with_suffix('.xml') if expected == 'xrechnung' else pdf
+
+    def content():
+        xml = m.build_xml(data)
+        assert m.validate_xml_bytes(xml)[0]
+        assert m.validate_schematron(xml)['ok']
+        return xml if expected == 'xrechnung' else m.build_pdf('<p>Test invoice</p>', xml)
+
+    original = content()
+    document.write_bytes(original)
+    assert client.post(endpoint, data={'filename': document.name}).status_code == 200
+    assert status.read(document, m.validation_ruleset(), expected)['state'] == 'valid'
+
+    data['invoice']['profile'] = 'en16931' if expected == 'xrechnung' else 'xrechnung'
+    replacement = content()
+    document.write_bytes(replacement)
+    assert status.read(document, m.validation_ruleset(), expected)['state'] == 'file_changed'
+    before = {p: p.read_bytes() for p in folders['default'].iterdir() if p.suffix != '.validation'}
+    message = m.translate(lang)['validation_profile_mismatch'].format(
+        profile='XRechnung' if expected == 'xrechnung' else 'ZUGFeRD (EN 16931)')
+    response = client.post(endpoint, data={'filename': document.name})
+    assert response.status_code == 200
+    assert message in html.fromstring(response.text).xpath('//*[@role="alert"]/text()')
+    for checked_response in (response, client.get(endpoint)):
+        page = html.fromstring(checked_response.text)
+        assert not page.xpath('//span[@class="arch-validation valid"]')
+        assert page.xpath('//span[@class="arch-validation invalid"]')
+    assert all(p.read_bytes() == raw for p, raw in before.items())
+
+    # An upload is a separate document check, never an archive update, even if
+    # its filename matches. The archive's failed profile check must remain red.
+    receipt = status.receipt_path(document).read_bytes()
+    response = client.post(endpoint, data={'file': (io.BytesIO(replacement), document.name)})
+    assert html.fromstring(response.text).xpath('//div[contains(@class,"validation-result ok")]')
+    assert status.receipt_path(document).read_bytes() == receipt
+
+    document.write_bytes(original)
+    response = client.post(endpoint, data={'filename': document.name})
+    assert html.fromstring(response.text).xpath('//span[@class="arch-validation valid"]')
+    assert status.read(document, m.validation_ruleset(), expected)['state'] == 'valid'
+
+
+@pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
+@pytest.mark.parametrize('timestamp', ['9999-12-31T23:59:59-23:59', '0001-01-01T00:00:00+23:59'])
+def test_corrupt_timestamp_does_not_block_archive_or_recheck(archive, validator, endpoint, timestamp):
+    client, folders = archive
+    document = folders['default'] / FILE
+    client.post(endpoint, data={'filename': FILE})
+    receipt = status.receipt_path(document)
+    record = json.loads(receipt.read_text())
+    record['checked_at'] = timestamp
+    receipt.write_text(json.dumps(record))
+    response = client.get(endpoint)
+    assert response.status_code == 200
+    assert not html.fromstring(response.text).xpath('//span[@class="arch-validation valid"]')
+    assert status.read(document, 'rules-1') is None
+    response = client.post(endpoint, data={'filename': FILE})
+    assert response.status_code == 200
+    assert html.fromstring(response.text).xpath('//span[@class="arch-validation valid"]')
+
+
+@pytest.mark.parametrize('pending', [False, True])
+def test_receipt_cannot_be_reused_for_different_archive_profile(tmp_path, pending):
+    document = tmp_path / 'invoice.xml'
+    raw = m.build_xml(make_data())
+    document.write_bytes(raw)
+    if pending:
+        status.remember_unsaved(document, raw, 'rules', 'valid', 'en16931')
+    else:
+        status.save(document, raw, 'rules', 'valid', 'en16931')
+    assert status.read(document, 'rules', 'xrechnung')['state'] == 'file_changed'

@@ -654,7 +654,7 @@ def validation_ruleset() -> str | None:
         if not all(p.is_file() for p in (schema, rules / _SCH_EN16931, rules / _SCH_XRECHNUNG)):
             return None
         # Bump this revision when the validation/extraction policy changes.
-        engine = (2, pypdf.__version__, saxonche.__version__, etree.LXML_VERSION, etree.LIBXML_VERSION)
+        engine = (3, pypdf.__version__, saxonche.__version__, etree.LXML_VERSION, etree.LIBXML_VERSION)
         digest = hashlib.sha256(repr(engine).encode())
         for root, pattern in ((schema.parent, "*.xsd"), (rules, "*.xsl*")):
             for path in sorted(root.rglob(pattern)):

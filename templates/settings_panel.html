@@ -36,6 +36,7 @@
     </button>
   </div>
   {% if result.ok %}<p>{{ t.validate_ok_text }}</p>{% endif %}
+  {% if result.profile_message %}<p role="alert">{{ result.profile_message }}</p>{% endif %}
   {% if result.save_failed and not archive_validation_unsaved %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
   {% if result.xsd_messages %}
     <p style="margin:10px 0 2px"><strong>{{ t.val_xsd }}: ✗</strong></p>
@@ -146,6 +147,7 @@
                 {% elif a.validation.state == 'invalid' %}<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>
                 {% else %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>{% endif %}
               </svg>
+              <span aria-hidden="true">XML</span>
             </span>
             {% endif %}
           </span>
@@ -157,7 +159,7 @@
             {% if a.amount is not none %}<span class="arch-amt">{{ a.currency }} {{ a.amount|money(lang) }}</span>{% endif %}
           </div>
         </td>
-        <td class="arch-date">{{ a.modified }}</td>
+        <td class="arch-date" title="{{ a.modified }}">{{ a.modified[:10] }}</td>
         <td class="r arch-actions">
           {% if is_desktop %}
           <button type="button" class="secondary small reveal-btn" data-url="{{ url_for('reveal', filename=a.filename, issuer=a.issuer_id) }}">{{ t.reveal_finder }}</button>

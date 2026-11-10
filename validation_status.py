@@ -61,14 +61,15 @@ def copy_receipt(source: Path, target: Path) -> None:
     _write(target, source.read_bytes())
 
 
-def _record(raw: bytes, ruleset: str, status: str) -> dict:
+def _record(raw: bytes, ruleset: str, status: str, profile: str | None = None) -> dict:
     return {"version": 1, "sha256": hashlib.sha256(raw).hexdigest(), "ruleset": ruleset,
-            "status": status, "checked_at": datetime.now(UTC).isoformat()}
+            "status": status, "checked_at": datetime.now(UTC).isoformat(),
+            "profile": profile if profile in ("en16931", "xrechnung") else None}
 
 
-def save(document: Path, checked_bytes: bytes, ruleset: str, status: str) -> bool:
+def save(document: Path, checked_bytes: bytes, ruleset: str, status: str, profile: str | None = None) -> bool:
     """Caller holds the data lock. Cache only the exact bytes actually checked."""
-    record = _record(checked_bytes, ruleset, status)
+    record = _record(checked_bytes, ruleset, status, profile)
     if _digest(document, _stamp(document)) != record["sha256"]:
         return False  # An external edit must never inherit the previous result.
     _write(receipt_path(document), json.dumps(record).encode("utf-8"))
@@ -83,9 +84,9 @@ def _forget_saved(document: Path) -> None:
         pass  # The in-memory result still takes precedence in this app session.
 
 
-def remember_unsaved(document: Path, raw: bytes, ruleset: str, status: str) -> None:
+def remember_unsaved(document: Path, raw: bytes, ruleset: str, status: str, profile: str | None = None) -> None:
     """Keep a failed write visible on subsequent page loads, not just on POST."""
-    _unsaved[document.absolute()] = _record(raw, ruleset, status)
+    _unsaved[document.absolute()] = _record(raw, ruleset, status, profile)
     _forget_saved(document)
 
 
@@ -99,7 +100,7 @@ def relocate_unsaved(source: Path, target: Path) -> None:
             _forget_saved(moved)
 
 
-def read(document: Path, ruleset: str | None) -> dict | None:
+def read(document: Path, ruleset: str | None, profile: str | None = None) -> dict | None:
     """Return a current result or a neutral stale state, never guess success."""
     try:
         receipt = receipt_path(document)
@@ -118,6 +119,8 @@ def read(document: Path, ruleset: str | None) -> dict | None:
         state = record["status"]
         if not ruleset or record["ruleset"] != ruleset:
             state = "rules_changed"
+        if profile in ("en16931", "xrechnung") and record.get("profile") != profile:
+            state = "file_changed"  # The archive's expected profile changed.
         try:
             if _digest(document, _stamp(document)) != record["sha256"]:
                 state = "file_changed"
@@ -127,5 +130,5 @@ def read(document: Path, ruleset: str | None) -> dict | None:
             state = "unsaved"
         return {"state": state, "checked_at": checked.astimezone().strftime("%d.%m.%Y %H:%M"),
                 "saved": pending is None}
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, OverflowError):
         return None
