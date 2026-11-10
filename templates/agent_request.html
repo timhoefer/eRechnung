@@ -1,37 +1,5 @@
 {% extends "agent_base.html" %}
 {% block content %}
-<h1>{{ 'Anfrage prüfen' if de else 'Review request' }}</h1>
-<p>{{ 'Verbindung' if de else 'Connection' }}: <strong>{{ entry.connection.name }}</strong></p>
-<section class="card">
-{% if entry.status == 'pending' %}
-  <h2>{{ entry.confirmation.title }}</h2>
-  <p>{{ 'Rechnungsaussteller' if de else 'Issuer' }}: <strong>{{ entry.confirmation.issuer }}</strong></p>
-  <p class="flash err">{{ entry.confirmation.message }}</p>
-  <table class="summary">
-    <thead><tr><th>{{ 'Angabe' if de else 'Field' }}</th><th>{{ 'Bisher' if de else 'Before' }}</th><th>{{ 'Danach' if de else 'After' }}</th></tr></thead>
-    <tbody>{% for detail in entry.confirmation.details %}<tr><td>{{ detail.label }}</td><td>{{ detail.before }}</td><td>{{ detail.after }}</td></tr>{% endfor %}</tbody>
-  </table>
-  {% macro fields(record) %}<dl class="agent-fields">{% for key, value in record.items() %}<dt>{{ t.get(key, key.replace('_', ' ')) }}</dt><dd>{{ '—' if value is none or value == '' else value }}</dd>{% endfor %}</dl>{% endmacro %}
-  {% set invoice = entry.confirmation.invoice_snapshot %}
-  {% if invoice %}
-  <h3>{{ 'Rechnung' if de else 'Invoice' }}</h3>{{ fields(invoice.invoice) }}
-  <h3>{{ 'Kunde' if de else 'Customer' }}</h3>{{ fields(invoice.buyer) }}
-  <h3>{{ 'Positionen' if de else 'Items' }}</h3>
-  {% for item in invoice['items'] %}<div class="export-box">{{ fields(item) }}</div>{% endfor %}
-  {% if invoice.bank %}<h3>{{ 'Zahlungskonto' if de else 'Payment account' }}</h3>{{ fields(invoice.bank) }}{% endif %}
-  {% endif %}
-  <p>{{ 'Bestätige nur, wenn du diese konkrete Aktion beauftragt hast. Die Ausführung erfolgt sofort; Löschungen können nicht rückgängig gemacht werden.' if de else 'Approve only if you requested this specific operation. It executes immediately; deletions may be irreversible.' }}</p>
-  <form method="post" class="agent-actions">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button type="submit" name="decision" value="deny" class="secondary">{{ 'Ablehnen' if de else 'Deny' }}</button>
-    <button type="submit" name="decision" value="approve">{{ 'Ausdrücklich bestätigen' if de else 'Explicitly approve' }}</button>
-  </form>
-{% else %}
-  <h2>{{ {'completed': 'Ausgeführt', 'failed': 'Nicht ausgeführt', 'denied': 'Abgelehnt', 'expired': 'Abgelaufen'}.get(entry.status, entry.status) if de else entry.status|capitalize }}</h2>
-  {% if entry.result and entry.result.status == 'approval_required' %}<p>{{ 'Der Datenstand hat sich geändert. Bitte die neue Anfrage separat prüfen.' if de else 'The data changed. Review the new request separately.' }}</p>{% endif %}
-  {% if entry.result and entry.result.filename %}<p>{{ entry.result.filename }}</p>{% endif %}
-  {% if entry.result and entry.result.message %}<p>{{ entry.result.message }}</p>{% endif %}
-{% endif %}
-</section>
+<section class="card">{% include '_agent_request_content.html' %}</section>
 <p><a href="{{ url_for('agents_settings') }}">{{ 'Zurück zum Agentenzugriff' if de else 'Back to agent access' }}</a></p>
 {% endblock %}

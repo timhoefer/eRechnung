@@ -5,49 +5,9 @@
   <title>{{ 'Agentenzugriff' if lang == 'de' else 'Agent access' }} · eRechnung</title>
   {% include "_theme_script.html" %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_version('style.css') }}">
-  <style>
-    .agent-page { max-width: 960px; margin: 28px auto; padding: 0 20px; }
-    .agent-page .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
-    .agent-check input { width: auto; flex: none; margin-top: 4px; }
-    .agent-customer-options { margin-top: 12px; border: 1px solid var(--line); border-radius: 9px; padding: 12px; max-height: 280px; overflow-y: auto; }
-    .agent-connection { position: relative; isolation: isolate; overflow: hidden; min-height: 220px; overflow-wrap: anywhere; }
-    .agent-connection-header strong { min-width: 0; }
-    .agent-connection-details { padding-right: 126px; }
-    .agent-circuit {
-      position: absolute; right: 0; top: 50%; width: 300px; height: 220px; transform: translateY(-50%);
-      z-index: -1; pointer-events: none; color: var(--accent);
-      -webkit-mask-image: linear-gradient(to right, transparent, #000 72%);
-      mask-image: linear-gradient(to right, transparent, #000 72%);
-    }
-    .agent-circuit-traces, .agent-circuit-chip { stroke-opacity: .28; }
-    .agent-circuit-flow { display: none; stroke-opacity: 1; stroke-dasharray: 4 110; stroke-dashoffset: 5; }
-    .is-active .agent-circuit-flow { display: initial; animation: agent-data-flow 6s linear infinite; animation-delay: var(--delay); filter: drop-shadow(0 0 3px var(--accent)); }
-    .is-active .agent-circuit-chip { animation: agent-chip-glow 5s ease-in-out infinite; filter: drop-shadow(0 0 4px var(--accent)); }
-    .agent-chip-control { position: absolute; right: 60px; top: 50%; transform: translate(50%, -50%); display: grid; justify-items: center; gap: 6px; }
-    .agent-chip-control .hint { margin: 0; font-size: 11px; line-height: 14px; }
-    @keyframes agent-data-flow {
-      0% { stroke-dashoffset: 5; opacity: 0; }
-      10%, 75% { opacity: .65; }
-      95%, 100% { stroke-dashoffset: -100; opacity: 0; }
-    }
-    @keyframes agent-chip-glow { 0%, 100% { stroke-opacity: .35; } 50% { stroke-opacity: .6; } }
-    @media (prefers-reduced-motion: reduce) {
-      .is-active .agent-circuit-flow { display: none; animation: none; }
-      .is-active .agent-circuit-chip { animation: none; stroke-opacity: .45; }
-    }
-    @media (max-width: 480px) {
-      .agent-connection { padding-bottom: 164px; }
-      .agent-connection-details { padding-right: 0; }
-      .agent-circuit { top: auto; bottom: -30px; transform: none; }
-      .agent-chip-control { top: auto; bottom: 80px; transform: translate(50%, 50%); }
-    }
-    .agent-page pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .agent-page td { vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .agent-page .agent-fields { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 8px 16px; }
-    .agent-fields dt { color: var(--muted); } .agent-fields dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-  </style>
+
 </head>
-<body><main class="agent-page">
+<body><main class="agent-page agent-ui">
 {% set de = lang == 'de' %}
 {% block content %}{% endblock %}
 </main>{% block scripts %}{% endblock %}</body></html>

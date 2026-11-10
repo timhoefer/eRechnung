@@ -33,7 +33,8 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    und offenen Anfragen; erneutes Einschalten stellt diese nicht wieder her.
    **Abbrechen** erhält den bisherigen Zustand. Hat sich die Liste seit der
    Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
-3. **Verbindungen und Aktionsfreigaben** öffnen und mit **+** eine neue Verbindung
+3. Direkt darunter zeigt **Verbindungen**, ob bereits ein Zugang eingerichtet ist.
+   Mit **Verbindung hinzufügen** (später **+**) eine neue Verbindung
    anlegen. Im Dialog einen Namen und die gewünschten aktiven Aussteller wählen.
    Deaktivierte Aussteller werden bei neuen Verbindungen nicht angeboten. Bereits
    erteilte Archivfreigaben bleiben für die Historie und Korrekturen erhalten.
@@ -48,7 +49,8 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Werte** bietet dafür Kopierbuttons für den Startbefehl, jedes Argument sowie
    die Namen und Werte aller Umgebungsvariablen. Beide Ansichten enthalten denselben
    Schlüssel und sind nur unmittelbar nach dem Anlegen oder Erneuern verfügbar.
-6. In der App unter **Aktionsfreigaben → Aktualisieren** offene Aktionen prüfen.
+6. In den Einstellungen unter **Aktionsfreigaben → Aktualisieren** offene Aktionen
+   im Dialog prüfen und ausdrücklich bestätigen oder ablehnen.
    Diese stammen von bereits eingerichteten MCP-Verbindungen und geben keinem
    weiteren Agenten Zugang. Lesen, Prüfen und Vorschauen benötigen keine einzelne
    Bestätigung; endgültige Rechnungen, Änderungen an bestehenden Daten und

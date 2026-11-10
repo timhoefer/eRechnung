@@ -725,3 +725,86 @@ def test_unreadable_agent_settings_do_not_block_normal_invoicing(client):
     assert page.get_element_by_id("agent-access-card").xpath('.//p[@role="alert" and not(@hidden)]')
     assert not call("x" * 43, "list_customers")["ok"]
     assert path.read_text() == "invalid-json"
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_inline_settings_show_setup_state_and_manage_connections(client, language):
+    client.set_cookie("lang", language)
+    headers = {"X-Requested-With": "fetch"}
+    access = m.app.extensions["mcp_access"]
+
+    def update(action, **fields):
+        return client.post("/agents/settings", headers=headers, data={
+            "csrf": csrf(client), "return_to": "settings", "action": action, **fields,
+        })
+
+    before = snapshot()
+    enabled = update("enable", consent="yes")
+    assert enabled.status_code == 200
+    page = html.fromstring(enabled.json["management"])
+    assert page.get_element_by_id("agent-connection-add").text.strip() == (
+        "Verbindung hinzufügen" if language == "de" else "Add connection")
+    assert not access.load()["connections"]
+    assert snapshot() == before
+    created = update("connect", name="Fictional connection", issuers=["default"], write="yes", customer_mode="all")
+    assert created.status_code == 200
+    page = html.fromstring(created.json["management"])
+    config = json.loads(page.get_element_by_id("mcp-configuration").text)
+    token = config["mcpServers"]["erechnung"]["env"]["ERECHNUNG_MCP_TOKEN"]
+    connection = access.authenticate(token, m.DATA_DIR)
+    assert page.get_element_by_id("agent-setup-dialog").get("data-in-settings") == "true"
+    for form in page.xpath('//form'):
+        assert form.xpath('./input[@name="return_to" and @value="settings"]')
+    for endpoint in ("/settings/panel", "/validate", "/agents/panel"):
+        response = client.get(endpoint)
+        assert response.status_code == 200
+        assert token not in response.text
+        assert "Fictional connection" in response.text
+    assert update("pause", connection=connection["id"]).status_code == 200
+    assert not call(token, "list_customers")["ok"]
+    assert update("resume", connection=connection["id"]).status_code == 200
+    assert call(token, "list_customers")["ok"]
+    review = update("revoke", connection=connection["id"])
+    assert review.status_code == 200 and "confirmation" in review.json
+    assert call(token, "list_customers")["ok"]
+    form, = html.fromstring(review.json["confirmation"]).xpath('//form')
+    removed = client.post(form.action, headers=headers, data=dict(form.form_values()))
+    assert removed.status_code == 200
+    assert not access.load()["connections"]
+    assert not call(token, "list_customers")["ok"]
+
+
+@pytest.mark.parametrize("decision", ["approve", "deny"])
+def test_inline_action_review_still_requires_exact_explicit_decision(client, decision):
+    token = grant(client)
+    pending = call(token, "save_customer", issuer="default", buyer={**BUYER, "city": "Hamburg"})
+    endpoint = "/agents/requests/" + pending["request_id"]
+    before = snapshot()
+    headers = {"X-Requested-With": "fetch"}
+    review = client.get(endpoint, headers=headers)
+    assert review.status_code == 200 and not review.json["decided"]
+    assert "Hamburg" in review.json["confirmation"]
+    assert snapshot() == before
+    fields = {"csrf": csrf(client), "return_to": "settings"}
+    assert client.post(endpoint, headers=headers, data=fields).status_code == 400
+    assert client.post(endpoint, headers=headers, data={"decision": decision}).status_code == 403
+    for extra in ({"Origin": "https://other.example"}, {"Authorization": "Bearer " + token}):
+        assert client.post(endpoint, headers={**headers, **extra}, data={**fields, "decision": decision}).status_code == 403
+    assert snapshot() == before
+    result = client.post(endpoint, headers=headers, data={**fields, "decision": decision})
+    assert result.status_code == 200 and result.json["decided"]
+    assert not html.fromstring(result.json["confirmation"]).xpath('//button[@name="decision"]')
+    assert (snapshot() != before) == (decision == "approve")
+    after = snapshot()
+    assert client.post(endpoint, headers=headers, data={**fields, "decision": decision}).status_code == 409
+    assert snapshot() == after
+
+
+def test_settings_fragment_read_does_not_require_agent_csrf_on_unrelated_form_posts(client, monkeypatch):
+    # A file-validation POST must still render Settings without an MCP CSRF field.
+    monkeypatch.setattr(m, "_localized_validation", lambda: None)
+    assert client.post("/settings/panel", data={}).status_code == 200
+    assert client.post("/validate", data={}).status_code == 200
+    assert client.get("/agents/panel", headers={"Authorization": "Bearer " + "x" * 43}).status_code == 403
+    monkeypatch.setitem(m.app.config, "MCP_FEATURE", False)
+    assert client.get("/agents/panel").status_code == 404

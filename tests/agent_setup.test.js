@@ -9,7 +9,7 @@ const credential = { de: 'Konfiguration: FICTIONAL-KEY', en: 'Configuration: FIC
 const response = (views, status = 200) => ({ ok: status === 200, status, json: async () => ({ views }) });
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-function setup(initialViews) {
+function setup(initialViews, embedded = false) {
   const handlers = {};
   const requests = [];
   const navigation = [];
@@ -30,7 +30,7 @@ function setup(initialViews) {
   };
   const dialog = {
     open: false, scrollTop: 0,
-    dataset: { languageUrl: '/agents/language', csrf: 'csrf-only', returnUrl: '/agents?issuer=default' },
+    dataset: { languageUrl: '/agents/language', csrf: 'csrf-only', returnUrl: '/agents?issuer=default', inSettings: embedded ? 'true' : '' },
     setAttribute(name, value) { this[name] = value; },
     removeAttribute(name) { if (name === 'open') this.open = false; },
     querySelector() { return { setAttribute() {} }; },
@@ -60,6 +60,7 @@ function setup(initialViews) {
     document: {
       documentElement: { lang: 'de' }, getElementById: id => elements[id],
       querySelectorAll: () => [link],
+      querySelector: selector => ({ click: () => navigation.push(selector) }),
       dispatchEvent(event) {
         assert.equal(event.type, 'agent-setup-rendered');
         renders.push(content.innerHTML);
@@ -166,4 +167,16 @@ test('stale renewal displays the new warning and network errors never retry the 
   assert.equal(page.elements['agent-setup-error'].hidden, false);
   assert.match(page.elements['agent-setup-error'].textContent, /bisherige bereits ungültig/);
   assert.equal(page.escape().prevented, false);
+});
+
+
+test('embedded dialog preserves its credential while translating, then uses the draft-preserving main language switch', async () => {
+  const page = setup(credential, true);
+  await page.click(page.languages[1]);
+  assert.equal(page.content.innerHTML, credential.en);
+  assert.equal(page.requests.length, 0);
+  assert.deepEqual(page.navigation, []);
+  await page.click(page.close);
+  assert.deepEqual(page.navigation, ['.langswitch a[href*="/setlang/en"]']);
+  assert.equal(page.content.innerHTML, '');
 });

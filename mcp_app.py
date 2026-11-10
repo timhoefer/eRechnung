@@ -92,7 +92,7 @@ def register(m):
         }}} if token else None
         return {"configuration": configuration, "autostart": "ERECHNUNG_MCP_AUTOSTART" in startup}
 
-    def settings_page(token=None, error=None):
+    def settings_page(token=None, error=None, *, embedded=False):
         state = access.load()
         customers = customer_records()
         access.prune()
@@ -103,7 +103,8 @@ def register(m):
                                  csrf=csrf(), profiles=m.issuer_profiles(include_deleted=True),
                                  customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customers},
                                  **configuration)
-        return render_template("agents.html", state=state, csrf=csrf(),
+        return render_template("_agent_management.html" if embedded else "agents.html",
+                               agent_settings=embedded, state=state, csrf=csrf(),
                                profiles=m.issuer_profiles(include_deleted=True),
                                customer_choices=customer_scope.choices(customers),
                                customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customers},
@@ -127,6 +128,29 @@ def register(m):
         ui_guard()
         with m.DATA_LOCK:
             return settings_page()
+
+    def settings_fragment():
+        enabled()
+        if request.headers.get("Authorization"):
+            abort(403)
+        with m.DATA_LOCK:
+            try:
+                return settings_page(embedded=True)
+            except AccessError:
+                # Optional agent settings must not block the invoice/archive UI.
+                return render_template("_agent_access_unavailable.html", agent_access_unavailable=True)
+
+    app.extensions["mcp_settings_fragment"] = settings_fragment
+
+    def panel_response(token=None):
+        return {"management": settings_page(token, embedded=True),
+                "disclaimer": disclaimer(access.load()["enabled"])}
+
+    @app.get("/agents/panel")
+    def agents_panel():
+        ui_guard()
+        with m.DATA_LOCK:
+            return panel_response()
 
     @app.get("/agents/status")
     def agents_status():
@@ -176,7 +200,7 @@ def register(m):
         m.BASE.mkdir(parents=True, exist_ok=True)
         with m.DATA_LOCK, data_lock(m.BASE), data_lock(m.DATA_DIR):
             action = request.form.get("action")
-            in_settings = request.form.get("return_to") == "settings" and action in {"enable", "disable"}
+            in_settings = request.form.get("return_to") == "settings"
             inline = in_settings and request.headers.get("X-Requested-With") == "fetch"
             token = None
             if action == "enable":
@@ -203,7 +227,10 @@ def register(m):
                 if not connection:
                     abort(404)
                 if request.form.get("confirm") != "yes":
-                    return render_template("agent_revoke.html", connection=connection, csrf=csrf())
+                    context = dict(connection=connection, csrf=csrf(), in_settings=in_settings, inline=inline)
+                    if inline:
+                        return {"confirmation": render_template("_agent_revoke_confirmation.html", **context)}
+                    return render_template("agent_revoke.html", **context)
                 access.revoke(identifier)
             elif action == "connect":
                 name = request.form.get("name", "").strip()
@@ -230,18 +257,25 @@ def register(m):
                 abort(400)
             if in_settings:
                 if inline:
-                    active = access.load()["enabled"]
-                    return {"controls": render_template("_agent_access_toggle.html", agent_settings=True),
-                            "disclaimer": disclaimer(active)}
-                return redirect(url_for("validate"))
+                    return panel_response(token)
+                if not token:
+                    return redirect(url_for("validate"))
             return settings_page(token)
+
+    def request_view(entry, identifier, *, decided=False):
+        inline = request.headers.get("X-Requested-With") == "fetch"
+        context = dict(entry=entry, identifier=identifier, csrf=csrf(), inline=inline)
+        if inline:
+            return {"confirmation": render_template("_agent_request_content.html", **context),
+                    "decided": decided}
+        return render_template("agent_request.html", **context)
 
     @app.get("/agents/requests/<identifier>")
     def agents_review(identifier):
         ui_guard()
         with m.DATA_LOCK:
             entry = access.get(identifier)
-            return render_template("agent_request.html", entry=entry, identifier=identifier, csrf=csrf())
+            return request_view(entry, identifier)
 
     @app.post("/agents/requests/<identifier>")
     def agents_decide(identifier):
@@ -269,6 +303,8 @@ def register(m):
                     entry.update(confirmation=None, arguments={})
             else:
                 abort(400)
+            if request.headers.get("X-Requested-With") == "fetch":
+                return request_view(entry, identifier, decided=True)
             return redirect(url_for("agents_review", identifier=identifier), code=303)
 
     @app.after_request

@@ -1960,6 +1960,7 @@ def _settings_context(*, archive_year: str | None = None) -> dict:
                 for y, q in sorted({(row["year"], row["quarter"]) for row in archive if row["year"] is not None},
                                    key=lambda period: (-period[0], period[1]))]
     return {
+        "agent_settings_html": app.extensions["mcp_settings_fragment"]() if app.config.get("MCP_FEATURE") else "",
         "archive": archive,
         "archive_validation_unsaved": any(row["validation"] and not row["validation"]["saved"] for row in archive),
         "archive_quarters": quarters,

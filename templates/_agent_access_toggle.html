@@ -20,6 +20,5 @@
   {{ 'Mit dem Einschalten erlaubst du Agentenzugriff. Anschließend wählst du für jede Verbindung die freigegebenen Aussteller und Rechte.' if de else 'Turning this on allows agent access. Then choose the permitted issuers and permissions for each connection.' }}{% endif %}</p>
   <p class="hint" id="agent-access-notice">{{ 'Freigegebene Daten können vom Agenten an dessen Anbieter übertragen werden. eRechnung erstellt und prüft Rechnungen weiterhin lokal.' if de else 'The agent may send granted data to its provider. eRechnung continues to create and validate invoices locally.' }}</p>
   {% if agent_settings %}
-  <a class="abtn" href="{{ url_for('agents_settings') }}">{{ 'Verbindungen und Aktionsfreigaben' if de else 'Connections and action approvals' }}</a>
   <p class="hint" data-agent-error role="alert" hidden>{{ t.action_failed }}</p>
   {% endif %}

@@ -1,0 +1,16 @@
+{% set de = lang == 'de' %}
+<h2>{{ 'Zugang löschen?' if de else 'Delete connection?' }}</h2>
+
+  <h2>{{ connection.name }}</h2>
+  <p>{{ 'Dieser Zugang wird dauerhaft widerrufen. Der bisherige Zugangsschlüssel funktioniert danach nicht mehr und alle offenen Anfragen dieser Verbindung verfallen.' if de else 'This connection will be permanently revoked. Its credential will stop working and all its pending requests will be discarded.' }}</p>
+  <p>{{ 'Für einen späteren Zugriff musst du eine neue Verbindung einrichten. Rechnungen und gespeicherte Daten bleiben erhalten.' if de else 'To restore access later, you will need to set up a new connection. Invoices and saved data are kept.' }}</p>
+  <form method="post" action="{{ url_for('agents_update') }}" class="agent-actions{{ ' agent-management-form' if inline else '' }}">
+    {% if in_settings %}<input type="hidden" name="return_to" value="settings">{% endif %}
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="revoke">
+    <input type="hidden" name="connection" value="{{ connection.id }}">
+    <input type="hidden" name="confirm" value="yes">
+    {% if inline %}<button type="button" class="secondary" data-agent-cancel>{{ t.cancel }}</button>{% else %}<a href="{{ url_for('agents_settings') }}">{{ t.cancel }}</a>{% endif %}
+    <button type="submit" class="danger">{{ 'Dauerhaft löschen' if de else 'Permanently delete' }}</button>
+  </form>
+

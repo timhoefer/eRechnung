@@ -2383,11 +2383,14 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     const response = await fetch(url, options);
     if (!response.ok) throw new Error("archive load failed");
     const html = await response.text();
-    if (loadId !== settingsPanelLoadId) return false;
+    if (loadId !== settingsPanelLoadId || window.AgentAccess?.isBusy()
+        || pane.querySelector('#agent-management dialog[open]')) return false;
     const selection = keepSelection ? window.ArchiveSelection?.capture(pane) : initialSelection;
     settingsPanelUrl = url;
     pane.innerHTML = html;
     window.ArchiveSelection?.init(pane, selection);
+    window.AgentSettings?.init();
+    window.AgentSetup?.init();
     loadDepsAsync();
     return true;
   } catch (error) {
@@ -2395,6 +2398,8 @@ async function loadSettingsPanel(url = settingsPanelUrl || window.SETTINGS_PANEL
     return false;
   }
 }
+
+window.refreshAgentSettings = () => loadSettingsPanel(undefined, undefined, true);
 
 async function switchArchive(form) {
   if (form.ariaBusy === "true") return;
@@ -2597,7 +2602,8 @@ function closeSettings() {
   // Formulare im Panel ohne Seitenwechsel abschicken.
   pane.addEventListener("submit", (e) => {
     const form = e.target;
-    if (form.matches(".agent-access-form")) return; // managed without replacing the archive panel
+    if (form.matches(".agent-access-form, .agent-management-form")
+        || form.closest(".agent-setup-dialog")) return; // managed without replacing the archive panel
     if (form.matches(".issuer-restore-form")) return; // handled by the document's switch guard
     e.preventDefault();
     if (form.id === "archive-issuer-form") {

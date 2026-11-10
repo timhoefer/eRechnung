@@ -625,6 +625,8 @@
 <script src="{{ url_for('static', filename='archive_selection.js') }}?v={{ asset_version('archive_selection.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_version('app.js') }}"></script>
 {% include "_whats_new.html" %}
-{% if config.MCP_FEATURE %}<script src="{{ url_for('static', filename='agent_access.js') }}?v={{ asset_version('agent_access.js') }}"></script>{% endif %}
+{% if config.MCP_FEATURE %}
+{% for script in ['agent_settings.js', 'agent_setup.js', 'agent_access.js'] %}<script src="{{ url_for('static', filename=script) }}?v={{ asset_version(script) }}"></script>{% endfor %}
+{% endif %}
 </body>
 </html>

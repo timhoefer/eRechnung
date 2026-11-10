@@ -1,17 +1,2 @@
 {% extends "agent_base.html" %}
-{% block content %}
-<h1>{{ 'Zugang löschen?' if de else 'Delete connection?' }}</h1>
-<section class="card">
-  <h2>{{ connection.name }}</h2>
-  <p>{{ 'Dieser Zugang wird dauerhaft widerrufen. Der bisherige Zugangsschlüssel funktioniert danach nicht mehr und alle offenen Anfragen dieser Verbindung verfallen.' if de else 'This connection will be permanently revoked. Its credential will stop working and all its pending requests will be discarded.' }}</p>
-  <p>{{ 'Für einen späteren Zugriff musst du eine neue Verbindung einrichten. Rechnungen und gespeicherte Daten bleiben erhalten.' if de else 'To restore access later, you will need to set up a new connection. Invoices and saved data are kept.' }}</p>
-  <form method="post" action="{{ url_for('agents_update') }}" class="agent-actions">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <input type="hidden" name="action" value="revoke">
-    <input type="hidden" name="connection" value="{{ connection.id }}">
-    <input type="hidden" name="confirm" value="yes">
-    <a href="{{ url_for('agents_settings') }}">{{ 'Abbrechen' if de else 'Cancel' }}</a>
-    <button type="submit" class="danger">{{ 'Dauerhaft löschen' if de else 'Permanently delete' }}</button>
-  </form>
-</section>
-{% endblock %}
+{% block content %}<section class="card">{% include '_agent_revoke_confirmation.html' %}</section>{% endblock %}

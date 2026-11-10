@@ -1,27 +1,33 @@
 (() => {
-  const dialog = document.getElementById('agent-connection-dialog');
-  const add = document.getElementById('agent-connection-add');
-  if (dialog && add) {
-    add.addEventListener('click', () => dialog.showModal());
-    dialog.querySelectorAll('[data-close-connection]').forEach(button => {
-      button.addEventListener('click', () => dialog.close());
-    });
-    dialog.addEventListener('close', () => add.focus());
-  }
-  const mode = document.getElementById('agent-customer-mode');
-  if (mode) {
-    const update = () => {
-      document.querySelectorAll('[data-customer-mode]').forEach(element => {
-        element.hidden = element.dataset.customerMode !== mode.value;
-        if (element.tagName === 'FIELDSET') element.disabled = element.hidden;
+  const initialized = new WeakSet();
+  function init() {
+    const dialog = document.getElementById('agent-connection-dialog');
+    const add = document.getElementById('agent-connection-add');
+    if (dialog && add && !initialized.has(dialog)) {
+      initialized.add(dialog);
+      add.addEventListener('click', () => dialog.showModal());
+      dialog.querySelectorAll('[data-close-connection]').forEach(button => {
+        button.addEventListener('click', () => dialog.close());
       });
-    };
-    mode.addEventListener('change', update);
-    update();
+      dialog.addEventListener('close', () => add.focus());
+    }
+    const mode = document.getElementById('agent-customer-mode');
+    if (mode && !initialized.has(mode)) {
+      initialized.add(mode);
+      const update = () => {
+        document.querySelectorAll('[data-customer-mode]').forEach(element => {
+          element.hidden = element.dataset.customerMode !== mode.value;
+          if (element.tagName === 'FIELDSET') element.disabled = element.hidden;
+        });
+      };
+      mode.addEventListener('change', update);
+      update();
+    }
   }
   function initializeConfiguration() {
     const tabs = document.getElementById('configuration-tabs');
-    if (tabs) {
+    if (tabs && !initialized.has(tabs)) {
+      initialized.add(tabs);
       const buttons = Array.from(tabs.querySelectorAll('[role="tab"]'));
       const activate = selected => {
         buttons.forEach(button => {
@@ -53,7 +59,8 @@
     if (status) {
       document.querySelectorAll('[data-copy-target]').forEach(copy => {
         const target = document.getElementById(copy.dataset.copyTarget);
-        if (!target) return;
+        if (!target || initialized.has(copy)) return;
+        initialized.add(copy);
         copy.hidden = false;
         copy.addEventListener('click', async () => {
           status.textContent = '';
@@ -67,6 +74,8 @@
       });
     }
   }
+  window.AgentSettings = { init };
+  init();
   initializeConfiguration();
   document.addEventListener('agent-setup-rendered', initializeConfiguration);
 })();

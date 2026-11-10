@@ -15,6 +15,7 @@ function setup(clipboard) {
   };
   const elements = { 'mcp-configuration': { textContent: displayed }, 'configuration-copy-status': status };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
+    window: {},
     document: { addEventListener: () => {}, getElementById: id => elements[id], querySelectorAll: () => [button] },
     navigator: { clipboard },
   });
@@ -66,6 +67,7 @@ test('tabs keep the same values and support arrow keys, Home and End without cop
     addEventListener(_, fn) { this.click = fn; },
   }));
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
+    window: {},
     document: { addEventListener: () => {}, getElementById: id => elements[id], querySelectorAll: () => copies },
     navigator: { clipboard: { writeText: async text => { writes.push(text); } } },
   });
@@ -127,6 +129,7 @@ test('new connection opens on demand and cancel/escape return focus without subm
   };
   const elements = { 'agent-connection-dialog': dialog, 'agent-connection-add': add };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
+    window: {},
     document: { addEventListener: () => {}, getElementById: id => elements[id], querySelector: () => null },
   });
   assert.equal(dialog.open, false);
