@@ -1,7 +1,13 @@
 # Änderungen
 
-## Unreleased
+## 1.3.0
 
+- Das Archiv lässt sich nach Jahr und Aussteller filtern oder für alle Aussteller gemeinsam anzeigen. Die Liste bleibt kompakt; gleiche Rechnungsnummern verschiedener Aussteller bleiben eindeutig zugeordnet. Das Erstellungsdatum steht im Vordergrund, die Uhrzeit bleibt als Zusatzinformation erreichbar.
+- Im Auswahlmodus lassen sich einzelne Rechnungen, alle angezeigten Belege oder ganze Quartale als CSV exportieren. Ein Klick auf die Zeile schaltet die Auswahl um; Sortieren behält die Auswahl. Beim Wechsel von Jahr oder Aussteller wird sie zurückgesetzt.
+- Vor dem CSV-Export werden die gespeicherten Rechnungswerte mit der tatsächlichen archivierten XML abgeglichen. Fehlende, geänderte oder widersprüchliche Daten brechen den Export mit einem Hinweis ab, statt unbemerkt abweichende Buchungsdaten auszugeben.
+- Eine eigene XML-Spalte zeigt den gespeicherten technischen Prüfstatus. Ein grüner XML-Chip gilt nur für die geprüften Dateiinhalte, das passende Rechnungsprofil und den aktuellen Prüfregelsatz. Geänderte Dateien oder Prüfregeln machen eine erneute Prüfung erforderlich; der Chip ist keine Prüfung des gesamten PDF oder der steuerlichen Richtigkeit.
+- Auch reine XML-/XRechnung-Belege erscheinen im Archiv. Rechnungen lassen sich jederzeit über das Zeilenmenü erneut prüfen; Prüfergebnisse können geschlossen werden. Vorhandene Rechnungsdateien werden dabei nicht verändert.
+- Der Sprachwechsel erhält die geöffnete Einstellungsansicht, Archivfilter und Auswahl auch während laufender Ladevorgänge. Gespeicherte Prüfnachweise werden beim Datenordnerwechsel mitgenommen.
 - macOS-Downloads als gestaltetes DMG mit App und Programme-Verknüpfung; das ZIP bleibt als Alternative verfügbar. Der helle Hintergrund enthält dezente Rechnungsmotive und Installationshinweise auf Deutsch und Englisch.
 - Build- und Release-Prüfungen kontrollieren beide Downloads, einschließlich Signierung, Notarisierung und Selbsttest der aus dem DMG kopierten App. Die Verpackung erfolgt außerhalb synchronisierter Projektordner.
 - Änderungen an bestehenden Stammdaten, Kunden und gespeicherten Positionen sowie Löschungen erhalten eine zusätzliche Bestätigung mit den betroffenen Daten. Unbestätigte Änderungen bleiben im Formular; beim Kundenwechsel wird vor ihrem Verlust gewarnt.
