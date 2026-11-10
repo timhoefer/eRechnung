@@ -841,6 +841,9 @@ body.drawer-open { overflow: hidden; }
 .draft-import-table th:nth-child(n+2), .draft-import-table td:nth-child(n+2) { text-align: right; white-space: nowrap; }
 
 /* Shared agent controls on settings and connection pages. */
+.agent-subsection { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+.agent-subsection h3 { margin: 0 0 14px; font-size: var(--text-base); }
+.agent-subsection > :last-child { margin-bottom: 0; }
 .agent-toggle-row, .agent-section-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .agent-toggle-row h2 { margin: 0; }
 .agent-toggle-control { display: flex; align-items: center; gap: 10px; flex: none; }
@@ -856,7 +859,7 @@ body.drawer-open { overflow: hidden; }
 .agent-actions form { margin: 0; }
 .agent-connection .agent-actions > .abtn { display: inline-flex; align-items: center; justify-content: center; min-height: 37px; box-sizing: border-box; }
 .agent-section-header { margin-bottom: 20px; }
-.agent-section-header h2 { margin: 0; }
+.agent-section-header h2, .agent-section-header h3 { margin: 0; }
 .agent-add { display: inline-flex; align-items: center; justify-content: center; padding: 10px; }
 dialog.agent-connection-dialog, dialog.agent-disable-dialog { width: 680px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); box-sizing: border-box; overflow-y: auto; }
 dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); overflow-y: auto; }

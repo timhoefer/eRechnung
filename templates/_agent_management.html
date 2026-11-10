@@ -1,13 +1,12 @@
 {% set de = lang == 'de' %}
 <div class="agent-ui" id="agent-management" data-refresh-url="{{ url_for('agents_panel') }}">
 {% if error %}<p class="flash err">{{ error }}</p>{% endif %}
-<section class="card" id="agent-access-card">
+<section class="card" id="agent-access-card" aria-labelledby="agent-access-label">
   {% include '_agent_access_toggle.html' %}
-</section>
 {% if state.enabled %}
-<section class="card">
+<section class="agent-subsection" aria-labelledby="agent-connections-title">
   <div class="agent-section-header">
-    <h2>{{ 'Verbindungen' if de else 'Connections' }}</h2>
+    <h3 id="agent-connections-title">{{ 'Verbindungen' if de else 'Connections' }}</h3>
     {% if state.connections %}<button type="button" class="secondary agent-add" id="agent-connection-add" aria-haspopup="dialog" aria-controls="agent-connection-dialog" aria-label="{{ 'Neue Verbindung' if de else 'New connection' }}" title="{{ 'Neue Verbindung' if de else 'New connection' }}">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
     </button>{% endif %}
@@ -108,8 +107,9 @@
   </div>
 </dialog>
 {% if setup_views %}<script type="application/json" id="agent-setup-initial">{{ setup_views|tojson }}</script>{% endif %}
-<section class="card">
-  <h2>{{ 'Aktionsfreigaben' if de else 'Action approvals' }}</h2>
+{% if state.enabled %}
+<section class="agent-subsection" aria-labelledby="agent-approvals-title">
+  <h3 id="agent-approvals-title">{{ 'Aktionsfreigaben' if de else 'Action approvals' }}</h3>
   <p>{{ 'Hier bestätigst du einzelne Aktionen bereits eingerichteter MCP-Verbindungen. Dadurch erhält kein weiterer Agent Zugang.' if de else 'Approve individual actions from existing MCP connections here. This does not grant access to another agent.' }}</p>
   <p class="hint">{{ 'Eine Freigabe gilt nur für die gezeigte Aktion und verfällt nach fünf Minuten. Geänderte Daten erfordern eine neue Prüfung.' if de else 'Approval applies only to the displayed operation and expires after five minutes. Changed data requires another review.' }}</p>
   {% for id, entry in requests.items() %}
@@ -117,6 +117,8 @@
     <a {% if agent_settings %}data-agent-review {% endif %}href="{{ url_for('agents_review', identifier=id) }}">{{ 'Prüfen' if de else 'Review' }}</a></p>
   {% else %}<p>{{ 'Keine offenen Anfragen.' if de else 'No pending requests.' }}</p>{% endfor %}
   <a {% if agent_settings %}data-agent-refresh {% endif %}href="{{ url_for('agents_panel' if agent_settings else 'agents_settings') }}">{{ 'Aktualisieren' if de else 'Refresh' }}</a>
+</section>
+{% endif %}
 </section>
 {% if agent_settings %}<dialog class="modal agent-disable-dialog agent-confirmation-dialog" id="agent-disable-dialog" aria-label="{{ 'Aktion prüfen' if de else 'Review action' }}"></dialog>{% endif %}
 </div>
