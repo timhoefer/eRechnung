@@ -33,6 +33,9 @@ def test_manual_check_is_scoped_and_does_not_change_invoice_data(archive, valida
     page = html.fromstring(response.data)
     icons = page.xpath('//span[@class="arch-validation valid"]')
     assert len(icons) == 1 and FILE in icons[0].get("title")
+    assert icons[0].getparent().get("class") == "arch-status"
+    unchecked = page.xpath('//span[@class="arch-validation unchecked"]')
+    assert unchecked and all(chip.get("title").startswith("XML noch nicht") for chip in unchecked)
     assert page.xpath('//details[@class="row-menu"]//form[@class="check-file-form"]')
     assert not page.xpath('//td[@class="arch-actions"]/form[@class="check-file-form"]')
     assert status.read(folders[COMPANY] / FILE, "rules-1")["state"] == "valid"

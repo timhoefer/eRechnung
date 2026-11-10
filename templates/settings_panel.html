@@ -127,7 +127,7 @@
   </form>
   {% if archive_validation_unsaved %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
   <table class="archive">
-    <thead><tr><th class="archive-selection-cell"><span class="sr-only">{{ t.archive_select }}</span></th><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th>{{ t.created }}</th><th></th></tr></thead>
+    <thead><tr><th class="archive-selection-cell"><span class="sr-only">{{ t.archive_select }}</span></th><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th class="arch-status">{{ t.archive_validation_heading }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
       {% for a in archive %}
       <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if archive_all %}, {{ a.issuer_label }}{% endif %}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename, issuer=a.issuer_id) }}" data-preview-url="{{ url_for('archive_preview', filename=a.filename, issuer=a.issuer_id) }}">
@@ -136,21 +136,7 @@
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
            bleibt der Dateiname. Tooltip zeigt immer die Datei. #}
         <td class="arch-file" title="{{ a.filename }}">
-          <span class="arch-number">
-            <span class="arch-id">{{ a.number or a.filename }}</span>
-            {% if a.validation %}
-            {% set status_text = t['archive_validation_' ~ a.validation.state].format(date=a.validation.checked_at) ~ ' · ' ~ a.validation_file %}
-            {% if not a.validation.saved %}{% set status_text = status_text ~ ' · ' ~ t.validation_save_failed %}{% endif %}
-            <span class="arch-validation {{ a.validation.state }}" role="img" aria-label="{{ status_text }}" title="{{ status_text }}">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                {% if a.validation.state == 'valid' %}<path d="m5 12 4 4L19 6"/>
-                {% elif a.validation.state == 'invalid' %}<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>
-                {% else %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>{% endif %}
-              </svg>
-              <span aria-hidden="true">XML</span>
-            </span>
-            {% endif %}
-          </span>
+          <span class="arch-id">{{ a.number or a.filename }}</span>
           {% if archive_all %}<span class="arch-issuer" title="{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}">{{ a.issuer_label }}{{ ' · ' ~ t.issuer_archived if a.issuer_deleted else '' }}</span>{% endif %}
         </td>
         <td class="arch-buyer">
@@ -158,6 +144,23 @@
             <span class="arch-name">{{ a.buyer or "" }}</span>
             {% if a.amount is not none %}<span class="arch-amt">{{ a.currency }} {{ a.amount|money(lang) }}</span>{% endif %}
           </div>
+        </td>
+        <td class="arch-status">
+            {% set status_state = a.validation.state if a.validation else 'unchecked' %}
+            {% if a.validation %}
+            {% set status_text = t['archive_validation_' ~ a.validation.state].format(date=a.validation.checked_at) ~ ' · ' ~ a.validation_file %}
+            {% if not a.validation.saved %}{% set status_text = status_text ~ ' · ' ~ t.validation_save_failed %}{% endif %}
+            {% else %}
+            {% set status_text = t.archive_validation_unchecked ~ ' · ' ~ a.validation_file %}
+            {% endif %}
+            <span class="arch-validation {{ status_state }}" role="img" aria-label="{{ status_text }}" title="{{ status_text }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                {% if status_state == 'valid' %}<path d="m5 12 4 4L19 6"/>
+                {% elif status_state == 'invalid' %}<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>
+                {% else %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>{% endif %}
+              </svg>
+              <span aria-hidden="true">XML</span>
+            </span>
         </td>
         <td class="arch-date" title="{{ a.modified }}">{{ a.modified[:10] }}</td>
         <td class="r arch-actions">

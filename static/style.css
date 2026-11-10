@@ -625,13 +625,13 @@ table.archive td { padding: 8px 4px; border-bottom: 1px solid var(--line); font-
 table.archive td.r { text-align: right; white-space: nowrap; }
 table.archive td.r .link { margin-left: 12px; }
 table.archive form { margin-left: 12px; }
-/* Archiv: Nummer | Kunde | Summe | Erstellt — einzeilig */
+/* Archiv: Nummer | Kunde + Summe | Prüfstatus | Erstellt — einzeilig */
 /* width:1% + nowrap: Spalte schrumpft auf Inhaltsbreite, Kunde bekommt den Rest.
    Lange Fallback-Dateinamen (Einträge ohne Sidecar) werden ellipsiert, damit sie
    die Spalte nicht aufspannen — der volle Name steht im Tooltip. */
 table.archive td.arch-file { white-space: nowrap; width: 1%; padding-right: 18px; }
 .arch-id { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-.arch-number { display: inline-flex; align-items: center; gap: 6px; }
+table.archive .arch-status { width: 1%; padding-left: 12px; padding-right: 18px; white-space: nowrap; }
 .arch-validation { display: inline-flex; flex: none; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.4; }
 .arch-validation svg { width: 13px; height: 13px; flex: none; }
 .arch-validation.valid { color: var(--ok); background: var(--ok-bg); }
