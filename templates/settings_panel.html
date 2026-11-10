@@ -72,6 +72,7 @@
         <select name="year" id="archive-year-select">
           {% for year in archive_years %}<option value="{{ year }}" {{ 'selected' if archive_year == year|string else '' }}>{{ year }}</option>{% endfor %}
           <option value="all" {{ 'selected' if archive_year == 'all' else '' }}>{{ t.archive_all_years }}</option>
+          {% if archive_undated or archive_year == 'unknown' %}<option value="unknown" {{ 'selected' if archive_year == 'unknown' else '' }}>{{ t.archive_undated }}</option>{% endif %}
         </select>
       </label>
       <label class="archive-sort"><span>{{ t.archive_sort }}</span>
@@ -130,7 +131,7 @@
     <thead><tr><th class="archive-selection-cell"><span class="sr-only">{{ t.archive_select }}</span></th><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th class="arch-status">{{ t.archive_validation_heading }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
       {% for a in archive %}
-      <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if archive_all %}, {{ a.issuer_label }}{% endif %}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename, issuer=a.issuer_id) }}" data-preview-url="{{ url_for('archive_preview', filename=a.filename, issuer=a.issuer_id) }}">
+      <tr class="arch-row" tabindex="0" aria-label="{{ a.number or a.filename }}{% if archive_all %}, {{ a.issuer_label }}{% endif %}{% if a.buyer %}, {{ a.buyer }}{% endif %}" data-view-url="{{ url_for('view', filename=a.filename, issuer=a.issuer_id) }}" data-preview-url="{{ url_for('archive_preview', filename=a.filename, issuer=a.issuer_id) }}" data-preview-type="{{ 'xml' if a.filename.lower().endswith('.xml') else 'pdf' }}">
         <td class="archive-selection-cell"><input type="checkbox" name="entry" form="archive-selection" value="{{ [a.issuer_id, a.filename]|tojson|forceescape }}" data-archive-entry data-quarter="{{ a.year }}-Q{{ a.quarter }}" aria-label="{{ t.archive_select_invoice }} {{ a.number or a.filename }} · {{ a.issuer_label }}" {% if not a.can_export %}disabled title="{{ t.archive_no_csv }}"{% endif %}></td>
         {# Primär die Rechnungsnummer (der Dateiname ist Implementierungsdetail —
            bei XRechnung ist das PDF ohnehin nur Sichtexemplar); ohne Sidecar
@@ -162,7 +163,7 @@
               <span aria-hidden="true">XML</span>
             </span>
         </td>
-        <td class="arch-date" title="{{ a.modified }}">{{ a.modified[:10] }}</td>
+        <td class="arch-date" title="{{ t['archive_date_' ~ a.created_source].format(date=a.created_time) }}">{{ a.created or t.archive_date_unknown }}{% if a.created_source == 'invoice' %} *{% endif %}</td>
         <td class="r arch-actions">
           {% if is_desktop %}
           <button type="button" class="secondary small reveal-btn" data-url="{{ url_for('reveal', filename=a.filename, issuer=a.issuer_id) }}">{{ t.reveal_finder }}</button>
@@ -189,7 +190,7 @@
                 <a href="{{ url_for('export_csv', file=a.filename, issuer=a.issuer_id) }}" role="menuitem">CSV</a>
                 {% endif %}
               {% endif %}
-              {% if not is_desktop and a.xml_filename %}<a href="{{ url_for('download', filename=a.xml_filename, issuer=a.issuer_id) }}" role="menuitem">XML</a>{% endif %}
+              {% if not is_desktop and a.xml_filename and a.xml_filename != a.filename %}<a href="{{ url_for('download', filename=a.xml_filename, issuer=a.issuer_id) }}" role="menuitem">XML</a>{% endif %}
               {% if not a.issuer_deleted %}<button type="button" class="js-delete danger-item" data-url="{{ url_for('archive_delete', issuer=a.issuer_id) }}" data-filename="{{ a.filename }}" role="menuitem">{{ t.act_delete }}</button>{% endif %}
             </div>
           </details>
@@ -198,6 +199,7 @@
       {% endfor %}
     </tbody>
   </table>
+  {% if archive|selectattr('created_source', 'equalto', 'invoice')|list %}<p class="hint">{{ t.archive_date_legacy_hint }}</p>{% endif %}
   {% else %}
   <p class="hint">{{ t.no_invoices }}</p>
   {% endif %}

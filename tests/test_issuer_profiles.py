@@ -277,7 +277,7 @@ def test_default_change_cannot_retarget_existing_legacy_archive_links(client):
     filename = "same.pdf"
     (appmod.OUTPUT_DIR / filename).write_bytes(b"Legacy original")
     (directory / "output" / filename).write_bytes(b"Company original")
-    page = html.fromstring(client.get("/settings/panel?issuer=default").data)
+    page = html.fromstring(client.get("/settings/panel?issuer=default&year=all").data)
     view = page.xpath('//tr[@class="arch-row"]/@data-preview-url')[0]
     delete = page.xpath('//button[contains(@class, "js-delete")]/@data-url')[0]
     export = page.get_element_by_id("archive-selection").get("action")
@@ -449,7 +449,7 @@ def test_archive_preview_download_csv_template_and_delete_are_scoped(client, fas
 
 
 @pytest.mark.parametrize("endpoint", ["/settings/panel", "/validate"])
-@pytest.mark.parametrize("year", [str(YEAR), str(YEAR - 1), "all"])
+@pytest.mark.parametrize("year", [str(YEAR), str(YEAR - 1), "all", "unknown"])
 def test_archive_year_survives_empty_issuer_roundtrip(client, endpoint, year):
     empty_issuer, _ = add_issuer(client, "Empty Company")
     (appmod.OUTPUT_DIR / "Rechnung_2026-001.pdf").write_bytes(b"%PDF-test")
@@ -461,7 +461,7 @@ def test_archive_year_survives_empty_issuer_roundtrip(client, endpoint, year):
         assert page.get_element_by_id("archive-year-select").value == year
         assert page.get_element_by_id("archive-issuer-select").value == issuer
         assert page.get_element_by_id("archive-sort-select").value == values["sort"]
-        assert bool(page.xpath('//form[@id="archive-selection"]')) == (issuer != empty_issuer and year != str(YEAR - 1))
+        assert bool(page.xpath('//form[@id="archive-selection"]')) == (issuer != empty_issuer and year in {"all", "unknown"})
         page.get_element_by_id("archive-sort-select").value = "number"
 
 

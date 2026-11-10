@@ -1124,7 +1124,7 @@ function scaleMiniPreview() {
   const wrap = inner && inner.parentElement;
   if (!frame || !inner || !wrap) return;
   const wrapW = wrap.clientWidth;
-  const isPdf = frame.dataset.previewType === "pdf";
+  const isPdf = !!frame.dataset.previewType; // Archived PDFs and XML text size themselves.
   // Nur bei tatsächlicher Breitenänderung neu skalieren -> verhindert eine
   // ResizeObserver-Rückkopplung (Zittern beim Öffnen, bevor das Layout steht).
   if (wrapW <= 0 || (wrapW === scaleMiniPreview._lastW && isPdf === scaleMiniPreview._lastPdf)) return;
@@ -1176,7 +1176,7 @@ function checkMiniPages() {
   const hint = document.getElementById("preview-pages-hint");
   if (!frame || !hint) return;
   const measure = () => {
-    if (settingsOpen || frame.dataset.previewType === "pdf") {
+    if (settingsOpen || frame.dataset.previewType) {
       hint.textContent = "";
       hint.hidden = true;
       return;
@@ -2297,12 +2297,12 @@ function setPreviewHead(label) {
 
 // Original-PDF direkt laden: Layout, Seitenumbrüche und Daten bleiben erhalten.
 // Beim Zeilenwechsel verwirft der Browser die vorherige iframe-Navigation.
-function showInvoicePreview(url, label) {
+function showInvoicePreview(url, label, type = "pdf") {
   const frame = document.getElementById("preview-frame");
   if (!frame) return;
-  frame.dataset.previewType = "pdf";
+  frame.dataset.previewType = type;
   frame.removeAttribute("srcdoc");
-  frame.src = url + "#toolbar=0&navpanes=0&view=FitH";
+  frame.src = url + (type === "pdf" ? "#toolbar=0&navpanes=0&view=FitH" : "");
   scaleMiniPreview();
   checkMiniPages();
   setPreviewHead(label);
@@ -2313,9 +2313,9 @@ function previewRow(row) {
   const key = row.dataset.previewUrl || row.dataset.viewUrl;
   if (!key || key === lastPreviewUrl) return;
   lastPreviewUrl = key;
-  const fileCell = row.querySelector("td");
+  const fileCell = row.querySelector(".arch-id");
   const label = fileCell ? fileCell.textContent.trim() : "";
-  if (row.dataset.previewUrl) showInvoicePreview(row.dataset.previewUrl, label);
+  if (row.dataset.previewUrl) showInvoicePreview(row.dataset.previewUrl, label, row.dataset.previewType);
   else showNoPreview(label);
 }
 

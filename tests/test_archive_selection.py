@@ -3,7 +3,7 @@ import csv
 import io
 import json
 import os
-from datetime import date
+from datetime import UTC, date, datetime
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -59,8 +59,9 @@ def test_all_issuers_years_and_retired_actions(archive, endpoint):
     assert page.get_element_by_id("archive-issuer-select").value == "all"
     assert page.get_element_by_id("archive-year-select").value == str(YEAR)
     rows = page.xpath('//tr[contains(@class,"arch-row")]')
-    assert len(rows) == 4 and "OLD" not in [r.xpath('.//span[@class="arch-id"]/text()')[0] for r in rows]
-    assert page.xpath('//input[@data-archive-entry and @disabled]')
+    assert len(rows) == 3 and "OLD" not in [r.xpath('.//span[@class="arch-id"]/text()')[0] for r in rows]
+    undated = html.fromstring(client.get(endpoint + "?issuer=all&year=unknown").data)
+    assert undated.xpath('//input[@data-archive-entry and @disabled]')
     for row in rows:
         issuer = parse_qs(urlparse(row.get("data-view-url")).query)["issuer"][0]
         assert client.get(row.get("data-view-url")).data in {issuer.encode(), b"no accounting data"}
@@ -86,6 +87,7 @@ def test_sort_spans_quarters_and_quarter_controls_stay_in_selection(archive, sor
         pdf = folders[identity] / FILE
         data = json.loads(pdf.with_suffix(".json").read_text())
         data["invoice"]["number"] = f"{YEAR}-{number}"
+        data["_archive"] = {"created_at": datetime.fromtimestamp(modified, UTC).isoformat()}
         pdf.with_suffix(".json").write_text(json.dumps(data))
         os.utime(pdf, (modified, modified))
     page = html.fromstring(client.get("/settings/panel", query_string={"issuer": "all", "sort": sort}).data)

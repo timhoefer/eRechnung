@@ -91,3 +91,21 @@ test("a pending live response cannot replace an archived PDF", async () => {
   assert.equal(elements["preview-frame"].srcdoc, undefined);
   assert.match(elements["preview-frame"].src, /OLD-1\.pdf#/);
 });
+
+test("standalone XML loads its inert text preview at readable width", () => {
+  const { app, elements } = loadApp();
+  vm.runInContext("settingsOpen = true", app);
+  const xmlRow = row("XML-1");
+  xmlRow.dataset.previewUrl = "/archive/preview/XML-1.xml";
+  xmlRow.dataset.previewType = "xml";
+  app.previewRow(xmlRow);
+  const frame = elements["preview-frame"];
+  assert.equal(frame.src, "/archive/preview/XML-1.xml");
+  assert.equal(frame.dataset.previewType, "xml");
+  assert.equal(frame.style.width, "400px");
+  assert.equal(frame.style.transform, "none");
+  app.openPreviewDrawer();
+  assert.equal(elements["drawer-frame"].src, "/archive/preview/XML-1.xml");
+  app.restoreLivePreview();
+  assert.equal(frame.dataset.previewType, undefined);
+});

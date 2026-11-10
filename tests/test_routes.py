@@ -4,6 +4,7 @@ echten seller/customers/output-Dateien werden NICHT angefasst.
 Der volle /generate-Roundtrip ruft build_pdf (WeasyPrint/Pango) auf und wird
 übersprungen, wenn WeasyPrint nicht verfügbar ist (z. B. in der CI)."""
 import json
+from datetime import UTC, datetime
 
 import pytest
 from helpers import confirmed_post, export_invoice
@@ -242,7 +243,7 @@ def test_archive_rows_offer_original_pdf_preview(client, has_sidecar):
     filename = _make_archive_entry(appmod.OUTPUT_DIR)
     if not has_sidecar:
         (appmod.OUTPUT_DIR / filename).with_suffix(".json").unlink()
-    doc = html.fromstring(client.get("/settings/panel").data)
+    doc = html.fromstring(client.get("/settings/panel?year=all").data)
     rows = doc.xpath('//tr[@class="arch-row"]')
     assert len(rows) == 1
     assert rows[0].get("data-preview-url") == "/archive/preview/" + filename + "?issuer=default"
@@ -552,7 +553,7 @@ def test_archive_check_targets_xml_for_xrechnung(client):
     }), encoding="utf-8")
     # Hybrid-Eintrag ohne .xml daneben: prüft weiterhin das PDF.
     (out / "Rechnung_2026-002.pdf").write_bytes(b"%PDF-1.4")
-    html = client.get("/settings/panel").get_data(as_text=True)
+    html = client.get("/settings/panel?year=all").get_data(as_text=True)
     assert 'value="Rechnung_2026-001.xml"' in html
     assert 'value="Rechnung_2026-002.pdf"' in html
     # Die Prüfung der XML läuft direkt über den XML-Pfad (kein PDF-Extrakt).
@@ -574,7 +575,7 @@ def test_archive_shows_buyer_and_amount(client):
     }), encoding="utf-8")
     # Eintrag ohne Sidecar: Zeile bleibt ohne Kunde/Betrag, Panel rendert trotzdem.
     (out / "Rechnung_2026-004.pdf").write_bytes(b"%PDF-1.4")
-    html = client.get("/settings/panel").get_data(as_text=True)
+    html = client.get("/settings/panel?year=all").get_data(as_text=True)
     assert "Muster GmbH" in html
     assert "238,00" in html  # 2x100 netto + 19 %
     # Angezeigt wird die Rechnungsnummer (Datei nur als Tooltip) ...
@@ -723,7 +724,7 @@ def test_uploaded_validation_requires_schematron(client, monkeypatch):
 
 @pytest.mark.parametrize('endpoint', ['/settings/panel', '/validate'])
 @pytest.mark.parametrize('with_sidecars', [False, True])
-def test_archive_orders_by_displayed_timestamp_not_number(client, endpoint, with_sidecars):
+def test_archive_orders_by_recorded_time_or_stable_number_when_unknown(client, endpoint, with_sidecars):
     import os
 
     from lxml import html
@@ -737,11 +738,12 @@ def test_archive_orders_by_displayed_timestamp_not_number(client, endpoint, with
         os.utime(pdf, (stamp, stamp))
         if with_sidecars:
             pdf.with_suffix('.json').write_text(json.dumps({
+                '_archive': {'created_at': datetime.fromtimestamp(stamp, UTC).isoformat()},
                 'invoice': {'number': number, 'issue_date': '2026-01-01'},
                 'buyer': {'name': 'Example Client'}, 'items': [],
             }))
     before = {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()}
-    page = html.fromstring(client.get(endpoint).data)
+    page = html.fromstring(client.get(endpoint + '?year=all').data)
     ordered = page.xpath('//button[contains(@class, "js-delete")]/@data-filename')
     assert ordered == [f'Rechnung_{n}.pdf' for n in reversed(numbers)]
     assert {p.name: p.read_bytes() for p in appmod.OUTPUT_DIR.iterdir()} == before
@@ -759,7 +761,10 @@ def test_archive_sort_choices_use_numeric_numbers_and_customer_names(client, end
         # Creation order deliberately differs from number and customer order.
         stamp = 1_780_000_000 - index
         os.utime(pdf, (stamp, stamp))
-        pdf.with_suffix('.json').write_text(json.dumps({'invoice': {'number': number}, 'buyer': {'name': customer}}))
+        pdf.with_suffix('.json').write_text(json.dumps({
+            '_archive': {'created_at': datetime.fromtimestamp(stamp, UTC).isoformat()},
+            'invoice': {'number': number}, 'buyer': {'name': customer},
+        }))
 
     def numbers(url):
         page = html.fromstring(client.get(url).data)

@@ -10,7 +10,7 @@ import secrets
 import sys
 import tempfile
 import threading
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
@@ -36,7 +36,14 @@ from change_confirmation import Confirmations
 from countries import COUNTRIES
 from i18n import LANGUAGES, get_ui_lang, localize_rule
 from i18n import t as translate
-from invoice_archive import ArchiveError, archive_invoice, data_lock, recover_archive
+from invoice_archive import (
+    ArchiveError,
+    archive_created_at,
+    archive_documents,
+    archive_invoice,
+    data_lock,
+    recover_archive,
+)
 from invoice_core import (
     UNITS,
     datefmt_filter,
@@ -803,7 +810,7 @@ def issuer_restore():
             if not seller.get("name"):
                 # Early prototypes retained only a label. Recover the latest
                 # available snapshot without touching the original invoices.
-                originals = sorted(output_dir().glob("*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+                originals = sorted(archive_documents(output_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
                 for pdf in originals:
                     original = correction_original(pdf.name)
                     if original:
@@ -1167,8 +1174,8 @@ def load_draft(src: str | None) -> dict | None:
 
 
 def correction_original(source: str, *, issuer: str | None = None) -> dict | None:
-    """A retired issuer can issue adjustments only against its own archived PDF."""
-    if Path(source).name != source or Path(source).suffix.lower() != ".pdf":
+    """A retired issuer can issue adjustments only against its own archived document."""
+    if Path(source).name != source or Path(source).suffix.lower() not in {".pdf", ".xml"}:
         return None
     identity = issuer if issuer is not None else current_issuer()
     directory = issuer_output_dir(identity) if issuer is not None else output_dir()
@@ -1271,7 +1278,7 @@ def used_invoice_numbers() -> list[str]:
     """Bereits vergebene Rechnungsnummern im Archiv (für den Live-Hinweis im Formular).
     Quelle ist primär die Sidecar-JSON (exakt), sonst der Dateiname."""
     nums = set()
-    for p in output_dir().glob("*.pdf"):
+    for p in archive_documents(output_dir()):
         sidecar = output_dir() / f"{p.stem}.json"
         num = None
         if sidecar.exists():
@@ -1290,7 +1297,7 @@ def archived_invoices() -> list[dict]:
     """Im Tool erzeugte Rechnungen als {number, date} aus den Sidecars – für den
     Bezugs-Auswähler bei Storno/Korrektur. Neueste zuerst, je Nummer einmal."""
     rows = []
-    for p in output_dir().glob("*.pdf"):
+    for p in archive_documents(output_dir()):
         sidecar = output_dir() / f"{p.stem}.json"
         if not sidecar.exists():
             continue
@@ -1660,38 +1667,48 @@ def reveal(filename):
 
 @app.route("/view/<path:filename>")
 def view(filename):
+    if Path(filename).suffix.lower() == ".xml":
+        return archive_preview(filename)
     return _serve(filename, inline=True)
 
 
 @app.route("/archive/preview/<path:filename>")
 def archive_preview(filename):
-    """Das gespeicherte Original-PDF anzeigen, unabhängig von Vorlage/Stammdaten."""
-    if Path(filename).suffix.lower() != ".pdf":
+    """Original PDF or inert XML text, independent of current invoice templates."""
+    path = output_dir() / filename
+    if (path.name != filename or path.suffix.lower() not in {".pdf", ".xml"}
+            or path.is_symlink() or not path.is_file()):
         abort(404)
+    if path.suffix.lower() == ".xml":
+        raw = path.read_bytes()
+        encoding = "utf-16" if raw.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
+        response = app.make_response(render_template("archive_xml.html", filename=path.name,
+                                                     xml=raw.decode(encoding, errors="replace")))
+        response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'"
+        return response
     return _serve(filename, inline=True)
 
 
 @app.route("/archive/delete", methods=["POST"])
 def archive_delete():
-    """Archivierte Rechnung (PDF + Sidecar-JSON) löschen – nur innerhalb OUTPUT_DIR."""
+    """Delete an archived PDF/XML with its siblings, after explicit confirmation."""
     filename = request.form.get("filename", "")
     path = output_dir() / filename
     # Pfad-Traversal verhindern: nur einfache Dateinamen direkt im Ausgabeordner.
-    if filename and path.name == filename and path.suffix == ".pdf" and path.exists():
-        files = [path, *(output_dir() / f"{path.stem}.{suffix}" for suffix in ("json", "xml", "csv"))]
+    if (filename and path.name == filename and path.suffix.lower() in {".pdf", ".xml"}
+            and not path.is_symlink() and path.is_file()):
+        files = list(dict.fromkeys([path, *(path.with_suffix("." + suffix) for suffix in ("pdf", "json", "xml", "csv"))]))
+        if any(p.is_symlink() or (p.exists() and not p.is_file()) for p in files):
+            abort(409)
         existing = [p for p in files if p.exists()]
         ui = translate(get_ui_lang(request))
         confirm_change(ui["confirm_delete_title"], ui["change_archive_warning"],
                        {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in existing}, None,
                        [{"label": p.name, "before": ui["change_exists"], "after": ui["change_deleted"]}
                         for p in existing])
-        path.unlink()
-        # Sidecar + XRechnung-XML + evtl. exportierte Einzel-CSV mitlöschen
-        for sib in (f"{path.stem}.json", f"{path.stem}.xml", f"{path.stem}.csv"):
-            p = output_dir() / sib
-            if p.exists():
-                p.unlink()
-        for document in (path, path.with_suffix(".xml")):
+        for p in existing:
+            p.unlink()
+        for document in (path, path.with_suffix(".pdf"), path.with_suffix(".xml")):
             validation_status.receipt_path(document).unlink(missing_ok=True)
         flash(translate(get_ui_lang(request))["invoice_deleted"], "ok")
     return redirect(url_for("validate"))
@@ -1699,7 +1716,7 @@ def archive_delete():
 
 def _serve(filename, inline):
     path = output_dir() / filename
-    if path.name != filename or not path.exists():
+    if path.name != filename or path.is_symlink() or not path.is_file():
         abort(404)
     disp = "inline" if inline else "attachment"
     mime = "application/xml" if path.suffix.lower() == ".xml" else "application/pdf"
@@ -1797,19 +1814,20 @@ def _settings_context() -> dict:
     profiles = issuer_profiles(include_deleted=True)
     all_issuers = g.get("archive_all", False)
     selected = [p for p in profiles if p["available"] and (all_issuers or p["id"] == current_issuer())]
-    files = [(p.stat().st_mtime, profile["id"], p, profile)
-             for profile in selected for p in issuer_output_dir(profile["id"]).glob("*.pdf")
-             if p.is_file() and not p.is_symlink()]
-    for modified_at, identity, p, profile in sorted(files, key=lambda f: f[:3], reverse=True):
+    files = [(profile["id"], p, profile)
+             for profile in selected for p in archive_documents(issuer_output_dir(profile["id"]))]
+    for identity, p, profile in files:
         # Nummer, Kunde + Rechnungsbetrag aus dem Sidecar (fehlt/defekt: ohne).
         number, buyer_name, amount, currency = None, None, None, "EUR"
         sidecar = p.with_suffix(".json")
-        issue_date = datetime.fromtimestamp(modified_at).date()
+        issue_date = None
+        created_at = None
         exportable = False
         profile_kind = None
         if sidecar.is_file() and not sidecar.is_symlink():
             try:
                 d = json.loads(sidecar.read_text(encoding="utf-8"))
+                created_at = archive_created_at(d)
                 inv = d.get("invoice") or {}
                 profile_kind = inv.get("profile")
                 number = (inv.get("number") or "").strip() or None
@@ -1838,12 +1856,18 @@ def _settings_context() -> dict:
         # A stray XML beside a known ZUGFeRD PDF must not replace the checked PDF.
         check_xml = profile_kind == "xrechnung" or (not profile_kind and p.with_suffix(".xml").exists())
         checked_file = p.with_suffix(".xml") if check_xml else p
+        # Old files never acquired a reliable archive time. Their invoice date is
+        # an explicitly labelled fallback; filesystem mtime is not a creation date.
+        sort_date = created_at or (datetime.combine(issue_date, datetime.min.time(), tzinfo=UTC) if issue_date else None)
+        display_date = sort_date.date().isoformat() if sort_date else ""
+        period_date = issue_date or (created_at.date() if created_at else None)
         archive.append(
             {
                 "filename": p.name,
-                "modified": datetime.fromtimestamp(modified_at).strftime(
-                    "%Y-%m-%d %H:%M"
-                ),
+                "created": display_date,
+                "created_time": created_at.strftime("%Y-%m-%d %H:%M") if created_at else "",
+                "created_source": "archived" if created_at else "invoice" if issue_date else "unknown",
+                "created_sort": sort_date.timestamp() if sort_date else float("-inf"),
                 "has_draft": sidecar.is_file() and not sidecar.is_symlink(),
                 "can_export": exportable,
                 "validation": validation_status.read(checked_file, ruleset, profile_kind),
@@ -1851,8 +1875,8 @@ def _settings_context() -> dict:
                 "issuer_id": identity,
                 "issuer_label": profile["label"],
                 "issuer_deleted": profile["deleted"],
-                "year": issue_date.year,
-                "quarter": (issue_date.month - 1) // 3 + 1,
+                "year": period_date.year if period_date else None,
+                "quarter": (period_date.month - 1) // 3 + 1 if period_date else None,
                 "can_correct": correction_original(p.name, issuer=identity) is not None,
                 "xml_filename": (
                     f"{p.stem}.xml" if p.with_suffix(".xml").exists() else None
@@ -1863,26 +1887,29 @@ def _settings_context() -> dict:
                 "currency": currency,
             }
         )
-    years = sorted({date.today().year, *(row["year"] for row in archive)}, reverse=True)
+    years = sorted({date.today().year, *(row["year"] for row in archive if row["year"] is not None)}, reverse=True)
+    undated = any(row["year"] is None for row in archive)
     year = request.args.get("year", str(date.today().year))
-    if year != "all" and not re.fullmatch(r"[1-9][0-9]{3}", year):
+    if year not in {"all", "unknown"} and not re.fullmatch(r"[1-9][0-9]{3}", year):
         year = str(date.today().year)
-    if year != "all" and int(year) not in years:
+    if year not in {"all", "unknown"} and int(year) not in years:
         years = sorted([*years, int(year)], reverse=True)
-    archive = [row for row in archive if year == "all" or str(row["year"]) == year]
+    archive = [row for row in archive if year == "all" or str(row["year"]) == year
+               or (year == "unknown" and row["year"] is None)]
+    def number_key(row):
+        parts = re.split(r"([0-9]+)", row["number"] or row["filename"])
+        return tuple((1, int(p)) if p.isascii() and p.isdigit() else (0, p.casefold()) for p in parts)
+    archive.sort(key=lambda row: (row["created_sort"], number_key(row), row["issuer_id"], row["filename"]), reverse=True)
     archive_sort = request.args.get("sort", request.cookies.get("archive_sort", "created"))
     if archive_sort not in {"created", "number", "customer"}:
         archive_sort = "created"
     if archive_sort == "number":
-        def number_key(row):
-            parts = re.split(r"([0-9]+)", row["number"] or row["filename"])
-            return tuple((1, int(p)) if p.isascii() and p.isdigit() else (0, p.casefold()) for p in parts)
         archive.sort(key=number_key, reverse=True)  # stable: timestamp breaks equal-number ties
     elif archive_sort == "customer":
         archive.sort(key=lambda row: _country_sortkey(str(row["buyer"] or "")))
     # Quarter shortcuts select rows without changing the list's sort order.
     quarters = [{"key": f"{y}-Q{q}", "year": y, "quarter": q}
-                for y, q in sorted({(row["year"], row["quarter"]) for row in archive},
+                for y, q in sorted({(row["year"], row["quarter"]) for row in archive if row["year"] is not None},
                                    key=lambda period: (-period[0], period[1]))]
     return {
         "archive": archive,
@@ -1892,6 +1919,7 @@ def _settings_context() -> dict:
         "archive_all": all_issuers,
         "archive_year": year,
         "archive_years": years,
+        "archive_undated": undated,
         "archive_sort": archive_sort,
         "archive_issuers": profiles,
         "default_issuer_id": default_issuer(),
@@ -1980,21 +2008,32 @@ def export_csv():
         if not isinstance(entries, list) or only or frm or to or not entries or len(entries) > 10000:
             return abort(400)
         seen = set()
+        documents: dict[str, dict[str, Path]] = {}
         for pair in entries:
             if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(v, str) for v in pair):
                 abort(400)
             identity, filename = pair
             if (identity not in profiles or (not all_issuers and identity != current_issuer())
-                    or Path(filename).name != filename or Path(filename).suffix.lower() != ".pdf"):
+                    or Path(filename).name != filename or Path(filename).suffix.lower() not in {".pdf", ".xml"}):
                 abort(400)
+            path = issuer_output_dir(identity) / filename
+            if path.is_symlink() or not path.is_file():
+                abort(409)
+            if identity not in documents:
+                documents[identity] = {p.stem: p for p in archive_documents(issuer_output_dir(identity))}
+            canonical = documents[identity].get(path.stem)
+            if canonical is None:
+                abort(409)
+            filename = canonical.name
             if (identity, filename) in seen:
                 continue
             seen.add((identity, filename))
             sources.append((identity, issuer_output_dir(identity) / filename))
     else:
         identities = profiles if all_issuers else [current_issuer()]
-        sources = [(identity, p) for identity in identities for p in issuer_output_dir(identity).glob("*.pdf")
-                   if not only or p.name == only]
+        sources = [(identity, p) for identity in identities for p in archive_documents(issuer_output_dir(identity))
+                   if not only or (Path(only).name == only and p.stem == Path(only).stem
+                                   and Path(only).suffix.lower() in {".pdf", ".xml"})]
 
     def fnum(value):
         s = f"{value:.2f}"
