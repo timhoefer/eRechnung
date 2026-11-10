@@ -63,8 +63,8 @@
     <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" autocomplete="off" autofocus placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
     <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
     <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
-    {% for profile in profiles if profile.available %}
-    <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"><span>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</span></label>
+    {% for profile in profiles if profile.available and not profile.deleted %}
+    <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"><span>{{ profile.label }}</span></label>
     {% endfor %}
     <h3>{{ 'Kundenzugriff' if de else 'Customer access' }}</h3>
     <label for="agent-customer-mode">{{ 'Freigegebene Kunden' if de else 'Permitted customers' }}</label>
@@ -101,6 +101,8 @@
   {% else %}<p>{{ 'Keine offenen Anfragen.' if de else 'No pending requests.' }}</p>{% endfor %}
   <a href="{{ url_for('agents_settings') }}">{{ 'Aktualisieren' if de else 'Refresh' }}</a>
 </section>
-<p><a href="{{ url_for('index') }}">{{ 'Zurück zur Rechnung' if de else 'Back to invoice' }}</a></p>
+{% set active_issuers = profiles|selectattr('available')|rejectattr('deleted')|map(attribute='id')|list %}
+{% set return_issuer = request.args.get('issuer') if request.args.get('issuer') in active_issuers else active_issuers|first %}
+<p><a href="{{ url_for('index', issuer=return_issuer, _anchor='agent-access-card') if active_issuers else url_for('validate') }}">{{ 'Zurück zu den Einstellungen' if de else 'Back to settings' }}</a></p>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='agent_settings.js') }}?v={{ asset_version('agent_settings.js') }}"></script>{% endblock %}

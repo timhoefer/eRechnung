@@ -24,7 +24,8 @@ function setup() {
     fetch: (url, options) => new Promise((resolve, reject) => { requests.push({ url, options, resolve, reject }); }),
   });
   const button = { disabled: false };
-  const form = { action: '/agents/settings', fields: { csrf: 'fictional', return_to: 'settings' },
+  // The hidden input named "action" masks HTMLFormElement.action in browsers.
+  const form = { action: { value: 'enable' }, getAttribute: () => '/agents/settings', fields: { csrf: 'fictional', return_to: 'settings' },
     matches: () => true, querySelector: () => button };
   return { requests, card, dialog, error, disclaimer, button, focused: () => focused,
     submit: () => listeners.submit({ target: form, preventDefault() {} }),
@@ -39,6 +40,7 @@ test('settings toggle waits for server, updates only controls/disclaimer and sup
   const pending = page.submit();
   await page.submit();
   assert.equal(page.requests.length, 1);
+  assert.equal(page.requests[0].url, '/agents/settings');
   assert.equal(page.button.disabled, true);
   assert.equal(page.card.innerHTML, 'Access is off');
   assert.equal(page.requests[0].options.body.fields.csrf, 'fictional');

@@ -8,11 +8,13 @@
     <span class="agent-toggle-control">
       <span class="hint" aria-hidden="true">{{ ('Ein' if agent_enabled else 'Aus') if de else ('On' if agent_enabled else 'Off') }}</span>
       <button class="agent-toggle" type="submit" role="switch" aria-checked="{{ 'true' if agent_enabled else 'false' }}"
+              {% if agent_access_unavailable %}disabled{% endif %}
               aria-labelledby="agent-access-label" aria-describedby="agent-access-notice agent-access-effect">
         <span aria-hidden="true"></span>
       </button>
     </span>
   </form>
+  {% if agent_access_unavailable %}<p role="alert">{{ 'Agenteneinstellungen konnten nicht gelesen werden. Agentenzugriff bleibt gesperrt.' if de else 'Agent settings could not be read. Agent access remains blocked.' }}</p>{% endif %}
   <p id="agent-access-effect">{% if agent_enabled %}{{ 'Nur eingerichtete Verbindungen erhalten Zugriff. Ausschalten widerruft alle Zugänge und offenen Anfragen.' if de else 'Only configured connections have access. Turning this off revokes all connections and pending requests.' }}
   {% else %}
   {{ 'Mit dem Einschalten erlaubst du Agentenzugriff. Anschließend wählst du für jede Verbindung die freigegebenen Aussteller und Rechte.' if de else 'Turning this on allows agent access. Then choose the permitted issuers and permissions for each connection.' }}{% endif %}</p>

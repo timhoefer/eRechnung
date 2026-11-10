@@ -2622,9 +2622,19 @@ async function restoreSettingsAfterLanguage() {
     if (url.origin !== window.location.origin || url.pathname !== "/settings/panel") return;
     settingsPanelUrl = url.href;
     await openSettings(saved.selection);
+    return true;
   } catch { /* A stale view must not prevent using the invoice form. */ }
 }
-restoreSettingsAfterLanguage();
+
+async function restoreInitialSettings() {
+  const restored = await restoreSettingsAfterLanguage();
+  if (!restored && window.location?.hash === '#agent-access-card') {
+    await openSettings();
+    document.getElementById('agent-access-card')?.scrollIntoView({block: 'center'});
+    window.history?.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+restoreInitialSettings();
 
 // === Hinweis bei bereits vergebener Rechnungsnummer (blockiert NICHT) ========
 // Doppelte Nummern bleiben erlaubt (z. B. Korrekturrechnungen) – wir weisen nur hin.

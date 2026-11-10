@@ -34,7 +34,9 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    **Abbrechen** erhält den bisherigen Zustand. Hat sich die Liste seit der
    Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
 3. **Verbindungen und Aktionsfreigaben** öffnen und mit **+** eine neue Verbindung
-   anlegen. Im Dialog einen Namen und die gewünschten Aussteller wählen.
+   anlegen. Im Dialog einen Namen und die gewünschten aktiven Aussteller wählen.
+   Deaktivierte Aussteller werden bei neuen Verbindungen nicht angeboten. Bereits
+   erteilte Archivfreigaben bleiben für die Historie und Korrekturen erhalten.
    Unter **Kundenzugriff** zwischen **Keine Kundendaten**, **Nur ausgewählte Kunden**
    (Mehrfachauswahl) und **Alle Kunden** wählen. Neue Verbindungen starten ohne
    Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,

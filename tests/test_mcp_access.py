@@ -666,3 +666,62 @@ def test_new_connection_dialog_has_no_implicit_grant_and_groups_actions(client):
     assert setup.getparent().xpath('.//form[input[@name="action" and @value="revoke"]]')
     assert m.app.extensions["mcp_access"].load() == before
     assert call(credential, "list_customers")["ok"]
+
+
+def test_agent_back_link_opens_settings(client):
+    page = html.fromstring(client.get("/agents").data)
+    back, = page.xpath('//a[contains(@href,"#agent-access-card")]/@href')
+    response = client.get(back)
+    assert response.status_code == 200
+    assert back.endswith("#agent-access-card")
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_new_connections_exclude_inactive_issuers_and_reject_stale_forms(client, language):
+    client.set_cookie("lang", language)
+    add_other()
+    existing = grant(client, issuers=[OTHER])
+    page = html.fromstring(client.get("/agents").data)
+    form, = page.get_element_by_id("agent-connection-dialog").xpath('.//form')
+    assert OTHER in form.xpath('.//input[@name="issuers"]/@value')
+    stale = {**dict(form.form_values()), "name": "New connection", "issuers": OTHER}
+    seller_file = m.DATA_DIR / "issuers" / OTHER / "seller.json"
+    seller = json.loads(seller_file.read_text())
+    seller["_deleted"] = True
+    m._write_json(seller_file, seller)
+    page = html.fromstring(client.get("/agents").data)
+    assert page.get_element_by_id("agent-connection-dialog").xpath('.//input[@name="issuers"]/@value') == ["default"]
+    before = m.app.extensions["mcp_access"].load()
+    assert client.post(form.action, data=stale).status_code == 400
+    assert m.app.extensions["mcp_access"].load() == before
+    # Existing grants keep their archive access for corrections and history.
+    assert call(existing, "list_invoices", issuer=OTHER)["ok"]
+    seller["_deleted"] = False
+    m._write_json(seller_file, seller)
+    assert client.post(form.action, data=stale).status_code == 200
+
+
+def test_agent_back_link_uses_active_profile_after_deactivation(client):
+    add_other()
+    seller = m.load_seller()
+    seller["_deleted"] = True
+    m._write_json(m.SELLER_FILE, seller)
+    page = html.fromstring(client.get("/agents?issuer=default").data)
+    back, = page.xpath('//a[contains(@href,"#agent-access-card")]/@href')
+    assert f"issuer={OTHER}" in back
+    response = client.get(back)
+    assert response.status_code == 200
+    assert back.endswith("#agent-access-card")
+
+
+def test_unreadable_agent_settings_do_not_block_normal_invoicing(client):
+    path = m.BASE / "agent_access.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("invalid-json")
+    assert client.get("/").status_code == 200
+    page = html.fromstring(client.get("/settings/panel").data)
+    switch, = page.xpath('//button[@role="switch"]')
+    assert "disabled" in switch.attrib
+    assert page.get_element_by_id("agent-access-card").xpath('.//p[@role="alert" and not(@hidden)]')
+    assert not call("x" * 43, "list_customers")["ok"]
+    assert path.read_text() == "invalid-json"

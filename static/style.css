@@ -858,4 +858,12 @@ body.drawer-open { overflow: hidden; }
 dialog.agent-connection-dialog, dialog.agent-disable-dialog { width: 680px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); box-sizing: border-box; overflow-y: auto; }
 .agent-connection-dialog h3 { margin-top: 24px; }
 .agent-connection-dialog .hint { color: var(--muted); }
+.agent-page p[data-customer-mode] { margin-top: 12px; }
+#agent-access-card .abtn { margin-top: 16px; }
 .agent-disable-dialog .agent-actions { justify-content: flex-end; }
+
+.agent-permissions { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 12px 20px; margin: 20px 0; }
+.agent-permissions dt { color: var(--muted); font-size: var(--text-sm); padding-top: 2px; }
+.agent-permissions dd { margin: 0; color: var(--ink); font-size: var(--text-base); }
+.agent-permissions ul { list-style: none; margin: 0; padding: 0; }
+.agent-permissions li + li { margin-top: 4px; }

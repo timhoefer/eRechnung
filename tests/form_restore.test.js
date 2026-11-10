@@ -1156,3 +1156,16 @@ test('customer switch keeps existing behavior when the experimental flag is off'
   assert.equal(fields.buyer_name.value, 'B');
   assert.equal(prompts.length, 0);
 });
+
+test('return from agent management opens settings instead of the invoice screen', async () => {
+  const {app, pane, content, button} = settingsView();
+  app.window.location = {hash: '#agent-access-card', pathname: '/', search: '?issuer=default'};
+  let cleaned;
+  app.window.history = {replaceState: (_, __, url) => { cleaned = url; }};
+  app.fetch = async () => ({ok: true, text: async () => 'Settings with agent switch'});
+  await app.restoreInitialSettings();
+  assert.equal(cleaned, '/?issuer=default');
+  assert.equal(pane.hidden, false);
+  assert.equal(content.hidden, true);
+  assert.equal(button.textContent, 'Close');
+});

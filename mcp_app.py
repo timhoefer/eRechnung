@@ -50,10 +50,16 @@ def register(m):
     def agent_ui_context():
         # Share only the switch state, never credentials or connection details.
         active = False
+        unavailable = False
         if app.config["MCP_FEATURE"]:
-            with m.DATA_LOCK:
-                active = access.load().get("enabled", False)
-        return {"agent_enabled": active, "disclaimer_text": disclaimer(active),
+            try:
+                with m.DATA_LOCK:
+                    active = access.load().get("enabled", False)
+            except AccessError:
+                # A broken optional integration must not prevent normal invoicing.
+                unavailable = True
+        return {"agent_enabled": active, "agent_access_unavailable": unavailable,
+                "disclaimer_text": disclaimer(active),
                 "agent_csrf": csrf() if app.config["MCP_FEATURE"] and not request.headers.get("Authorization") else ""}
 
     def ui_guard():
@@ -174,7 +180,7 @@ def register(m):
             elif action == "connect":
                 name = request.form.get("name", "").strip()
                 issuers = request.form.getlist("issuers")
-                allowed = {p["id"] for p in m.issuer_profiles(include_deleted=True) if p["available"]}
+                allowed = {p["id"] for p in m.issuer_profiles() if p["available"]}
                 if not name or len(name) > 80 or not issuers or not set(issuers) <= allowed:
                     abort(400)
                 mode = request.form.get("customer_mode", "none")

@@ -21,7 +21,7 @@
     error.hidden = true;
     button.disabled = true;
     try {
-      const response = await fetch(form.action, {
+      const response = await fetch(form.getAttribute('action'), {
         method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'fetch'},
       });
       const data = await response.json();
