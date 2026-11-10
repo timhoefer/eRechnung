@@ -2027,7 +2027,7 @@ def export_csv():
                 documents[identity] = {p.stem: p for p in archive_documents(issuer_output_dir(identity))}
             canonical = documents[identity].get(path.stem)
             if canonical is None:
-                abort(409)
+                return abort(409)
             filename = canonical.name
             if (identity, filename) in seen:
                 continue
