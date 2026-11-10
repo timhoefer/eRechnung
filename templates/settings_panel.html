@@ -36,6 +36,7 @@
     </button>
   </div>
   {% if result.ok %}<p>{{ t.validate_ok_text }}</p>{% endif %}
+  {% if result.save_failed and not archive_validation_unsaved %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
   {% if result.xsd_messages %}
     <p style="margin:10px 0 2px"><strong>{{ t.val_xsd }}: ✗</strong></p>
     <ul>{% for m in result.xsd_messages %}<li>{{ m }}</li>{% endfor %}</ul>
@@ -123,6 +124,7 @@
       <span class="hint" data-archive-export-status role="status" aria-live="polite"></span>
     </div>
   </form>
+  {% if archive_validation_unsaved %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
   <table class="archive">
     <thead><tr><th class="archive-selection-cell"><span class="sr-only">{{ t.archive_select }}</span></th><th>{{ t.invoice }}</th><th>{{ t.customer }}</th><th>{{ t.created }}</th><th></th></tr></thead>
     <tbody>
@@ -137,6 +139,7 @@
             <span class="arch-id">{{ a.number or a.filename }}</span>
             {% if a.validation %}
             {% set status_text = t['archive_validation_' ~ a.validation.state].format(date=a.validation.checked_at) ~ ' · ' ~ a.validation_file %}
+            {% if not a.validation.saved %}{% set status_text = status_text ~ ' · ' ~ t.validation_save_failed %}{% endif %}
             <span class="arch-validation {{ a.validation.state }}" role="img" aria-label="{{ status_text }}" title="{{ status_text }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 {% if a.validation.state == 'valid' %}<path d="m5 12 4 4L19 6"/>

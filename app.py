@@ -324,7 +324,8 @@ def _set_data_dir(raw: str):
             for relative in files:
                 src, dst = old / relative, target / relative
                 if src.exists() and dst.exists() and (
-                    not dst.is_file() or not filecmp.cmp(src, dst, shallow=False)
+                    not dst.is_file() or (not validation_status.is_receipt(relative)
+                                         and not filecmp.cmp(src, dst, shallow=False))
                 ):
                     return False, "data_dir_err_export_conflict" if relative in exports else "issuer_move_conflict"
             # One copy path for every issuer, including empty archives. Existing
@@ -333,9 +334,12 @@ def _set_data_dir(raw: str):
                 (target / relative).mkdir(parents=True, exist_ok=True)
             for relative in [*files, Path("customers.json")]:
                 src, dst = old / relative, target / relative
-                if src.is_file() and not dst.exists():
+                if src.is_file() and (not dst.exists() or validation_status.is_receipt(relative)):
                     dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(src, dst)
+                    if validation_status.is_receipt(relative):
+                        validation_status.copy_receipt(src, dst)
+                    else:
+                        shutil.copy2(src, dst)
         except OSError:
             return False, "data_dir_err_write"
 
@@ -353,6 +357,7 @@ def _set_data_dir(raw: str):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     # Verschieben abschließen: identische Originale im alten Ordner entfernen.
     if target.resolve() != old.resolve():
+        validation_status.relocate_unsaved(old, target)
         _drop_identical(old, target)
     if has_request_context():
         _select_issuer()
@@ -1550,6 +1555,7 @@ def generate():
 
     filename = xml_filename = None
     reused = False
+    validation_save_failed = False
     if valid:
         try:
             archived = archive_invoice(dict(data, issuer_id=current_issuer()), pdf, xml, output_dir(), seller_file(),
@@ -1564,7 +1570,8 @@ def generate():
         reused = archived["reused"]
         xml_filename = str(Path(filename).with_suffix(".xml")) if is_xr else None
         if not reused:
-            _remember_validation(output_dir() / (xml_filename or filename), xml if is_xr else pdf, ruleset, "valid")
+            validation_save_failed = not _remember_validation(
+                output_dir() / (xml_filename or filename), xml if is_xr else pdf, ruleset, "valid")
         # Only update customer data after a successful final archive operation.
         _write_json(CUSTOMERS_FILE, customers)
 
@@ -1580,6 +1587,7 @@ def generate():
         messages=messages,
         sch=sch,
         reused=reused,
+        validation_save_failed=validation_save_failed,
     )
 
 
@@ -1877,6 +1885,7 @@ def _settings_context() -> dict:
                                    key=lambda period: (-period[0], period[1]))]
     return {
         "archive": archive,
+        "archive_validation_unsaved": any(row["validation"] and not row["validation"]["saved"] for row in archive),
         "archive_quarters": quarters,
         "archive_scope": issuer_store.issuer_scope(DATA_DIR),
         "archive_all": all_issuers,
@@ -2139,14 +2148,16 @@ def data_dir_browse():
     return {"ok": True, "path": r.stdout.strip() or None}
 
 
-def _remember_validation(path: Path, raw: bytes, ruleset: str | None, state: str) -> None:
+def _remember_validation(path: Path, raw: bytes, ruleset: str | None, state: str) -> bool:
     if not ruleset or ruleset != validation_ruleset():
-        return  # Rules changed during the check, or their version is unavailable.
+        return False  # Rules changed during the check, or their version is unavailable.
     try:
-        validation_status.save(path, raw, ruleset, state)
+        return validation_status.save(path, raw, ruleset, state)
     except OSError:
         # A disposable receipt must not turn a successful invoice into a failure.
+        validation_status.remember_unsaved(path, raw, ruleset, state)
         logger.warning("Could not save validation status for %s", path.name, exc_info=True)
+        return False
 
 
 def _validate_request():
@@ -2175,10 +2186,14 @@ def _validate_request():
             sch = result.get("sch")
             if result.get("xsd_ok") and sch and (not sch["available"] or sch.get("error")):
                 state = "unavailable"
-            _remember_validation(archive_path, raw, ruleset, state)
+            result["save_failed"] = not _remember_validation(archive_path, raw, ruleset, state)
         return result
 
-    if raw.lstrip().startswith(b"<"):
+    # Archived files have a known container: an XML named .pdf (or vice versa)
+    # must not acquire a successful persisted status through content sniffing.
+    is_xml = (archive_path.suffix.lower() == ".xml" if archive_path is not None
+              else raw.lstrip().startswith(b"<"))
+    if is_xml:
         xml = raw
     else:
         try:

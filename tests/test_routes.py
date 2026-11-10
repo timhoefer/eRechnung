@@ -645,6 +645,19 @@ def _mock_generation(monkeypatch):
     })
 
 
+def test_generation_warns_when_only_validation_receipt_cannot_be_saved(client, monkeypatch):
+    _mock_generation(monkeypatch)
+    def fail_save(*args):
+        raise OSError('Disk full')
+    monkeypatch.setattr(appmod.validation_status, 'save', fail_save)
+    response = export_invoice(client, data=_FORM)
+    assert response.status_code == 200
+    assert appmod.translate('de')['validation_save_failed'] in response.text
+    pdf = appmod.OUTPUT_DIR / 'Rechnung_2026-001.pdf'
+    assert pdf.is_file() and pdf.with_suffix('.json').is_file()
+    assert appmod.validation_status.read(pdf, appmod.validation_ruleset())['state'] == 'unsaved'
+
+
 @pytest.mark.parametrize('sch', [
     {'available': False, 'ok': None, 'errors': [], 'error': None},
     {'available': False, 'ok': None, 'errors': [], 'error': 'Validator failed'},

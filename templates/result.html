@@ -37,6 +37,7 @@
   {% if sch and sch.error %}<p>{{ sch.error }}</p>{% endif %}
   {% if sch and not sch.available %}<p class="hint">{{ t.val_sch_unavailable }}</p>{% endif %}
   <p class="hint">{{ t.valid_hint }}</p>
+  {% if validation_save_failed %}<p role="alert">{{ t.validation_save_failed }}</p>{% endif %}
 </div>
 
 <div class="card">

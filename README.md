@@ -88,6 +88,18 @@ Hinweis auf eine nötige Neuprüfung; fehlgeschlagene Prüfungen erscheinen rot.
 Altbelege ohne gespeichertes Prüfergebnis erhalten erst nach einer Prüfung einen
 Status. Ein gewöhnliches App-Update ohne geänderte Prüfregeln setzt ihn nicht zurück.
 Prüfergebnisse werden separat gespeichert; die Belegdateien bleiben unverändert.
+Die erneute Archivprüfung berücksichtigt das Dateiformat: Eine PDF-Datei muss
+das XML eingebettet enthalten, eine XML-Datei wird direkt geprüft. Beim Umzug
+in einen Datenordner mit identischen Belegen werden die separaten Prüfergebnisse
+des aktiven Ordners übernommen; unterschiedliche Prüfzeitpunkte sind kein
+Rechnungsdatenkonflikt. Abweichende Belege blockieren den Umzug weiterhin.
+
+Kann ein Prüfergebnis nicht gespeichert werden, zeigt die App einen Hinweis.
+Das aktuelle Ergebnis bleibt während der laufenden Sitzung auch nach Neuladen
+sichtbar; ein nicht gespeicherter Erfolg erhält keinen grünen Haken. Die App
+entfernt nach Möglichkeit den älteren Status. Ist auch das wegen fehlender
+Schreibrechte unmöglich, gilt die Anzeige des neuen Ergebnisses nur bis zum
+App-Neustart. Nach Beheben des Speicherproblems bitte erneut prüfen.
 
 Die Nummer gehört weiterhin zu einem Aussteller. Eine identische Wiederholung
 verwendet die ursprünglichen Dateien. Abweichende Inhalte mit derselben Nummer

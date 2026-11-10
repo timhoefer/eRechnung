@@ -9,10 +9,18 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 
+_unsaved: dict[Path, dict] = {}
+
 
 def receipt_path(document: Path) -> Path:
     # No .json suffix: the invoice-number scan treats those as invoice sidecars.
     return document.with_name(f".{document.name}.validation")
+
+
+def is_receipt(path: Path) -> bool:
+    """Only the reserved archive-cache names may bypass data conflicts."""
+    return (path.parent.name == "output" and path.name.startswith(".")
+            and path.name.endswith((".pdf.validation", ".xml.validation")))
 
 
 def _stamp(document: Path) -> tuple[int, ...]:
@@ -31,22 +39,15 @@ def _digest(document: Path, stamp: tuple[int, ...]) -> str:
     return value
 
 
-def save(document: Path, checked_bytes: bytes, ruleset: str, status: str) -> None:
-    """Caller holds the data lock. Cache only the exact bytes actually checked."""
-    expected = hashlib.sha256(checked_bytes).hexdigest()
-    if _digest(document, _stamp(document)) != expected:
-        return  # An external edit must never inherit the previous result.
-    target = receipt_path(document)
+def _write(target: Path, raw: bytes) -> None:
     if target.is_symlink():
         raise OSError("Linked validation receipts are not supported")
-    record = {"version": 1, "sha256": expected, "ruleset": ruleset,
-              "status": status, "checked_at": datetime.now(UTC).isoformat()}
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=document.parent,
+        with tempfile.NamedTemporaryFile(mode="wb", dir=target.parent,
                                          prefix=".validation-", delete=False) as stream:
             temporary = Path(stream.name)
-            json.dump(record, stream)
+            stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, target)
@@ -55,13 +56,57 @@ def save(document: Path, checked_bytes: bytes, ruleset: str, status: str) -> Non
             temporary.unlink(missing_ok=True)
 
 
+def copy_receipt(source: Path, target: Path) -> None:
+    """Replace only a disposable cache, atomically; caller checks directory links."""
+    _write(target, source.read_bytes())
+
+
+def _record(raw: bytes, ruleset: str, status: str) -> dict:
+    return {"version": 1, "sha256": hashlib.sha256(raw).hexdigest(), "ruleset": ruleset,
+            "status": status, "checked_at": datetime.now(UTC).isoformat()}
+
+
+def save(document: Path, checked_bytes: bytes, ruleset: str, status: str) -> bool:
+    """Caller holds the data lock. Cache only the exact bytes actually checked."""
+    record = _record(checked_bytes, ruleset, status)
+    if _digest(document, _stamp(document)) != record["sha256"]:
+        return False  # An external edit must never inherit the previous result.
+    _write(receipt_path(document), json.dumps(record).encode("utf-8"))
+    _unsaved.pop(document.absolute(), None)
+    return True
+
+
+def _forget_saved(document: Path) -> None:
+    try:
+        receipt_path(document).unlink(missing_ok=True)
+    except OSError:
+        pass  # The in-memory result still takes precedence in this app session.
+
+
+def remember_unsaved(document: Path, raw: bytes, ruleset: str, status: str) -> None:
+    """Keep a failed write visible on subsequent page loads, not just on POST."""
+    _unsaved[document.absolute()] = _record(raw, ruleset, status)
+    _forget_saved(document)
+
+
+def relocate_unsaved(source: Path, target: Path) -> None:
+    """Keep pending results visible after the data-folder move has committed."""
+    for document, record in list(_unsaved.items()):
+        if document.is_relative_to(source.absolute()):
+            moved = target.absolute() / document.relative_to(source.absolute())
+            _unsaved[moved] = record
+            del _unsaved[document]
+            _forget_saved(moved)
+
+
 def read(document: Path, ruleset: str | None) -> dict | None:
     """Return a current result or a neutral stale state, never guess success."""
     try:
         receipt = receipt_path(document)
-        if receipt.is_symlink():
+        pending = _unsaved.get(document.absolute())
+        if pending is None and receipt.is_symlink():
             return None
-        record = json.loads(receipt.read_text(encoding="utf-8"))
+        record = pending if pending is not None else json.loads(receipt.read_text(encoding="utf-8"))
         if (not isinstance(record, dict) or record.get("version") != 1
                 or record.get("status") not in {"valid", "invalid", "unavailable"}
                 or not isinstance(record.get("sha256"), str)
@@ -78,6 +123,9 @@ def read(document: Path, ruleset: str | None) -> dict | None:
                 state = "file_changed"
         except OSError:
             state = "file_changed"
-        return {"state": state, "checked_at": checked.astimezone().strftime("%d.%m.%Y %H:%M")}
+        if pending is not None and state == "valid":
+            state = "unsaved"
+        return {"state": state, "checked_at": checked.astimezone().strftime("%d.%m.%Y %H:%M"),
+                "saved": pending is None}
     except (OSError, ValueError, TypeError, KeyError):
         return None
