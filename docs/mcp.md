@@ -23,7 +23,7 @@ entpacken. Aus diesem Ordner lautet der entsprechende Teststart:
 ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 ```
 
-1. In den Einstellungen **Agentenzugriff** öffnen. Ohne `ERECHNUNG_MCP=1` bleibt
+1. In den Einstellungen zum Abschnitt **Agentenzugriff erlauben** gehen. Ohne `ERECHNUNG_MCP=1` bleibt
    dieser Eintrag unsichtbar und die Werkzeug- und Einstellungsendpunkte sind abgeschaltet.
 2. Den Hinweis zur möglichen Datenübertragung an den Agentenanbieter lesen und
    den Schalter **Agentenzugriff erlauben** einschalten. Die Änderung gilt sofort,
@@ -33,7 +33,8 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    und offenen Anfragen; erneutes Einschalten stellt diese nicht wieder her.
    **Abbrechen** erhält den bisherigen Zustand. Hat sich die Liste seit der
    Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
-3. Eine benannte Verbindung anlegen und die gewünschten Aussteller auswählen.
+3. **Verbindungen und Aktionsfreigaben** öffnen und mit **+** eine neue Verbindung
+   anlegen. Im Dialog einen Namen und die gewünschten Aussteller wählen.
    Unter **Kundenzugriff** zwischen **Keine Kundendaten**, **Nur ausgewählte Kunden**
    (Mehrfachauswahl) und **Alle Kunden** wählen. Neue Verbindungen starten ohne
    Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
@@ -42,7 +43,11 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
 5. Die einmalig angezeigte Konfiguration in den MCP-Client übernehmen. Manche
    Clients benötigen statt des `mcpServers`-Blocks ein eigenes Konfigurationsformat;
    Befehl, Argumente und Umgebungsvariablen bleiben dieselben.
-6. In der App unter **Anfragen → Aktualisieren** offene Anfragen prüfen.
+6. In der App unter **Aktionsfreigaben → Aktualisieren** offene Aktionen prüfen.
+   Diese stammen von bereits eingerichteten MCP-Verbindungen und geben keinem
+   weiteren Agenten Zugang. Lesen, Prüfen und Vorschauen benötigen keine einzelne
+   Bestätigung; endgültige Rechnungen, Änderungen an bestehenden Daten und
+   Löschungen benötigen weiterhin die ausdrückliche Freigabe in eRechnung.
 7. Jede Verbindung lässt sich mit ihrem eigenen Schalter pausieren und wieder
    einschalten. Schlüssel, Aussteller und Rechte bleiben erhalten. Beim Pausieren
    werden alle Aufrufe sofort gesperrt und ihre offenen Anfragen verworfen; diese

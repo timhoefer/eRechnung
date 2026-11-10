@@ -42,6 +42,20 @@ def register(m):
     def csrf():
         return session.setdefault("mcp_csrf", secrets.token_urlsafe(32))
 
+    def disclaimer(active):
+        text = m.translate(m.get_ui_lang(request))
+        return text["disclaimer_full"] + " " + text["disclaimer_agent" if active else "disclaimer_local"]
+
+    @app.context_processor
+    def agent_ui_context():
+        # Share only the switch state, never credentials or connection details.
+        active = False
+        if app.config["MCP_FEATURE"]:
+            with m.DATA_LOCK:
+                active = access.load().get("enabled", False)
+        return {"agent_enabled": active, "disclaimer_text": disclaimer(active),
+                "agent_csrf": csrf() if app.config["MCP_FEATURE"] and not request.headers.get("Authorization") else ""}
+
     def ui_guard():
         enabled()
         # A bearer credential never authorizes granting access or confirming changes.
@@ -128,6 +142,8 @@ def register(m):
         m.BASE.mkdir(parents=True, exist_ok=True)
         with m.DATA_LOCK, data_lock(m.BASE), data_lock(m.DATA_DIR):
             action = request.form.get("action")
+            in_settings = request.form.get("return_to") == "settings" and action in {"enable", "disable"}
+            inline = in_settings and request.headers.get("X-Requested-With") == "fetch"
             token = None
             if action == "enable":
                 if request.form.get("consent") != "yes":
@@ -139,8 +155,11 @@ def register(m):
                     revision = digest(json.dumps(state, sort_keys=True))
                     confirmed = request.form.get("confirm") == "yes"
                     if not confirmed or request.form.get("revision") != revision:
-                        return render_template("agent_disable.html", connections=state["connections"].values(),
-                                               revision=revision, changed=confirmed, csrf=csrf()), 409 if confirmed else 200
+                        context = dict(connections=state["connections"].values(), revision=revision,
+                                       changed=confirmed, csrf=csrf(), in_settings=in_settings, inline=inline)
+                        if inline:
+                            return {"confirmation": render_template("_agent_disable_confirmation.html", **context)}, 409 if confirmed else 200
+                        return render_template("agent_disable.html", **context), 409 if confirmed else 200
                 access.enable(False)
             elif action in {"pause", "resume"}:
                 access.set_active(request.form.get("connection", ""), action == "resume")
@@ -175,6 +194,12 @@ def register(m):
                                       customer_mode=mode, customer_ids=ids)
             else:
                 abort(400)
+            if in_settings:
+                if inline:
+                    active = access.load()["enabled"]
+                    return {"controls": render_template("_agent_access_toggle.html", agent_settings=True),
+                            "disclaimer": disclaimer(active)}
+                return redirect(url_for("validate"))
             return settings_page(token)
 
     @app.get("/agents/requests/<identifier>")

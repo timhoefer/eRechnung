@@ -555,7 +555,7 @@
 
 <details class="disclaimer">
   <summary>{{ t.disclaimer_link }}</summary>
-  <p>{{ t.disclaimer_full }}</p>
+  <p id="disclaimer-text">{{ disclaimer_text }}</p>
 </details>
 
 <div class="drawer-backdrop" id="preview-drawer" hidden>
@@ -625,5 +625,6 @@
 <script src="{{ url_for('static', filename='archive_selection.js') }}?v={{ asset_version('archive_selection.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_version('app.js') }}"></script>
 {% include "_whats_new.html" %}
+{% if config.MCP_FEATURE %}<script src="{{ url_for('static', filename='agent_access.js') }}?v={{ asset_version('agent_access.js') }}"></script>{% endif %}
 </body>
 </html>

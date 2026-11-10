@@ -231,11 +231,10 @@
 </div>
 
 {% if config.MCP_FEATURE %}
-<div class="card">
-  <h2>{{ 'Agentenzugriff' if lang == 'de' else 'Agent access' }}</h2>
-  <p class="hint">{{ 'Verbindungen freigeben, widerrufen und Änderungsanfragen prüfen.' if lang == 'de' else 'Grant or revoke connections and review change requests.' }}</p>
-  <a class="button secondary" href="{{ url_for('agents_settings') }}">{{ 'Agentenzugriff verwalten' if lang == 'de' else 'Manage agent access' }}</a>
+<div class="card" id="agent-access-card">
+  {% with agent_settings=true %}{% include '_agent_access_toggle.html' %}{% endwith %}
 </div>
+<dialog class="modal agent-disable-dialog" id="agent-disable-dialog" aria-labelledby="agent-disable-title"></dialog>
 {% endif %}
 
 {% if lazy_deps %}

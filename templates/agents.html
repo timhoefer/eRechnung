@@ -4,23 +4,7 @@
 <p class="hint">{{ 'Experimentell · Nur nach deiner Freigabe' if de else 'Experimental · Only with your permission' }}</p>
 {% if error %}<p class="flash err">{{ error }}</p>{% endif %}
 <section class="card">
-  <form class="agent-toggle-row" method="post" action="{{ url_for('agents_update') }}">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <input type="hidden" name="action" value="{{ 'disable' if state.enabled else 'enable' }}">
-    {% if not state.enabled %}<input type="hidden" name="consent" value="yes">{% endif %}
-    <h2 id="agent-access-label">{{ 'Agentenzugriff erlauben' if de else 'Allow agent access' }}</h2>
-    <span class="agent-toggle-control">
-      <span class="hint" aria-hidden="true">{{ ('Ein' if state.enabled else 'Aus') if de else ('On' if state.enabled else 'Off') }}</span>
-      <button class="agent-toggle" type="submit" role="switch" aria-checked="{{ 'true' if state.enabled else 'false' }}"
-              aria-labelledby="agent-access-label" aria-describedby="agent-access-notice agent-access-effect">
-        <span aria-hidden="true"></span>
-      </button>
-    </span>
-  </form>
-  <p id="agent-access-effect">{% if state.enabled %}{{ 'Nur eingerichtete Verbindungen erhalten Zugriff. Ausschalten widerruft alle Zugänge und offenen Anfragen.' if de else 'Only configured connections have access. Turning this off revokes all connections and pending requests.' }}
-  {% else %}
-  {{ 'Mit dem Einschalten erlaubst du Agentenzugriff. Anschließend wählst du für jede Verbindung die freigegebenen Aussteller und Rechte.' if de else 'Turning this on allows agent access. Then choose the permitted issuers and permissions for each connection.' }}{% endif %}</p>
-  <p class="hint" id="agent-access-notice">{{ 'Freigegebene Daten können vom Agenten an dessen Anbieter übertragen werden. eRechnung erstellt und prüft Rechnungen weiterhin lokal.' if de else 'The agent may send granted data to its provider. eRechnung continues to create and validate invoices locally.' }}</p>
+  {% include '_agent_access_toggle.html' %}
 </section>
 {% if configuration %}
 <section class="card">
@@ -30,7 +14,12 @@
 {% endif %}
 {% if state.enabled %}
 <section class="card">
-  <h2>{{ 'Verbindungen' if de else 'Connections' }}</h2>
+  <div class="agent-section-header">
+    <h2>{{ 'Verbindungen' if de else 'Connections' }}</h2>
+    <button type="button" class="secondary agent-add" id="agent-connection-add" aria-haspopup="dialog" aria-controls="agent-connection-dialog" aria-label="{{ 'Neue Verbindung' if de else 'New connection' }}" title="{{ 'Neue Verbindung' if de else 'New connection' }}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
   <p class="hint" id="agent-connection-effect">{{ 'Ausschalten pausiert nur diesen Zugang und verwirft seine offenen Anfragen. Du kannst ihn jederzeit wieder einschalten.' if de else 'Turning a connection off pauses only that connection and discards its pending requests. You can turn it back on at any time.' }}</p>
   {% for id, connection in state.connections.items() %}
   {% set active = connection.get('active', true) %}
@@ -38,12 +27,6 @@
     {% include '_agent_circuit.html' %}
     <div class="agent-connection-header">
       <strong>{{ connection.name }}</strong>
-      <form method="post" action="{{ url_for('agents_update') }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="connection" value="{{ id }}">
-        <button type="submit" class="del" title="{{ 'Zugang löschen' if de else 'Delete connection' }}" aria-label="{{ ('Zugang löschen: ' if de else 'Delete connection: ') ~ connection.name }}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
-        </button>
-      </form>
     </div>
     <form class="agent-chip-control" method="post" action="{{ url_for('agents_update') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -57,16 +40,27 @@
     </form>
     <div class="agent-connection-details">
       {% include '_agent_connection_permissions.html' %}
-      <a class="abtn" href="{{ url_for('agents_setup', identifier=connection.id) }}">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</a>
+      <div class="agent-actions">
+        <a class="abtn" href="{{ url_for('agents_setup', identifier=connection.id) }}">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</a>
+        <form method="post" action="{{ url_for('agents_update') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="connection" value="{{ id }}">
+        <button type="submit" class="del" title="{{ 'Zugang löschen' if de else 'Delete connection' }}" aria-label="{{ ('Zugang löschen: ' if de else 'Delete connection: ') ~ connection.name }}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+        </button>
+        </form>
+      </div>
     </div>
   </div>
   {% else %}<p class="hint">{{ 'Noch keine Verbindung freigegeben.' if de else 'No connections granted yet.' }}</p>{% endfor %}
 </section>
-<section class="card">
-  <h2>{{ 'Neue Verbindung' if de else 'New connection' }}</h2>
+<dialog class="modal agent-connection-dialog" id="agent-connection-dialog" aria-labelledby="agent-connection-title">
+  <div class="agent-section-header">
+    <h2 id="agent-connection-title">{{ 'Neue Verbindung' if de else 'New connection' }}</h2>
+    <button type="button" class="secondary" data-close-connection aria-label="{{ t.close }}">&times;</button>
+  </div>
   <form method="post" action="{{ url_for('agents_update') }}">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="connect">
-    <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" autocomplete="off" placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
+    <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" autocomplete="off" autofocus placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
     <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
     <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
     {% for profile in profiles if profile.available %}
@@ -79,7 +73,7 @@
       <option value="selected">{{ 'Nur ausgewählte Kunden' if de else 'Selected customers only' }}</option>
       <option value="all">{{ 'Alle Kunden' if de else 'All customers' }}</option>
     </select>
-    <fieldset class="agent-customer-options" data-customer-mode="selected">
+    <fieldset class="agent-customer-options" data-customer-mode="selected" hidden disabled>
       <legend>{{ 'Kunden auswählen' if de else 'Choose customers' }}</legend>
       {% for customer in customer_choices %}
       <label class="agent-check"><input type="checkbox" name="customers" value="{{ customer.key }}"><span>{{ customer.name }}</span></label>
@@ -91,13 +85,15 @@
     <label class="agent-check"><input type="checkbox" name="write" value="yes"><span>{{ 'Rechnungen erstellen und Datenänderungen anfragen' if de else 'Create invoices and request data changes' }}</span></label>
     <p class="hint">{{ 'Endgültige Rechnungen, Löschungen und Änderungen an vorhandenen Daten warten auf deine ausdrückliche Bestätigung in eRechnung.' if de else 'Final invoices, deletions and changes to existing data wait for your explicit approval in eRechnung.' }}</p>
     <div class="agent-actions">
+      <button type="button" class="secondary" data-close-connection>{{ t.cancel }}</button>
       <button type="submit">{{ 'Verbindung freigeben' if de else 'Grant connection' }}</button>
     </div>
   </form>
-</section>
+</dialog>
 {% endif %}
 <section class="card">
-  <h2>{{ 'Anfragen' if de else 'Requests' }}</h2>
+  <h2>{{ 'Aktionsfreigaben' if de else 'Action approvals' }}</h2>
+  <p>{{ 'Hier bestätigst du einzelne Aktionen bereits eingerichteter MCP-Verbindungen. Dadurch erhält kein weiterer Agent Zugang.' if de else 'Approve individual actions from existing MCP connections here. This does not grant access to another agent.' }}</p>
   <p class="hint">{{ 'Eine Freigabe gilt nur für die gezeigte Aktion und verfällt nach fünf Minuten. Geänderte Daten erfordern eine neue Prüfung.' if de else 'Approval applies only to the displayed operation and expires after five minutes. Changed data requires another review.' }}</p>
   {% for id, entry in requests.items() %}
     <p><strong>{{ entry.connection.name }}</strong> · {{ entry.confirmation.title if entry.confirmation else entry.operation }} — {{ entry.status }}

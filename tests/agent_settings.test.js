@@ -46,3 +46,31 @@ for (const clipboard of [undefined, { writeText: async () => { throw new Error('
     assert.ok(page.displayed.includes('fictional-test-value'));
   });
 }
+
+test('new connection opens on demand and cancel/escape return focus without submitting', () => {
+  const listeners = {};
+  let focused = false;
+  const add = { addEventListener: (_, fn) => { listeners.add = fn; }, focus: () => { focused = true; } };
+  const cancel = { addEventListener: (_, fn) => { listeners.cancel = fn; } };
+  const dialog = {
+    open: false,
+    showModal() { this.open = true; },
+    close() { this.open = false; listeners.close(); },
+    querySelectorAll: () => [cancel],
+    addEventListener: (name, fn) => { listeners[name] = fn; },
+  };
+  const elements = { 'agent-connection-dialog': dialog, 'agent-connection-add': add };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
+    document: { getElementById: id => elements[id], querySelector: () => null },
+  });
+  assert.equal(dialog.open, false);
+  listeners.add();
+  assert.equal(dialog.open, true);
+  listeners.cancel();
+  assert.equal(dialog.open, false);
+  assert.equal(focused, true);
+  focused = false;
+  listeners.add();
+  dialog.close(); // native Escape closes a dialog and emits close
+  assert.equal(focused, true);
+});

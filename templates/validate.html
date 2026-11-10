@@ -118,5 +118,6 @@
 </script>
 {% include "_whats_new.html" %}
 <script src="{{ url_for('static', filename='archive_selection.js') }}?v={{ asset_version('archive_selection.js') }}"></script>
+{% if config.MCP_FEATURE %}<script src="{{ url_for('static', filename='agent_access.js') }}?v={{ asset_version('agent_access.js') }}"></script>{% endif %}
 </body>
 </html>

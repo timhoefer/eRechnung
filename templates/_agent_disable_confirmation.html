@@ -1,0 +1,18 @@
+{% set de = lang == 'de' %}
+<h2 id="agent-disable-title">{{ 'Agentenzugriff ausschalten?' if de else 'Turn off agent access?' }}</h2>
+<div>
+  {% if changed %}<p class="flash err">{{ 'Die Zugänge haben sich inzwischen geändert. Bitte prüfe die Liste und bestätige erneut.' if de else 'The connections have changed. Please review the list and confirm again.' }}</p>{% endif %}
+  <p>{{ 'Alle Verbindungen werden dauerhaft gelöscht und ihre Zugangsschlüssel widerrufen. Auch alle offenen Anfragen verfallen.' if de else 'All connections will be permanently deleted and their credentials revoked. All pending requests will also be discarded.' }}</p>
+  {% if connections %}<ul>{% for connection in connections %}<li>{{ connection.name }}</li>{% endfor %}</ul>{% endif %}
+  <p>{{ 'Erneutes Einschalten stellt diese Verbindungen nicht wieder her. Du musst sie dann neu einrichten. Rechnungen und gespeicherte Daten bleiben erhalten.' if de else 'Turning access back on will not restore these connections. You will need to set them up again. Invoices and saved data are kept.' }}</p>
+  <form method="post" action="{{ url_for('agents_update') }}" class="agent-actions{{ ' agent-access-form' if inline else '' }}">
+    {% if in_settings %}<input type="hidden" name="return_to" value="settings">{% endif %}
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="disable">
+    <input type="hidden" name="confirm" value="yes">
+    <input type="hidden" name="revision" value="{{ revision }}">
+    {% if inline %}<button type="button" class="secondary" data-agent-cancel autofocus>{{ t.cancel }}</button>
+    {% else %}<a href="{{ url_for('validate' if in_settings else 'agents_settings') }}">{{ t.cancel }}</a>{% endif %}
+    <button type="submit" class="danger">{{ 'Ausschalten und Zugänge löschen' if de else 'Turn off and delete connections' }}</button>
+  </form>
+</div>

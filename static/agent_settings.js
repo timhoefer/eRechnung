@@ -1,4 +1,13 @@
 (() => {
+  const dialog = document.getElementById('agent-connection-dialog');
+  const add = document.getElementById('agent-connection-add');
+  if (dialog && add) {
+    add.addEventListener('click', () => dialog.showModal());
+    dialog.querySelectorAll('[data-close-connection]').forEach(button => {
+      button.addEventListener('click', () => dialog.close());
+    });
+    dialog.addEventListener('close', () => add.focus());
+  }
   const mode = document.getElementById('agent-customer-mode');
   if (mode) {
     const update = () => {

@@ -582,3 +582,87 @@ def test_tampered_approval_fields_cannot_change_original_request(client):
     })
     assert response.status_code == 303
     assert json.loads(m.CUSTOMERS_FILE.read_text())[0]["city"] == "Hamburg"
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_settings_opt_in_preserves_approval_and_updates_disclaimer(client, language):
+    client.set_cookie("lang", language)
+    access = m.app.extensions["mcp_access"]
+    headers = {"X-Requested-With": "fetch"}
+    local = m.translate(language)["disclaimer_local"]
+    notice = m.translate(language)["disclaimer_agent"]
+
+    def controls(response):
+        page = html.fromstring(response)
+        form, = page.xpath('//form[contains(@class,"agent-access-form")]')
+        return form, dict(form.form_values())
+
+    before = snapshot()
+    assert local in html.fromstring(client.get("/").data).get_element_by_id("disclaimer-text").text
+    form, fields = controls(client.get("/settings/panel").data)
+    assert fields["consent"] == "yes" and fields["return_to"] == "settings"
+    enabled = client.post(form.action, data=fields, headers=headers)
+    assert enabled.status_code == 200
+    assert notice in enabled.json["disclaimer"] and local not in enabled.json["disclaimer"]
+    assert access.load() == {"enabled": True, "connections": {}}
+    assert notice in html.fromstring(client.get("/").data).get_element_by_id("disclaimer-text").text
+    assert b'agent_access.js' in client.get("/validate").data
+
+    credential = grant(client)
+    pending = call(credential, "delete_customer", issuer="default", name=BUYER["name"])
+    form, fields = controls(client.get("/settings/panel").data)
+    review = client.post(form.action, data=fields, headers=headers)
+    assert review.status_code == 200 and "confirmation" in review.json
+    assert access.load()["enabled"]
+    assert call(credential, "request_status", request_id=pending["request_id"])["status"] == "pending"
+    confirmation = html.fromstring(review.json["confirmation"])
+    assert confirmation.xpath('//button[@data-agent-cancel and @type="button"]')
+    confirm, confirm_fields = controls(review.json["confirmation"])
+    # Another tab changes the connection after the warning was shown.
+    configure(client, "connect", name="Second connection", issuers=["default"])
+    stale = client.post(confirm.action, data=confirm_fields, headers=headers)
+    assert stale.status_code == 409 and "Second connection" in stale.json["confirmation"]
+    assert access.load()["enabled"] and len(access.load()["connections"]) == 2
+    confirm, confirm_fields = controls(stale.json["confirmation"])
+    disabled = client.post(confirm.action, data=confirm_fields, headers=headers)
+    assert disabled.status_code == 200
+    assert local in disabled.json["disclaimer"] and notice not in disabled.json["disclaimer"]
+    assert access.load() == {"enabled": False, "connections": {}}
+    assert not access.pending and not call(credential, "list_customers")["ok"]
+    assert snapshot() == before
+
+
+def test_settings_opt_in_keeps_csrf_origin_and_bearer_guards(client):
+    page = html.fromstring(client.get("/settings/panel").data)
+    form, = page.xpath('//form[contains(@class,"agent-access-form")]')
+    fields = dict(form.form_values())
+    headers = {"X-Requested-With": "fetch"}
+    for changes, extra_headers, status in [
+        ({"csrf": ""}, {}, 403), ({"consent": ""}, {}, 400),
+        ({}, {"Origin": "https://example.com"}, 403),
+        ({}, {"Authorization": "Bearer untrusted"}, 403),
+    ]:
+        assert client.post(form.action, data={**fields, **changes}, headers={**headers, **extra_headers}).status_code == status
+        assert not m.app.extensions["mcp_access"].load()["enabled"]
+    assert client.post(form.action, data=fields).status_code == 302  # no-JS full-page fallback
+    assert client.get("/validate").status_code == 200
+
+
+def test_new_connection_dialog_has_no_implicit_grant_and_groups_actions(client):
+    credential = grant(client)
+    before = m.app.extensions["mcp_access"].load()
+    page = html.fromstring(client.get("/agents").data)
+    trigger = page.get_element_by_id("agent-connection-add")
+    assert trigger.get("type") == "button" and trigger.get("aria-haspopup") == "dialog"
+    dialog = page.get_element_by_id(trigger.get("aria-controls"))
+    assert dialog.tag == "dialog" and "open" not in dialog.attrib
+    form, = dialog.xpath('.//form')
+    values = dict(form.form_values())
+    assert values.get("customer_mode") == "none"
+    assert "issuers" not in values and "write" not in values
+    for cancel in dialog.xpath('.//button[@data-close-connection]'):
+        assert cancel.get("type") == "button"
+    setup, = page.xpath('//a[contains(@href,"/setup")]')
+    assert setup.getparent().xpath('.//form[input[@name="action" and @value="revoke"]]')
+    assert m.app.extensions["mcp_access"].load() == before
+    assert call(credential, "list_customers")["ok"]

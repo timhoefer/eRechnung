@@ -837,3 +837,25 @@ body.drawer-open { overflow: hidden; }
 .draft-import-table th, .draft-import-table td { text-align: left; padding: 12px 8px; vertical-align: top; }
 .draft-import-table td:first-child { white-space: pre-wrap; overflow-wrap: anywhere; }
 .draft-import-table th:nth-child(n+2), .draft-import-table td:nth-child(n+2) { text-align: right; white-space: nowrap; }
+
+/* Shared agent controls on settings and connection pages. */
+.agent-toggle-row, .agent-section-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.agent-toggle-row h2 { margin: 0; }
+.agent-toggle-control { display: flex; align-items: center; gap: 10px; flex: none; }
+.agent-toggle-control .hint { margin: 0; }
+.agent-toggle { display: inline-flex; align-items: center; width: 52px; height: 30px; padding: 4px; border-radius: 999px; background: var(--muted); }
+.agent-toggle:hover { background: var(--muted); }
+.agent-toggle[aria-checked="true"] { background: var(--accent); }
+.agent-toggle[aria-checked="true"]:hover { background: var(--accent-d); }
+.agent-toggle span { width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+.agent-toggle[aria-checked="true"] span { transform: translateX(22px); }
+
+.agent-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
+.agent-actions form { margin: 0; }
+.agent-section-header { margin-bottom: 20px; }
+.agent-section-header h2 { margin: 0; }
+.agent-add { display: inline-flex; align-items: center; justify-content: center; padding: 10px; }
+dialog.agent-connection-dialog, dialog.agent-disable-dialog { width: 680px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); box-sizing: border-box; overflow-y: auto; }
+.agent-connection-dialog h3 { margin-top: 24px; }
+.agent-connection-dialog .hint { color: var(--muted); }
+.agent-disable-dialog .agent-actions { justify-content: flex-end; }

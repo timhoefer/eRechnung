@@ -2597,6 +2597,7 @@ function closeSettings() {
   // Formulare im Panel ohne Seitenwechsel abschicken.
   pane.addEventListener("submit", (e) => {
     const form = e.target;
+    if (form.matches(".agent-access-form")) return; // managed without replacing the archive panel
     if (form.matches(".issuer-restore-form")) return; // handled by the document's switch guard
     e.preventDefault();
     if (form.id === "archive-issuer-form") {
