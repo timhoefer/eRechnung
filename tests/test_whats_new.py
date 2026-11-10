@@ -33,8 +33,8 @@ def acknowledge(client):
 
 
 @pytest.mark.parametrize("language,title,feature", [
-    ("de", "Neu in eRechnung", "Mehrere Rechnungsaussteller"),
-    ("en", "What's new in eRechnung", "Multiple invoice issuers"),
+    ("de", "Neu in eRechnung", "Dein Archiv im Überblick"),
+    ("en", "What's new in eRechnung", "Your archive at a glance"),
 ])
 def test_unseen_announcement_is_localized_but_not_acknowledged_on_load(client, language, title, feature):
     client.set_cookie("lang", language)
