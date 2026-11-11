@@ -51,20 +51,24 @@ def test_policies_cover_every_write_tool():
 
 
 @pytest.mark.parametrize("lang", ["de", "en"])
-def test_new_connection_defaults_ask_and_destructive_actions_cannot_be_always_allowed(client, lang):
+def test_new_connection_denies_destructive_actions_and_asks_for_other_changes(client, lang):
     client.set_cookie("lang", lang)
     configure(client, "enable", consent="yes")
     page = html.fromstring(client.get("/agents").data)
     form, = page.xpath('//form[input[@name="action" and @value="connect"]]')
     fields = MultiDict(form.form_values())
     assert fields["permission_policy"] == "1" and fields["client_approvals"] == "no"
+    expected = dict.fromkeys(WRITE_OPERATIONS, "confirm")
+    expected.update(deactivate_issuer="deny", delete_customer="deny", delete_invoice="deny")
     for op in WRITE_OPERATIONS:
-        assert fields["permission_" + op] == "confirm"
+        assert fields["permission_" + op] == expected[op]
         values = form.xpath(f'.//select[@name="permission_{op}"]/option/@value')
         assert set(values) == ({"deny", "confirm"} if op in DESTRUCTIVE else {"deny", "confirm", "allow"})
+        selected, = form.xpath(f'.//select[@name="permission_{op}"]/option[@selected]')
+        assert ("empfohlen" if lang == "de" else "recommended") in selected.text
     assert client.post(form.action, data=fields).status_code == 200
     connection, = m.app.extensions["mcp_access"].load()["connections"].values()
-    assert connection["permissions"] == {op: "confirm" for op in WRITE_OPERATIONS}
+    assert connection["permissions"] == expected
     assert connection["writable"] is True
 
 

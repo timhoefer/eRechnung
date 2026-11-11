@@ -44,8 +44,10 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
    Prüfen und Vorschau beschränkt.
 4. Unter **Aktionen** jede Änderungsaktion auf **Verbieten**, **Nachfragen** oder
-   **Erlauben** setzen. **Nachfragen (empfohlen)** ist bei neuen Verbindungen
-   vorausgewählt. Löschen und Deaktivieren bieten nur Verbieten/Nachfragen.
+   **Erlauben** setzen. Neue Verbindungen starten für Aussteller deaktivieren,
+   Kunden löschen und Rechnungen löschen mit **Verbieten (empfohlen)**;
+   für die übrigen Aktionen ist **Nachfragen (empfohlen)** vorausgewählt.
+   Löschen und Deaktivieren bieten nur Verbieten/Nachfragen.
    Unter **Wo soll nachgefragt werden?** optional **Im Agenten, wenn unterstützt**
    wählen; standardmäßig wird weiterhin in eRechnung bestätigt.
    **Freigeben und weiter** erstellt die Verbindung und öffnet Schritt 2.

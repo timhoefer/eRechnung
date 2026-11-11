@@ -145,8 +145,9 @@ Rechnungen prüfen, Vorschauen erzeugen und Änderungen anfragen. Die Funktion i
 hinter `ERECHNUNG_MCP=1` verborgen und benötigt zusätzlich dein Opt-in in den
 Einstellungen. Jede Verbindung hat einen eigenen widerrufbaren Zugang und
 explizit ausgewählte Aussteller und Kunden. Pro Änderungsaktion wählst du
-**Verbieten**, **Nachfragen (empfohlen)** oder **Erlauben**. Neue Verbindungen
-fragen vor Änderungen nach; Kunden sind zunächst nicht freigegeben.
+**Verbieten**, **Nachfragen** oder **Erlauben**. Neue Verbindungen verbieten
+Löschen und Deaktivieren standardmäßig; bei den übrigen Änderungen ist
+**Nachfragen (empfohlen)** vorausgewählt. Kunden sind zunächst nicht freigegeben.
 Nach der Einrichtung öffnet die Verbindung eRechnung bei Bedarf automatisch.
 Das Starten erteilt keine zusätzlichen Rechte und aktiviert keinen widerrufenen
 Zugang. Im isolierten Testmodus bleibt der App-Start manuell.

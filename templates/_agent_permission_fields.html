@@ -42,8 +42,9 @@
       ('delete_invoice', ('Rechnungen löschen', 'Delete invoices'))] %}
       <label for="{{ field_prefix }}-{{ operation }}">{{ labels[0] if de else labels[1] }}</label>
       <select id="{{ field_prefix }}-{{ operation }}" name="permission_{{ operation }}">
-        {% for value, texts in [('deny', ('Verbieten', 'Deny')), ('confirm', ('Nachfragen (empfohlen)', 'Ask (recommended)')), ('allow', ('Erlauben', 'Allow'))] %}
-        {% if value != 'allow' or operation not in agent_destructive_operations %}<option value="{{ value }}"{% if policies[operation] == value %} selected{% endif %}>{{ texts[0] if de else texts[1] }}</option>{% endif %}
+        {% set recommended = 'deny' if operation in agent_destructive_operations else 'confirm' %}
+        {% for value, texts in [('deny', ('Verbieten', 'Deny')), ('confirm', ('Nachfragen', 'Ask')), ('allow', ('Erlauben', 'Allow'))] %}
+        {% if value != 'allow' or operation not in agent_destructive_operations %}<option value="{{ value }}"{% if policies[operation] == value %} selected{% endif %}>{{ texts[0] if de else texts[1] }}{% if value == recommended %}{{ ' (empfohlen)' if de else ' (recommended)' }}{% endif %}</option>{% endif %}
         {% endfor %}
       </select>
     {% endfor %}

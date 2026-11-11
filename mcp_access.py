@@ -40,7 +40,8 @@ def permission(connection, operation):
 
 def permission_choices(connection):
     if not connection:
-        return dict.fromkeys(WRITE_OPERATIONS, "confirm")
+        return {operation: "deny" if operation in DESTRUCTIVE else "confirm"
+                for operation in WRITE_OPERATIONS}
     return {operation: ("allow" if operation == "restore_issuer" else "confirm") if permission(connection, operation) == "legacy"
             else permission(connection, operation) for operation in WRITE_OPERATIONS}
 

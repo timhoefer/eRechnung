@@ -42,7 +42,8 @@ def test_empty_connection_name_uses_localized_default(client, language, expected
     connection, = m.app.extensions["mcp_access"].load()["connections"].values()
     assert connection["name"] == expected
     assert connection["issuers"] == ["default"] and connection["writable"]
-    assert set(connection["permissions"].values()) == {"confirm"}
+    assert {op for op, value in connection["permissions"].items() if value == "deny"} == {
+        "deactivate_issuer", "delete_customer", "delete_invoice"}
 
 
 @pytest.mark.parametrize("active", [True, False])
