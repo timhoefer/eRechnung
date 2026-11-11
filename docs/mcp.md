@@ -100,6 +100,23 @@ ausschließlich als Prüfwerte gespeichert; es gibt keine betriebssystemspezifis
 Schlüsselspeicherung. Nach Verlassen der einmaligen Anzeige lässt sich ein
 verlorener Schlüssel daher nur durch bewusstes Erneuern ersetzen.
 
+### Wenn die Bestätigung im Agenten nicht ankommt
+
+Die Brücke wartet höchstens vier Minuten auf die Antwort des MCP-Clients.
+Danach ist dieser Dialog abgelaufen; ein späterer Klick kann ihn nicht mehr
+bestätigen. Die App-Anfrage selbst gilt insgesamt fünf Minuten ab ihrer Erstellung.
+Ein Timeout beweist **nicht**, dass der Client keine Formulare unterstützt.
+
+Die Werkzeugantwort unterscheidet unter `client_confirmation_error` zwischen
+`unsupported` (keine Formularunterstützung, auch bei ausschließlich URL-basierten
+Abfragen), `timeout` (keine rechtzeitige Antwort), `dialog_failed` (Dialogfehler),
+`busy` und `invalid_response`. Keine dieser Antworten erteilt eine Freigabe.
+Zuerst mit `request_status` prüfen, ob die Anfrage noch offen, abgelaufen oder
+bereits in der App erledigt ist. Offene Anfragen lassen sich in eRechnung
+bestätigen; abgelaufene müssen nach Rücksprache neu gestellt werden. Schreibaufrufe
+nicht automatisch wiederholen. Bei der Fehlersuche weder Zugangsschlüssel noch
+private Bestätigungsdaten in Protokolle schreiben.
+
 Der erzeugte Befehl startet entweder `mcp_server.py` mit dem Python-Interpreter
 der App oder die gebündelte macOS-Datei mit `--mcp`. Außerhalb des Testmodus enthält
 die erzeugte Konfiguration zusätzlich `ERECHNUNG_MCP_AUTOSTART=1` und den bereits

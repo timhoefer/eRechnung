@@ -92,6 +92,8 @@ def test_unsupported_or_unselected_client_confirmation_falls_back_to_app(client,
         async with Client(transport(token), read_timeout_seconds=20, **kwargs) as agent:
             data = (await agent.call_tool("delete_customer", {"issuer": "default", "name": BUYER["name"]})).structured_content
             assert data["status"] == "approval_required", data
+            if not client_support and opted_in:
+                assert data["client_confirmation_error"] == "unsupported"
             assert "nonce" not in json.dumps(data) and "_client_approval" not in json.dumps(data)
             assert snapshot() == before
             assert decide(client, data["request_id"], "deny").status_code == 303
@@ -163,7 +165,9 @@ def test_bridge_dialog_failure_never_fabricates_approval(monkeypatch, failure):
     async def failed(**kwargs):
         raise TimeoutError() if failure == "timeout" else RuntimeError("No dialog")
     context = SimpleNamespace(request_id="test", protocol_version="2025-11-25", session=SimpleNamespace(
-        check_client_capability=lambda caps: failure != "unsupported", elicit_form=failed))
+        client_capabilities=types.ClientCapabilities(
+            elicitation=None if failure == "unsupported" else types.ElicitationCapability(form=types.FormElicitationCapability())),
+        elicit_form=failed))
     pending = {"ok": False, "status": "approval_required", "request_id": "test"}
     private = {"nonce": "secret-test-nonce", "connection": "Test", "review": {"title": "Delete test customer"}}
     monkeypatch.setattr(mcp_server, "app_call", lambda *args: {**pending, "_client_approval": private})
@@ -171,8 +175,49 @@ def test_bridge_dialog_failure_never_fabricates_approval(monkeypatch, failure):
         pytest.fail("No affirmative response: must not send a decision")
     monkeypatch.setattr(mcp_server, "app_request", forbidden)
     result = asyncio.run(mcp_server.call_tool(context, types.CallToolRequestParams(name="delete_customer", arguments={})))
-    assert result.structured_content == {**pending, "approval_location": "app"}
+    data = result.structured_content
+    assert all(data[key] == value for key, value in pending.items())
+    assert data["approval_location"] == "app"
+    assert data["client_confirmation_error"] == ("dialog_failed" if failure == "error" else failure)
+    assert "request_status" in data["message"]
+    assert "No dialog" not in data["message"]
     assert "secret-test-nonce" not in result.model_dump_json()
+
+
+@pytest.mark.parametrize("capabilities,expected", [
+    (None, False), ({}, False), ({"elicitation": {}}, True),
+    ({"elicitation": {"form": {}}}, True),
+    ({"elicitation": {"url": {}}}, False),
+    ({"elicitation": {"form": {}, "url": {}}}, True),
+])
+def test_form_support_respects_legacy_and_url_only_clients(capabilities, expected):
+    session = SimpleNamespace(client_capabilities=(
+        types.ClientCapabilities.model_validate(capabilities) if capabilities is not None else None))
+    assert mcp_server.supports_confirmation_form(session) is expected
+
+
+def test_unanswered_dialog_is_cancelled_without_sending_a_decision(monkeypatch):
+    async def scenario():
+        cancelled = asyncio.Event()
+        async def unanswered(**kwargs):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        context = SimpleNamespace(request_id="test", protocol_version="2025-11-25", session=SimpleNamespace(
+            client_capabilities=types.ClientCapabilities(elicitation=types.ElicitationCapability()),
+            elicit_form=unanswered))
+        result = await mcp_server.client_approval(context, types.CallToolRequestParams(name="save_customer"),
+            {"ok": False, "status": "approval_required", "request_id": "test"},
+            {"connection": "Test", "nonce": "private", "review": {"title": "Save customer"}})
+        assert cancelled.is_set()
+        assert result["client_confirmation_error"] == "timeout"
+        assert result["status"] == "approval_required" and not result["ok"]
+    monkeypatch.setattr(mcp_server, "CLIENT_CONFIRMATION_TIMEOUT", 0.01)
+    def forbidden(*args):
+        pytest.fail("Timeout must not turn into consent")
+    monkeypatch.setattr(mcp_server, "app_request", forbidden)
+    asyncio.run(scenario())
 
 
 def test_app_section_is_visible_only_with_pending_requests(client):
@@ -191,7 +236,8 @@ def test_modern_continuation_is_bound_consumed_and_never_reexecutes_tool(monkeyp
     pending = {"ok": False, "status": "approval_required", "request_id": "request"}
     private = {"nonce": "private-test-nonce", "connection": "Test", "review": {"title": "Delete test"}}
     params = types.CallToolRequestParams(name="delete_customer", arguments={"issuer": "default", "name": "Test"})
-    context = SimpleNamespace(protocol_version="2026-07-28", session=SimpleNamespace(check_client_capability=lambda caps: True))
+    context = SimpleNamespace(protocol_version="2026-07-28", session=SimpleNamespace(
+        client_capabilities=types.ClientCapabilities(elicitation=types.ElicitationCapability(form=types.FormElicitationCapability()))))
     initial = asyncio.run(mcp_server.client_approval(context, params, pending, private))
     assert isinstance(initial, types.InputRequiredResult)
     assert "private-test-nonce" not in initial.model_dump_json()

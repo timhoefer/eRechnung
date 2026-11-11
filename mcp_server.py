@@ -61,6 +61,28 @@ async def list_tools(context, params):
 
 
 _client_reviews: dict[str, dict] = {}
+CLIENT_CONFIRMATION_TIMEOUT = 240
+
+
+def app_approval_fallback(pending, reason):
+    messages = {
+        "unsupported": "This MCP client does not support confirmation forms.",
+        "timeout": "No answer to the MCP confirmation arrived within four minutes. The dialog has expired.",
+        "dialog_failed": "The MCP client could not complete the confirmation dialog.",
+        "busy": "There are too many unanswered MCP confirmations.",
+        "invalid_response": "The MCP client did not return a confirmation response.",
+    }
+    return {**pending, "approval_location": "app", "client_confirmation_error": reason,
+            "message": messages[reason] + " No change was authorized by this dialog. "
+            "Check request_status before continuing; review the request in eRechnung if it is still pending. "
+            "Do not repeat the write operation automatically."}
+
+
+def supports_confirmation_form(session):
+    capabilities = session.client_capabilities
+    elicitation = capabilities.elicitation if capabilities else None
+    # Bare elicitation={} is the legacy form capability; URL-only is not.
+    return elicitation is not None and (elicitation.form is not None or elicitation.url is None)
 
 
 async def call_tool(context, params):
@@ -95,11 +117,11 @@ async def client_approval(context, params, pending, private):
     """
     pending = {**pending, "approval_location": "app"}
     try:
-        capability = types.ClientCapabilities(elicitation=types.ElicitationCapability(form=types.FormElicitationCapability()))
-        if not context.session.check_client_capability(capability):
-            return pending
+        if not supports_confirmation_form(context.session):
+            return app_approval_fallback(pending, "unsupported")
         message = ("eRechnung: Aktion bestätigen / Approve operation\n"
                    "Verbindung / Connection: " + private["connection"] + "\n"
+                   "Bitte innerhalb von vier Minuten antworten. / Please answer within four minutes.\n"
                    "Prüfe die folgenden Daten. Nur bestätigen, wenn du diese konkrete Aktion beauftragt hast. "
                    "Die Ausführung erfolgt sofort; Löschungen können nicht rückgängig gemacht werden. / "
                    "Review the data below. Approve only if you requested this exact operation. "
@@ -112,19 +134,22 @@ async def client_approval(context, params, pending, private):
             # Newer clients carry the reply in a continuation, not a back-channel.
             prune_client_reviews()
             if len(_client_reviews) >= 64:
-                return pending
+                return app_approval_fallback(pending, "busy")
             handle = secrets.token_urlsafe(32)
             _client_reviews[handle] = {
                 "name": params.name, "arguments": json.dumps(params.arguments or {}, sort_keys=True),
-                "expires": time.monotonic() + 240, "pending": pending, "private": private,
+                "expires": time.monotonic() + CLIENT_CONFIRMATION_TIMEOUT, "pending": pending, "private": private,
             }
             return types.InputRequiredResult(request_state=handle, input_requests={
                 "approval": types.ElicitRequest(params=types.ElicitRequestFormParams(message=message, requested_schema=schema))})
         response = await asyncio.wait_for(context.session.elicit_form(
-            message=message, requested_schema=schema, related_request_id=context.request_id), timeout=240)
+            message=message, requested_schema=schema, related_request_id=context.request_id),
+            timeout=CLIENT_CONFIRMATION_TIMEOUT)
+    except TimeoutError:
+        return app_approval_fallback(pending, "timeout")
     except Exception:
         # Do not leak private envelopes or fabricate user consent on transport errors.
-        return pending
+        return app_approval_fallback(pending, "dialog_failed")
     return await send_client_decision(response, pending, private)
 
 
@@ -143,7 +168,7 @@ async def resume_client_approval(params):
     responses = params.input_responses or {}
     response = responses.get("approval")
     if set(responses) != {"approval"} or not isinstance(response, types.ElicitResult):
-        return review["pending"]
+        return app_approval_fallback(review["pending"], "invalid_response")
     return await send_client_decision(response, review["pending"], review["private"])
 
 
@@ -162,7 +187,9 @@ def server():
                   "For deletion or overwriting, obtain an explicit user instruction and warn about the affected "
                   "data. The MCP host may display a confirmation dialog; never answer it on the user's behalf. "
                   "When approval_required is returned, ask the user to review the request in eRechnung; "
-                  "do not click or otherwise automate its approval. request_status only reports the outcome.")
+                  "explain client_confirmation_error if present. A timeout does not mean the client lacks support. "
+                  "Check request_status before retrying an expired or failed confirmation; do not repeat writes automatically. "
+                  "Do not click or otherwise automate its approval. request_status only reports the outcome.")
 
 
 async def run():
