@@ -871,6 +871,7 @@ dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-hei
 .agent-setup-steps { display: flex; gap: 20px; list-style: none; padding: 16px; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 12px; }
 .agent-setup-steps li { display: flex; flex: 1; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); }
 .agent-step-number { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%; }
+.agent-step-arrow { flex: none; margin-left: auto; color: var(--muted); }
 .agent-setup-steps [aria-current="step"] { color: var(--ink); font-weight: 600; }
 .agent-setup-steps [aria-current="step"] .agent-step-number { background: var(--accent); border-color: var(--accent); color: #fff; }
 .agent-setup-steps .is-complete .agent-step-number { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
