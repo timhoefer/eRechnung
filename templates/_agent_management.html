@@ -62,8 +62,9 @@
     <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
     <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
     {% for profile in profiles if profile.available and not profile.deleted %}
-    <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"><span>{{ profile.label }}</span></label>
+    <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}" aria-describedby="agent-issuers-error"><span>{{ profile.label }}</span></label>
     {% endfor %}
+    <p class="agent-selection-error" id="agent-issuers-error" role="alert" tabindex="-1" hidden>{{ 'Bitte wähle mindestens einen Aussteller aus.' if de else 'Please select at least one issuer.' }}</p>
     <h3>{{ 'Kundenzugriff' if de else 'Customer access' }}</h3>
     <label for="agent-customer-mode">{{ 'Freigegebene Kunden' if de else 'Permitted customers' }}</label>
     <select id="agent-customer-mode" name="customer_mode">
@@ -74,8 +75,9 @@
     <fieldset class="agent-customer-options" data-customer-mode="selected" hidden disabled>
       <legend>{{ 'Kunden auswählen' if de else 'Choose customers' }}</legend>
       {% for customer in customer_choices %}
-      <label class="agent-check"><input type="checkbox" name="customers" value="{{ customer.key }}"><span>{{ customer.name }}</span></label>
+      <label class="agent-check"><input type="checkbox" name="customers" value="{{ customer.key }}" aria-describedby="agent-customers-error"><span>{{ customer.name }}</span></label>
       {% else %}<p class="hint">{{ 'Noch keine Kunden gespeichert.' if de else 'No saved customers yet.' }}</p>{% endfor %}
+      <p class="agent-selection-error" id="agent-customers-error" role="alert" tabindex="-1" hidden>{{ 'Bitte wähle mindestens einen Kunden aus oder ändere den Kundenzugriff.' if de else 'Please select at least one customer or change customer access.' }}</p>
       <p class="hint">{{ 'Nur diese Kunden, ihre gespeicherten Positionen und eindeutig zugeordneten Belege werden freigegeben. Neue Kunden und ältere Belege ohne Zuordnung bleiben gesperrt.' if de else 'Only these customers, their saved items and unambiguously linked invoices are permitted. New customers and older invoices without a link remain blocked.' }}</p>
     </fieldset>
     <p class="hint" data-customer-mode="none">{{ 'Kein Zugriff auf Kundendaten, gespeicherte Positionen oder Rechnungen. Ausstellerdaten und allgemeine Rechnungsinformationen bleiben verfügbar.' if de else 'No access to customer data, saved items or invoices. Issuer details and general invoice information remain available.' }}</p>

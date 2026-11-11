@@ -143,3 +143,59 @@ test('new connection opens on demand and cancel/escape return focus without subm
   dialog.close(); // native Escape closes a dialog and emits close
   assert.equal(focused, true);
 });
+
+test('empty issuer or selected-customer groups block submission and recover without resetting the form', () => {
+  const listeners = {};
+  const control = () => ({ checked: false, attributes: {}, focused: false,
+    setAttribute(name, value) { this.attributes[name] = value; },
+    removeAttribute(name) { delete this.attributes[name]; },
+    focus() { this.focused = true; },
+  });
+  const issuer = control(), customer = control();
+  const issuerError = { hidden: true }, customerError = { hidden: true };
+  const mode = { value: 'selected', addEventListener() {} };
+  const options = { hidden: false, disabled: false, tagName: 'FIELDSET', dataset: { customerMode: 'selected' } };
+  const dialog = {
+    querySelectorAll: selector => selector === 'input[name="issuers"]' ? [issuer]
+      : selector === 'input[name="customers"]' ? [customer] : [],
+    addEventListener(name, fn) { listeners[name] = fn; },
+  };
+  const elements = { 'agent-connection-dialog': dialog, 'agent-connection-add': { addEventListener() {} },
+    'agent-customer-mode': mode, 'agent-issuers-error': issuerError, 'agent-customers-error': customerError };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
+    window: {}, document: { addEventListener() {}, getElementById: id => elements[id], querySelectorAll: () => [options] },
+  });
+  function submit() {
+    const event = { prevented: false, stopped: false,
+      preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    listeners.submit(event);
+    assert.equal(event.prevented, event.stopped);
+    return event.prevented;
+  }
+  assert.equal(issuerError.hidden, true);
+  assert.equal(customerError.hidden, true);
+  assert.equal(submit(), true);
+  assert.equal(issuerError.hidden, false);
+  assert.equal(customerError.hidden, false);
+  assert.equal(issuer.focused, true);
+  issuer.checked = true;
+  listeners.change();
+  assert.equal(issuerError.hidden, true);
+  assert.equal(submit(), true);
+  assert.equal(customer.focused, true);
+  assert.equal(customer.attributes['aria-invalid'], 'true');
+  customer.checked = true;
+  listeners.change();
+  assert.equal(customerError.hidden, true);
+  assert.equal(customer.attributes['aria-invalid'], undefined);
+  assert.equal(submit(), false);
+  customer.checked = false;
+  assert.equal(submit(), true);
+  for (const value of ['none', 'all']) {
+    mode.value = value;
+    listeners.change();
+    assert.equal(customerError.hidden, true);
+    assert.equal(submit(), false);
+  }
+  assert.equal(issuer.checked, true);
+});

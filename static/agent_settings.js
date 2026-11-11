@@ -10,6 +10,32 @@
         button.addEventListener('click', () => dialog.close());
       });
       dialog.addEventListener('close', () => add.focus());
+      let attempted = false;
+      const validateSelections = () => {
+        let firstInvalid = null;
+        for (const name of ['issuers', 'customers']) {
+          const error = document.getElementById(`agent-${name}-error`);
+          const options = [...dialog.querySelectorAll(`input[name="${name}"]`)];
+          const required = name === 'issuers' || document.getElementById('agent-customer-mode').value === 'selected';
+          const invalid = required && !options.some(option => option.checked);
+          error.hidden = !attempted || !invalid;
+          options.forEach(option => {
+            if (attempted && invalid) option.setAttribute('aria-invalid', 'true');
+            else option.removeAttribute('aria-invalid');
+          });
+          if (invalid && !firstInvalid) firstInvalid = options[0] || error;
+        }
+        return firstInvalid;
+      };
+      dialog.addEventListener('submit', event => {
+        attempted = true;
+        const invalid = validateSelections();
+        if (!invalid) return;
+        event.preventDefault();
+        event.stopPropagation(); // Do not send an incomplete grant to the server.
+        invalid.focus();
+      });
+      dialog.addEventListener('change', validateSelections);
     }
     const mode = document.getElementById('agent-customer-mode');
     if (mode && !initialized.has(mode)) {
