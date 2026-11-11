@@ -861,12 +861,14 @@ body.drawer-open { overflow: hidden; }
 .agent-section-header { margin-bottom: 20px; }
 .agent-section-header h2, .agent-section-header h3 { margin: 0; }
 .agent-add { display: inline-flex; align-items: center; justify-content: center; padding: 10px; }
+.agent-connections-empty { display: grid; justify-items: center; gap: 16px; padding: 28px 20px; text-align: center; }
+.agent-connections-empty p { max-width: 64ch; margin: 0; }
 dialog.agent-connection-dialog, dialog.agent-disable-dialog { width: 680px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); box-sizing: border-box; overflow-y: auto; }
 dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-height: calc(100dvh - 48px); overflow-y: auto; }
 .agent-setup-dialog > .agent-section-header { position: sticky; top: -24px; z-index: 1; background: var(--card); padding: 16px 0; }
 .agent-setup-dialog .agent-section-header { flex-wrap: wrap; }
 .agent-setup-dialog .hint { color: var(--muted); }
-.agent-setup-steps { display: flex; gap: 20px; list-style: none; padding: 0 0 20px; margin: 0 0 24px; border-bottom: 1px solid var(--line); }
+.agent-setup-steps { display: flex; gap: 20px; list-style: none; padding: 16px; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 12px; }
 .agent-setup-steps li { display: flex; flex: 1; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); }
 .agent-step-number { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%; }
 .agent-setup-steps [aria-current="step"] { color: var(--ink); font-weight: 600; }

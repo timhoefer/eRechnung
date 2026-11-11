@@ -45,8 +45,10 @@
     </div>
   </div>
   {% else %}
-  <p>{{ 'Noch keine Verbindung eingerichtet. Füge eine Verbindung hinzu, damit ein Agent Zugriff erhält.' if de else 'No connection set up yet. Add a connection to give an agent access.' }}</p>
-  <button type="button" id="agent-connection-add" aria-haspopup="dialog" aria-controls="agent-connection-dialog">{{ 'Verbindung hinzufügen' if de else 'Add connection' }}</button>
+  <div class="export-box agent-connections-empty">
+    <p>{{ 'Noch keine Verbindung eingerichtet. Füge eine Verbindung hinzu, damit ein Agent Zugriff erhält.' if de else 'No connection set up yet. Add a connection to give an agent access.' }}</p>
+    <button type="button" class="small" id="agent-connection-add" aria-haspopup="dialog" aria-controls="agent-connection-dialog">{{ 'Verbindung hinzufügen' if de else 'Add connection' }}</button>
+  </div>
   {% endfor %}
 </section>
 <dialog class="modal agent-connection-dialog" id="agent-connection-dialog" aria-labelledby="agent-connection-title">
