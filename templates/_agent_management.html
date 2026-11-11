@@ -61,12 +61,17 @@
     {% if agent_settings %}<input type="hidden" name="return_to" value="settings">{% endif %}
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="connect">
     <label>{{ 'Name der Verbindung' if de else 'Connection name' }}<input name="name" maxlength="80" autocomplete="off" autofocus placeholder="{{ 'Mein Agent' if de else 'My agent' }}" required></label>
+    {% set active_profiles = profiles|selectattr('available')|rejectattr('deleted')|list %}
+    {% if active_profiles|length == 1 %}
+    <input type="hidden" name="issuers" value="{{ active_profiles[0].id }}">
+    {% elif active_profiles|length > 1 %}
     <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
     <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
-    {% for profile in profiles if profile.available and not profile.deleted %}
+    {% for profile in active_profiles %}
     <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}" aria-describedby="agent-issuers-error"><span>{{ profile.label }}</span></label>
     {% endfor %}
-    <p class="agent-selection-error" id="agent-issuers-error" role="alert" tabindex="-1" hidden>{{ 'Bitte wähle mindestens einen Aussteller aus.' if de else 'Please select at least one issuer.' }}</p>
+    {% endif %}
+    <p class="agent-selection-error" id="agent-issuers-error" role="alert" tabindex="-1"{% if active_profiles %} hidden{% endif %}>{{ ('Bitte wähle mindestens einen Aussteller aus.' if de else 'Please select at least one issuer.') if active_profiles else ('Bitte lege zuerst aktive Stammdaten an.' if de else 'Please set up an active issuer first.') }}</p>
     <h3>{{ 'Kundenzugriff' if de else 'Customer access' }}</h3>
     <label for="agent-customer-mode">{{ 'Freigegebene Kunden' if de else 'Permitted customers' }}</label>
     <select id="agent-customer-mode" name="customer_mode">

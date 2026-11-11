@@ -198,4 +198,9 @@ test('empty issuer or selected-customer groups block submission and recover with
     assert.equal(submit(), false);
   }
   assert.equal(issuer.checked, true);
+  // A single active issuer is submitted as a fixed hidden value, without a checkbox.
+  issuer.checked = false;
+  issuer.type = 'hidden';
+  issuer.value = 'default';
+  assert.equal(submit(), false);
 });

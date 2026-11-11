@@ -17,7 +17,7 @@
           const error = document.getElementById(`agent-${name}-error`);
           const options = [...dialog.querySelectorAll(`input[name="${name}"]`)];
           const required = name === 'issuers' || document.getElementById('agent-customer-mode').value === 'selected';
-          const invalid = required && !options.some(option => option.checked);
+          const invalid = required && !options.some(option => option.type === 'hidden' ? option.value : option.checked);
           error.hidden = !attempted || !invalid;
           options.forEach(option => {
             if (attempted && invalid) option.setAttribute('aria-invalid', 'true');

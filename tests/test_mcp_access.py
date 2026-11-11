@@ -649,6 +649,7 @@ def test_settings_opt_in_keeps_csrf_origin_and_bearer_guards(client):
 
 
 def test_new_connection_dialog_has_no_implicit_grant_and_groups_actions(client):
+    add_other()
     credential = grant(client)
     before = m.app.extensions["mcp_access"].load()
     page = html.fromstring(client.get("/agents").data)
@@ -660,6 +661,7 @@ def test_new_connection_dialog_has_no_implicit_grant_and_groups_actions(client):
     values = dict(form.form_values())
     assert values.get("customer_mode") == "none"
     assert "issuers" not in values and "write" not in values
+    assert len(form.xpath('.//input[@name="issuers" and @type="checkbox"]')) == 2
     for cancel in dialog.xpath('.//button[@data-close-connection]'):
         assert cancel.get("type") == "button"
     setup, = page.xpath('//a[contains(@href,"/setup")]')
@@ -674,6 +676,33 @@ def test_agent_back_link_opens_settings(client):
     response = client.get(back)
     assert response.status_code == 200
     assert back.endswith("#agent-access-card")
+
+
+@pytest.mark.parametrize("sole_issuer", ["default", OTHER])
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_single_active_issuer_is_used_without_a_selector_and_never_retargeted(client, sole_issuer, language):
+    client.set_cookie("lang", language)
+    root = m.DATA_DIR
+    add_other(deleted=sole_issuer == "default")
+    if sole_issuer == OTHER:
+        m._write_json(root / "seller.json", {**SELLER, "_deleted": True})
+    assert configure(client, "enable", consent="yes").status_code == 200
+    page = html.fromstring(client.get("/agents").data)
+    form, = page.get_element_by_id("agent-connection-dialog").xpath('.//form')
+    assert not form.xpath('.//input[@name="issuers" and @type="checkbox"]')
+    values = {**dict(form.form_values()), "name": "Sole issuer connection"}
+    assert values["issuers"] == sole_issuer
+    response = client.post(form.action, data=values)
+    assert response.status_code == 200
+    access = m.app.extensions["mcp_access"]
+    assert [c["issuers"] for c in access.load()["connections"].values()] == [[sole_issuer]]
+
+    # A stale form must not silently switch to a different default issuer.
+    m._write_json(root / "seller.json", {**SELLER, "_deleted": sole_issuer == "default"})
+    m._write_json(root / "issuers" / OTHER / "seller.json", {**SELLER, "_deleted": sole_issuer == OTHER})
+    before = access.load()
+    assert client.post(form.action, data=values).status_code == 400
+    assert access.load() == before
 
 
 @pytest.mark.parametrize("language", ["de", "en"])
