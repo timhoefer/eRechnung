@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 from lxml import html
-from test_mcp_access import BUYER, OTHER, call, configure, csrf, decide, disable, grant, snapshot
+from test_mcp_access import BUYER, OTHER, call, configure, decide, disable, grant, snapshot
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
 from test_mcp_customer_scope import scoped_grant
@@ -41,7 +41,8 @@ def test_empty_connection_name_uses_localized_default(client, language, expected
     assert response.status_code == 200
     connection, = m.app.extensions["mcp_access"].load()["connections"].values()
     assert connection["name"] == expected
-    assert connection["issuers"] == ["default"] and not connection["writable"]
+    assert connection["issuers"] == ["default"] and connection["writable"]
+    assert set(connection["permissions"].values()) == {"confirm"}
 
 
 @pytest.mark.parametrize("active", [True, False])

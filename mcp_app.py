@@ -17,7 +17,16 @@ from werkzeug.exceptions import HTTPException
 
 import mcp_customer_scope as customer_scope
 from invoice_archive import ArchiveError, archived_number_files, data_lock
-from mcp_access import Access, AccessError, digest
+from mcp_access import (
+    DESTRUCTIVE,
+    WRITE_OPERATIONS,
+    Access,
+    AccessError,
+    digest,
+    permission,
+    permission_choices,
+    validate_permissions,
+)
 from mcp_contract import ITEM_FIELDS, TOOLS, validate
 
 
@@ -66,6 +75,7 @@ def register(m):
                 unavailable = True
         return {"agent_enabled": active, "agent_access_unavailable": unavailable,
                 "disclaimer_text": disclaimer(active),
+                "agent_permission_choices": permission_choices, "agent_destructive_operations": DESTRUCTIVE,
                 "agent_csrf": csrf() if app.config["MCP_FEATURE"] and not request.headers.get("Authorization") else ""}
 
     def ui_guard():
@@ -130,6 +140,12 @@ def register(m):
         return m.load_customers()
 
     def permission_fields(existing=None):
+        policies = None
+        if request.form.get("permission_policy") == "1":
+            policies = validate_permissions({operation: request.form.get("permission_" + operation)
+                                              for operation in WRITE_OPERATIONS})
+        elif existing and "permissions" in existing:
+            abort(400)
         issuers = request.form.getlist("issuers")
         allowed = {p["id"] for p in m.issuer_profiles() if p["available"]}
         # Existing archive grants may be retained or removed, never newly added.
@@ -147,6 +163,7 @@ def register(m):
             # Only internal identities are added; no invoice or customer fields change.
             m._write_json(m.CUSTOMERS_FILE, customers)
         return dict(issuers=issuers, writable=request.form.get("write") == "yes",
+                    permissions=policies, client_approvals=request.form.get("client_approvals") == "yes",
                     customer_mode=mode, customer_ids=ids)
 
     @app.get("/agents")
@@ -316,30 +333,32 @@ def register(m):
         ui_guard()
         with m.DATA_LOCK, data_lock(m.DATA_DIR):
             entry = access.get(identifier)
-            if entry["status"] != "pending":
-                abort(409)
             connection = access.connection(entry["connection"]["id"], m.DATA_DIR)
-            if connection != entry["connection"]:
-                abort(403)
-            decision = request.form.get("decision")
-            if decision == "deny":
-                entry.update(status="denied", confirmation=None, arguments={})
-            elif decision == "approve":
-                # Consume before executing: double clicks and retries cannot replay the write.
-                entry["status"] = "executing"
-                try:
-                    result = execute(connection, entry["operation"], entry["arguments"],
-                                     entry["confirmation"]["fingerprint"])
-                    entry.update(status="completed" if result.get("ok") else "failed", result=result)
-                finally:
-                    if entry["status"] == "executing":
-                        entry["status"] = "failed"
-                    entry.update(confirmation=None, arguments={})
-            else:
-                abort(400)
+            decide_entry(entry, connection, request.form.get("decision"))
             if request.headers.get("X-Requested-With") == "fetch":
                 return request_view(entry, identifier, decided=True)
             return redirect(url_for("agents_review", identifier=identifier), code=303)
+
+    def decide_entry(entry, connection, decision):
+        if entry["status"] != "pending":
+            abort(409)
+        if connection != entry["connection"]:
+            abort(403)
+        if decision not in {"approve", "deny", "cancel"}:
+            abort(400)
+        entry.pop("client_nonce", None)
+        if decision != "approve":
+            entry.update(status="denied" if decision == "deny" else "cancelled", confirmation=None, arguments={})
+            return
+        # Consume before execution; app and client decisions share this one-shot path.
+        entry["status"] = "executing"
+        try:
+            result = execute(connection, entry["operation"], entry["arguments"], entry["confirmation"]["fingerprint"])
+            entry.update(status="completed" if result.get("ok") else "failed", result=result)
+        finally:
+            if entry["status"] == "executing":
+                entry["status"] = "failed"
+            entry.update(confirmation=None, arguments={})
 
     @app.after_request
     def agents_private(response):
@@ -354,8 +373,7 @@ def register(m):
             return {"ok": False, "error": "access_denied", "message": str(error)}, 403
         return str(error), 403
 
-    @app.post("/agents/call")
-    def agents_call():
+    def bearer_token():
         enabled()
         # Not a browser API. No cookies, cross-origin requests, arbitrary URLs or file paths.
         if request.headers.get("Origin") or request.headers.get("Cookie"):
@@ -364,20 +382,49 @@ def register(m):
         authorization = request.headers.get("Authorization", "")
         if not authorization.startswith("Bearer "):
             abort(401)
+        return authorization[7:]
+
+    @app.post("/agents/call")
+    def agents_call():
+        token = bearer_token()
         with m.DATA_LOCK, data_lock(m.DATA_DIR):
-            connection = access.authenticate(authorization[7:], m.DATA_DIR)
+            connection = access.authenticate(token, m.DATA_DIR)
             payload = request.get_json()
             if not isinstance(payload, dict) or set(payload) != {"tool", "arguments"}:
                 abort(400)
-            return execute(connection, payload["tool"], payload["arguments"])
+            result = execute(connection, payload["tool"], payload["arguments"])
+            if result.get("status") == "approval_required" and connection.get("client_approvals") is True:
+                entry = access.get(result["request_id"], connection)
+                # Private bridge envelope: stripped before any tool result reaches the model.
+                nonce = entry.setdefault("client_nonce", secrets.token_urlsafe(32))
+                review = {k: v for k, v in entry["confirmation"].items() if k != "fingerprint"}
+                result["_client_approval"] = {"nonce": nonce, "connection": connection["name"], "review": review}
+            return result
+
+    @app.post("/agents/client-decision")
+    def agents_client_decision():
+        token = bearer_token()
+        with m.DATA_LOCK, data_lock(m.DATA_DIR):
+            connection = access.authenticate(token, m.DATA_DIR)
+            payload = request.get_json()
+            if (not isinstance(payload, dict) or set(payload) != {"request_id", "nonce", "decision"}
+                    or any(not isinstance(v, str) for v in payload.values())):
+                abort(400)
+            entry = access.get(payload["request_id"], connection)
+            if (connection.get("client_approvals") is not True or not entry.get("client_nonce")
+                    or not secrets.compare_digest(entry["client_nonce"].encode(), payload["nonce"].encode())):
+                abort(403)
+            decide_entry(entry, connection, payload["decision"])
+            return {**entry.get("result", {"ok": False}), "status": entry["status"], "request_id": payload["request_id"]}
 
     def execute(connection, operation, arguments, approved=""):
         try:
             if not isinstance(operation, str):
                 raise ValueError("Expected a tool name.")
             validate(operation, arguments)
-            if TOOLS[operation]["write"] and not connection["writable"]:
-                raise AccessError("This connection is read-only.")
+            policy = permission(connection, operation)
+            if policy == "deny":
+                raise AccessError("This operation is not permitted for this connection.")
             issuer = arguments.get("issuer")
             if issuer is not None and issuer not in connection["issuers"]:
                 raise AccessError("Issuer not permitted.")
@@ -407,6 +454,9 @@ def register(m):
             with app.app_context(), app.test_request_context(path, method="POST", data=fields,
                     headers={"X-Requested-With": "fetch"}):
                 g.mcp_connection = connection
+                g.mcp_operation = operation
+                g.mcp_policy = policy
+                g.mcp_customer_policy = permission(connection, "save_customer")
                 g.mcp_approved = approved
                 early = app.preprocess_request()
                 if early is not None:

@@ -2,22 +2,24 @@
 from copy import deepcopy
 
 import pytest
-from lxml import html
-from werkzeug.datastructures import MultiDict
-
-import app as m
-from mcp_access import Access, AccessError
 from test_mcp_access import BUYER, OTHER, add_other, call, configure, csrf, disable, grant, snapshot
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
 from test_mcp_connection_names import edit_form, rename
 from test_mcp_customer_scope import PRIVATE, scoped_grant, seed_archive
-from test_mcp_key_rotation import setup_form, configured_token
+from test_mcp_key_rotation import configured_token, setup_form
+from werkzeug.datastructures import MultiDict
+
+import app as m
+from mcp_access import WRITE_OPERATIONS, Access, permission_choices
 
 
 def permissions(client, identifier, **changes):
     form = edit_form(client, identifier, "permissions")
     fields = MultiDict(form.form_values())
+    if "write" in changes:
+        writable = changes.pop("write") == "yes"
+        changes.update({"permission_" + op: "confirm" if writable else "deny" for op in WRITE_OPERATIONS})
     for key, value in changes.items():
         fields.setlist(key, value if isinstance(value, list) else [value])
     return client.post(form.action, data=fields)
@@ -30,12 +32,15 @@ def test_edit_form_reflects_current_grant_and_unchanged_confirmation_preserves_i
     token = scoped_grant(client, mode=mode, writable=writable)
     access = m.app.extensions["mcp_access"]
     identifier = access.authenticate(token, m.DATA_DIR)["id"]
+    # Explicitly adopt operation policies before testing an unchanged save.
+    assert permissions(client, identifier).status_code == 200
     if not active:
         configure(client, "pause", connection=identifier)
     before, data_before = access.load(), snapshot()
     form = edit_form(client, identifier, "permissions")
     assert form.fields["customer_mode"] == mode
-    assert bool(form.xpath('.//input[@name="write" and @checked]')) == writable
+    assert {op: form.fields["permission_" + op] for op in WRITE_OPERATIONS} == permission_choices(before["connections"][identifier])
+    assert any(form.fields["permission_" + op] != "deny" for op in WRITE_OPERATIONS) == writable
     assert bool(form.xpath('.//input[@name="customers" and @checked]')) == (mode == "selected")
     assert client.get("/agents").status_code == 200  # leaving the GET has no effect
     assert access.load() == before and snapshot() == data_before
@@ -61,7 +66,8 @@ def test_confirmed_restrictions_apply_to_existing_key_and_discard_only_its_reque
     fields.setlist("issuers", ["default"])
     fields.setlist("customer_mode", ["selected"])
     fields.setlist("customers", [key])
-    fields.pop("write", None)
+    for op in WRITE_OPERATIONS:
+        fields["permission_" + op] = "deny"
     # Preparing/dismissing the form cannot modify grants or invalidate requests.
     assert client.get(form.action).status_code == 200
     assert access.authenticate(token, m.DATA_DIR) == old and pending in access.pending
@@ -165,11 +171,16 @@ def test_bad_customer_selection_cannot_change_existing_permissions(client, probl
     fields["customer_mode"] = "selected"
     keys = form.xpath('.//input[@name="customers"]/@value')
     fields.setlist("customers", keys)
-    if problem == "empty": fields.setlist("customers", [])
-    elif problem == "unknown": fields.setlist("customers", ["unknown"])
-    elif problem == "changed": m._write_json(m.CUSTOMERS_FILE, [{**BUYER, "city": "Different"}])
-    elif problem == "ambiguous": m._write_json(m.CUSTOMERS_FILE, [BUYER, BUYER])
-    else: fields["customer_mode"] = "invalid"
+    if problem == "empty":
+        fields.setlist("customers", [])
+    elif problem == "unknown":
+        fields.setlist("customers", ["unknown"])
+    elif problem == "changed":
+        m._write_json(m.CUSTOMERS_FILE, [{**BUYER, "city": "Different"}])
+    elif problem == "ambiguous":
+        m._write_json(m.CUSTOMERS_FILE, [BUYER, BUYER])
+    else:
+        fields["customer_mode"] = "invalid"
     before = access.load(), snapshot()
     assert client.post(form.action, data=fields).status_code in (400, 403)
     assert (access.load(), snapshot()) == before

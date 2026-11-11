@@ -441,13 +441,18 @@ class ChangeConfirmationRequired(Exception):
 
 
 def confirm_change(title: str, message: str, before, after, details: list[dict],
-                   *, invoice_snapshot: dict | None = None) -> None:
+                   *, invoice_snapshot: dict | None = None, mcp_allow: bool = False) -> None:
     """Protect changes to saved data while DATA_LOCK is held.
 
     All handlers check before their first persistent side effect. The signature
     includes the complete request and current data, not a client 'confirmed' flag.
     """
     if not has_request_context():
+        return
+    connection = g.get("mcp_connection")
+    # Only explicitly marked non-destructive call sites can use standing grants.
+    # Legacy grants and unmarked destructive call sites still require approval.
+    if (connection and connection.get("writable") is True and mcp_allow and g.get("mcp_policy") == "allow"):
         return
     owner = session.setdefault("change_confirmation_owner", secrets.token_urlsafe(24))
     fields = request.form.to_dict(flat=False)
@@ -833,6 +838,10 @@ def issuer_restore():
                     if original:
                         seller = {**original["seller"], **seller}
                         break
+            if g.get("mcp_policy") == "confirm":
+                confirm_change("Aussteller reaktivieren / Restore issuer", "Der Aussteller kann wieder Rechnungen erstellen. / The issuer can issue invoices again.",
+                               seller, {**seller, "_deleted": False},
+                               [{"label": issuer_label(seller), "before": "Inaktiv / Inactive", "after": "Aktiv / Active"}])
             # Reinstating an old default must not change the current startup choice.
             _write_json(SELLER_FILE.parent / "issuer_preferences.json", {"default_issuer": default_issuer()})
             seller.pop("_deleted", None)
@@ -953,12 +962,12 @@ def save_seller_form() -> tuple[dict, int]:
     if updated_revision != current_revision:
         existing_details = any(seller.get(key) for key in (*SELLER_FIELDS, "logo", "accounts")
                                if key not in {"profile_label", "country", "bank_kind"})
-        if existing_details:
+        if existing_details or g.get("mcp_policy") == "confirm":
             details = change_details(seller, updated)
             if details:
                 ui = translate(get_ui_lang(request))
                 confirm_change(f'{ui["master"]}: {issuer_label(seller)}', ui["change_master_warning"],
-                               seller, updated, details)
+                               seller, updated, details, mcp_allow=True)
         save_seller(updated)
     return {"ok": True, "revision": updated_revision,
             "message": translate(get_ui_lang(request))["master_saved"]}, 200
@@ -1036,6 +1045,13 @@ def load_customers() -> list[dict]:
 def confirm_customer_changes(customers: list[dict]) -> None:
     if has_request_context():
         before = load_customers()
+        names = {c.get("name", "").lower() for c in before}
+        added = [c for c in customers if c.get("name", "").lower() not in names]
+        # Saving positions may implicitly create a customer. Both grants apply.
+        implicit_customer = bool(added) and g.get("mcp_operation") == "save_customer_items"
+        if implicit_customer and g.get("mcp_customer_policy") == "deny":
+            abort(403, "Creating a customer is not permitted for this connection.")
+        customer_confirmation = implicit_customer and g.get("mcp_customer_policy") == "confirm"
         details = []
         removed = False
         for old in before:
@@ -1049,10 +1065,15 @@ def confirm_customer_changes(customers: list[dict]) -> None:
             for detail in change_details(old, new):
                 detail["label"] = f'{old.get("name", "")} · {detail["label"]}'
                 details.append(detail)
+        if g.get("mcp_policy") == "confirm" or customer_confirmation:
+            details.extend({"label": new.get("name", "") + " · " + d["label"], **{k: d[k] for k in ("before", "after")}}
+                           for new in added
+                           for d in change_details({}, new))
         if details:
             ui = translate(get_ui_lang(request))
             confirm_change(ui["customer"], ui["change_customer_delete" if removed else "change_customer_warning"],
-                           before, customers, details)
+                           before, customers, details,
+                           mcp_allow=not removed and not customer_confirmation)
 
 
 def save_customers(customers: list[dict]) -> None:
@@ -1567,6 +1588,19 @@ def generate():
     if g.get("mcp_connection"):
         # One review covers both finalization and any implicit customer overwrite.
         # Bind the current customer/issuer state as well as the exact invoice.
+        customer_changes = [
+            {"label": old.get("name", "") + " · " + d["label"], "before": d["before"], "after": d["after"]}
+            for old in load_customers() for new in customers
+            if old.get("name", "").lower() == new.get("name", "").lower()
+            for d in change_details(old, new)
+        ]
+        old_names = {c.get("name", "").lower() for c in load_customers()}
+        customer_changes.extend({"label": new.get("name", "") + " · " + d["label"], **{k: d[k] for k in ("before", "after")}}
+                                for new in customers if new.get("name", "").lower() not in old_names
+                                for d in change_details({}, new))
+        if customer_changes and g.get("mcp_customer_policy") == "deny":
+            return {"ok": False, "error": "customer_changes_forbidden",
+                    "message": "This invoice would save customer changes. Use the saved customer details or grant customer editing."}, 403
         confirm_change(
             "Rechnung erstellen / Create invoice", "Die Rechnung wird verbindlich im Archiv abgelegt. "
             "Geänderte Kundendaten werden gespeichert. / This finalizes the invoice and saves changed customer data.",
@@ -1574,11 +1608,9 @@ def generate():
             [{"label": "Rechnung / Invoice", "before": "—", "after": data["invoice"]["number"]},
              {"label": "Kunde / Customer", "before": "—", "after": data["buyer"]["name"]},
              {"label": "Brutto / Gross", "before": "—", "after": str(totals["grand_total"]) + " " + data["invoice"]["currency"]},
-             *[{"label": old.get("name", "") + " · " + d["label"], "before": d["before"], "after": d["after"]}
-               for old in load_customers() for new in customers
-               if old.get("name", "").lower() == new.get("name", "").lower()
-               for d in change_details(old, new)]],
+             *customer_changes],
             invoice_snapshot=data,
+            mcp_allow=not customer_changes or g.get("mcp_customer_policy") == "allow",
         )
     else:
         confirm_customer_changes(customers)

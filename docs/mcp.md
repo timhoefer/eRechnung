@@ -43,7 +43,11 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    (Mehrfachauswahl) und **Alle Kunden** wählen. Neue Verbindungen starten ohne
    Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
    Prüfen und Vorschau beschränkt.
-4. Optional **Rechnungen erstellen und Datenänderungen anfragen** erlauben.
+4. Unter **Aktionen** jede Änderungsaktion auf **Verbieten**, **Nachfragen** oder
+   **Erlauben** setzen. **Nachfragen (empfohlen)** ist bei neuen Verbindungen
+   vorausgewählt. Löschen und Deaktivieren bieten nur Verbieten/Nachfragen.
+   Unter **Wo soll nachgefragt werden?** optional **Im Agenten, wenn unterstützt**
+   wählen; standardmäßig wird weiterhin in eRechnung bestätigt.
    **Freigeben und weiter** erstellt die Verbindung und öffnet Schritt 2.
 5. In Schritt **2 · Im Agenten einrichten** die einmalig angezeigte Konfiguration
    in den MCP-Client übernehmen und den Dialog mit **Fertig** schließen. Manche
@@ -52,12 +56,13 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Werte** bietet dafür Kopierbuttons für den Startbefehl, jedes Argument sowie
    die Namen und Werte aller Umgebungsvariablen. Beide Ansichten enthalten denselben
    Schlüssel und sind nur unmittelbar nach dem Anlegen oder Erneuern verfügbar.
-6. In den Einstellungen unter **Aktionsfreigaben → Aktualisieren** offene Aktionen
-   im Dialog prüfen und ausdrücklich bestätigen oder ablehnen.
-   Diese stammen von bereits eingerichteten MCP-Verbindungen und geben keinem
-   weiteren Agenten Zugang. Lesen, Prüfen und Vorschauen benötigen keine einzelne
-   Bestätigung; endgültige Rechnungen, Änderungen an bestehenden Daten und
-   Löschungen benötigen weiterhin die ausdrückliche Freigabe in eRechnung.
+6. Bei **Nachfragen** zeigt ein unterstützender MCP-Client nach entsprechender
+   Freigabe einen Bestätigungsdialog. Ohne Unterstützung oder bei einem
+   Dialogfehler bleibt die Anfrage in eRechnung verfügbar. Unter **Aktionsanfragen
+   aktualisieren** wird sie geladen. Der Abschnitt **Aktionsfreigaben** erscheint
+   nur, solange offene Anfragen existieren. Lesen, Prüfen und Vorschauen benötigen
+   keine einzelne Bestätigung. **Erlauben** führt die betreffende Änderungsaktion
+   direkt aus; **Verbieten** lehnt sie ab, ohne eine Freigabeanfrage anzulegen.
 7. Jede Verbindung lässt sich mit ihrem eigenen Schalter pausieren und wieder
    einschalten. Schlüssel, Aussteller und Rechte bleiben erhalten. Beim Pausieren
    werden alle Aufrufe sofort gesperrt und ihre offenen Anfragen verworfen; diese
@@ -109,8 +114,7 @@ Zugangsschlüssel noch Rechnungsaufrufe; Weiterleitungen werden nicht verfolgt.
 
 Der Start aktiviert weder das Opt-in noch legt er Zugänge an. Ausgeschalteter oder
 widerrufener Zugriff bleibt gesperrt. Eine laufende App mit abgeschaltetem
-Feature-Schalter wird ebenfalls nicht ersetzt. Rechnungen und destruktive Aktionen
-brauchen weiterhin ihre separate Bestätigung. Fehlgeschlagene Schreibaufrufe
+Feature-Schalter wird ebenfalls nicht ersetzt. Die pro Aktion festgelegten Rechte und Bestätigungen gelten unverändert. Fehlgeschlagene Schreibaufrufe
 werden nicht automatisch wiederholt.
 
 Eine lokale Datei enthält die aktuelle Adresse, sodass ein geänderter macOS-Port
@@ -140,10 +144,10 @@ Rechnungen, öffentlichen Repositories oder Fehlerberichten teilen.
 | Kunden | `list_customers` | Nur freigegebene Kunden inklusive ihrer gespeicherten Positionen durchsuchen |
 | Archiv | `list_invoices`, `get_invoice`, `get_invoice_file` | Nur Belege innerhalb der Aussteller- und Kundenfreigabe lesen, über alle Jahre einschließlich undatierter und reiner XML-Belege |
 | Vorbereitung | `next_number`, `check_invoice`, `preview_invoice` | Nummer vorschlagen, XML prüfen, als Entwurf markiertes PDF erzeugen; ohne Nummernreservierung oder Archivänderung |
-| Erstellen | `create_invoice` | Endgültige Rechnung erst nach Prüfung und App-Bestätigung erstellen |
-| Bearbeiten | `save_customer`, `save_customer_items`, `save_issuer` | Neue Kundendaten speichern; Änderungen bestehender Daten benötigen App-Bestätigung |
-| Löschen | `delete_customer`, `delete_invoice`, `deactivate_issuer` | Auswirkungen anzeigen und auf ausdrückliche App-Bestätigung warten |
-| Wiederherstellen | `restore_issuer` | Freigegebenen deaktivierten Aussteller mit bestehender Nummernfolge reaktivieren |
+| Erstellen | `create_invoice` | Endgültige Rechnung nach technischer Prüfung gemäß Aktionsrecht erstellen |
+| Bearbeiten | `save_customer`, `save_customer_items`, `save_issuer` | Je Aktion verbieten, nachfragen oder ohne weitere Bestätigung erlauben |
+| Löschen | `delete_customer`, `delete_invoice`, `deactivate_issuer` | Verbieten oder Auswirkungen anzeigen und auf ausdrückliche Bestätigung warten |
+| Wiederherstellen | `restore_issuer` | Gemäß Aktionsrecht mit bestehender Nummernfolge reaktivieren |
 | Rückmeldung | `request_status` | Status ausschließlich eigener Anfragen abfragen; keine Freigabe erteilen |
 
 Beim XML-Abruf wird für ZUGFeRD das unveränderte XML aus dem archivierten PDF
@@ -155,12 +159,24 @@ den gespeicherten XML-Prüfstatus; dieser gilt nur für die geprüften Dateiinha
 Prüfregeln, nicht für die steuerliche Richtigkeit. Für Dateiabrufe, Vorlagen und
 Korrekturen ist weiterhin ein gespeicherter Rechnungsschnappschuss erforderlich.
 Reine XRechnungen mit Schnappschuss können über ihren XML-Dateinamen gelesen,
-als Korrekturgrundlage verwendet und nach App-Bestätigung gelöscht werden.
+als Korrekturgrundlage verwendet und nach ausdrücklicher Bestätigung gelöscht werden.
 
-Schreibende Werkzeuge benötigen die zusätzliche Änderungsberechtigung. Neue
-Kundendatensätze erfordern zusätzlich **Alle Kunden**. Neue Datensätze und Reaktivierungen sind keine destruktiven Änderungen und
-benötigen keine zweite Bestätigung. Bestehende Archivdateien können auch mit einer
-Bestätigung nicht durch abweichende Rechnungen gleicher Nummer ersetzt werden.
+Die acht Änderungsaktionen haben getrennte Rechte: Rechnung erstellen,
+Ausstellerdaten bearbeiten, Kunden anlegen/bearbeiten, gespeicherte Positionen
+bearbeiten, Aussteller reaktivieren/deaktivieren sowie Kunden/Rechnungen löschen.
+**Erlauben** ist eine dauerhafte Freigabe innerhalb des bestehenden Aussteller-
+und Kundenumfangs. Sie ersetzt keine technische Rechnungsprüfung und erlaubt keine
+abweichende Rechnung unter einer bereits verwendeten Nummer. Ausstellerdaten
+umfassen auch Bankkonten. Löschen und Deaktivieren können nie ohne Einzelbestätigung
+freigegeben werden. Die Oberfläche und der Server erzwingen diese Einschränkung.
+
+Neue Kundendatensätze erfordern zusätzlich **Alle Kunden**. Beim Erstellen einer
+Rechnung und Speichern von Positionen gilt auch das Kundenbearbeitungsrecht,
+wenn dabei Kundendaten angelegt oder geändert werden. **Verbieten** blockiert
+dann die gesamte Aktion; **Nachfragen** führt zu einer gemeinsamen Bestätigung
+vor jeder Speicherung. Bereits bestehende Verbindungen behalten ihr bisheriges
+Verhalten bis zur ausdrücklichen Speicherung der neuen Aktionsrechte. Das Öffnen
+des Konfigurationsdialogs verändert ihre Rechte nicht.
 
 Rechnungen unterstützen Positions- und Gesamtrabatte, bereits gezahlte Beträge,
 Anzahlungsrechnungen, Stornos und Korrekturen. Für deaktivierte Aussteller bleiben
@@ -173,7 +189,7 @@ in der App genutzt, einschließlich Prüfung, Schreibsperre und Duplikatschutz.
 ist. Veraltete Revisionen werden abgewiesen. Geldbeträge sind Dezimalstrings mit
 Punkt, Daten sind ISO-Daten, Steuerart und Aussteller müssen ausdrücklich gewählt
 werden. `next_number` reserviert nichts; bei unklarem Nummernlauf fordert seine
-Antwort zur Rückfrage auf. Die endgültige Nummer wird immer nochmals angezeigt.
+Antwort zur Rückfrage auf. Die endgültige Nummer ist Teil der Rechnung und wird bei erforderlicher Bestätigung angezeigt.
 
 ## Kunden gezielt freigeben
 
@@ -213,12 +229,12 @@ Originalrechnung als `correction_source` mit derselben Kundenkennung.
 und allgemeine Werkzeuge bleiben zugänglich. **Alle Kunden** umfasst ausdrücklich
 auch neue Kunden und alte Belege. Bereits bestehende Verbindungen ohne diese
 neue Einstellung behalten ihren bisherigen vollständigen Kundenzugriff. Um sie
-einzuschränken, den Zugang löschen und mit der gewünschten Auswahl neu anlegen.
+einzuschränken, die Freigaben unter **Konfiguration einrichten** bearbeiten und bestätigen.
 Die Verbindungskarte zeigt ihren aktuellen Kundenumfang.
 
 ## Bestätigung einer Änderung
 
-Ein MCP-Aufruf liefert zunächst `status: approval_required` und eine Anfrage-ID.
+Für eine Aktion mit **Nachfragen** erstellt die App zunächst eine offene Anfrage.
 Zu diesem Zeitpunkt wurde die angefragte Änderung nicht ausgeführt. Die App zeigt
 die Verbindung, die konkrete Aktion, Warnung und betroffenen Daten. Bei einer
 Rechnung werden zusätzlich Rechnungsfelder, Kunde und Positionen gezeigt.
@@ -230,7 +246,36 @@ Die Freigabe gilt einmalig, höchstens fünf Minuten und nur für den zuvor gepr
 Datenstand. Änderungen zwischen Anfrage und Bestätigung führen zu Ablehnung oder
 einer neuen, separat zu prüfenden Anfrage. Zusätzliche Felder im Bestätigungsaufruf
 können die gespeicherte Aktion nicht verändern. Abbrechen, Pausieren, Widerruf oder Neustart
-verhindern ihre spätere Ausführung. Über MCP gibt es keinen Bestätigungsbefehl.
+verhindern ihre spätere Ausführung. Über die MCP-Werkzeugliste gibt es keinen
+Bestätigungsbefehl und kein Werkzeug zum Ändern von Zugriffsrechten.
+
+Bei **Im Agenten, wenn unterstützt** fordert die Brücke über MCP **Form Elicitation**
+eine Entscheidung vom Client an. Der Dialog enthält Verbindung, Aktion, Warnung,
+betroffene Daten vorher/nachher sowie gegebenenfalls den vollständigen Rechnungsstand.
+Nur `accept` zusammen mit ausdrücklich gesetztem `confirm: true` führt zur
+Ausführung. Ablehnen, Abbrechen, fehlende Zustimmung und Fehler erteilen keine
+Freigabe. Ohne Client-Unterstützung oder bei einem Dialogfehler liefert das
+Werkzeug `status: approval_required` und die Anfrage-ID für die Bestätigung in der
+App. Neuere Clients übermitteln die Entscheidung mit einer einmaligen Fortsetzung;
+abgelaufene oder veränderte Fortsetzungen werden abgewiesen. Die Anfrage kann in
+der App noch bestätigt werden, solange ihre eigene Gültigkeit nicht abgelaufen ist.
+Die App und der Client verwenden denselben einmaligen Ausführungspfad.
+
+Der private Transport bindet die Entscheidung an die Verbindung, einen zufälligen
+Einmalwert, die Aktion und den geprüften Datenstand. Der Einmalwert wird aus dem
+Werkzeugergebnis entfernt und nicht an das Modell ausgegeben. Veraltete Rechte,
+Widerruf, Pause, Schlüsselerneuerung und zwischenzeitliche Datenänderungen verhindern
+die Ausführung der alten Anfrage. Ein fehlgeschlagener Schreibaufruf wird nicht
+wiederholt. `request_status` kann nur den Status lesen. Dauerhafte Rechte lassen
+sich weiterhin ausschließlich in den lokalen Einstellungen ändern.
+
+**Vertrauensgrenze:** MCP Elicitation ist kein unabhängiger Nachweis menschlicher
+Anwesenheit. Bei Bestätigung im Agenten vertraut der Nutzer dessen Client, den Dialog
+anzuzeigen und die tatsächliche Entscheidung zu übermitteln. Ein selbst gebauter
+oder manipulierter Client mit dem Verbindungsschlüssel könnte diese Entscheidung
+synthetisieren. Wer diesem Client nicht vertrauen möchte, behält **In eRechnung**.
+Auch die App-Bestätigung ist keine Systembestätigung gegen zusätzliche vollständige
+Rechner-/Browsersteuerung.
 
 Maximal 20 Verbindungen und 64 kurzlebige Anfragen werden gehalten. Identische
 Wiederholungen einer noch offenen Anfrage liefern dieselbe ID. Erledigte Anfragen
@@ -239,9 +284,9 @@ Aktivitätsprotokoll und kein allgemeines Rückgängig.
 
 ## Grenzen
 
-- Dies ist ein **App-Dialog**, keine Touch-ID- oder Systembestätigung. Er verhindert
-  Selbstfreigaben über diese MCP-Werkzeuge. Ein Agent mit zusätzlichem Browser-,
-  App-Bedien- oder Dateizugriff kann außerhalb dieser Schnittstelle handeln.
+- Bestätigungen sind **App- oder Client-Dialoge**, keine Touch-ID- oder
+  Systembestätigungen. Ein Agent mit zusätzlichem Browser-, App-Bedien- oder
+  Dateizugriff kann außerhalb dieser Schnittstelle handeln.
 - Berechtigungen gelten für die ausgewählten Aussteller und den aktuellen
   Datenordner. Neue Aussteller sind nicht automatisch freigegeben. Nach einem
   Ordnerwechsel funktionieren alte Zugänge für den neuen Ordner nicht. Beim
@@ -276,7 +321,7 @@ Rechnungserzeugung. `tests/test_mcp_customer_scope.py` prüft Mehrfachauswahl,
 stabile Kundenidentitäten, gesperrte Altbelege, Dateiabrufe und erneute Prüfung
 bei Bestätigung. `tests/test_mcp_protocol.py` verbindet einen SDK-Client über
 stdio mit einer isolierten App und prüft Widerruf sowie die fehlende Möglichkeit,
-über MCP zu bestätigen. Beide Tests verwenden ausschließlich temporäre Testdaten.
+über ein MCP-Werkzeug zu bestätigen. Beide Tests verwenden ausschließlich temporäre Testdaten.
 `tests/test_mcp_key_rotation.py` prüft die bestätigte Schlüsselerneuerung,
 unveränderte Kundenfreigaben/Rechte/Pausen, gesperrte alte Schlüssel und veraltete
 oder parallele Bestätigungen. Ein echter SDK-Test prüft zusätzlich den nötigen
@@ -297,3 +342,10 @@ unveränderte Rechte und die weiterhin erforderlichen Bestätigungen.
 Beim Quellstart bleibt der Debugger über `FLASK_DEBUG=1` verfügbar; der automatische
 Entwicklungs-Neustart ist deaktiviert, damit kein zweiter Prozess die Instanzsperre
 des Servers übernimmt. Nach Codeänderungen die App manuell neu starten.
+
+`tests/test_mcp_operation_permissions.py` prüft getrennte Aktionsrechte, indirekte
+Kundenänderungen, Bestandsverbindungen, sichere Standardwerte und unveränderte
+Archiv-/Ausstellerschutzregeln. `tests/test_mcp_client_approval.py` prüft den echten
+MCP-Dialogablauf über einen SDK-Client, Zustimmung/Ablehnung/Abbruch, den App-Fallback,
+Einmaligkeit und Änderungen während eines offenen Dialogs. Das ist kein Nachweis,
+dass jeder konkrete Agenten-Client bereits Form Elicitation unterstützt.

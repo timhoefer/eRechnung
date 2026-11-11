@@ -12,6 +12,39 @@ class AccessError(Exception):
     pass
 
 
+# These are execution policies, not model-supplied approval hints.
+WRITE_OPERATIONS = ("create_invoice", "save_issuer", "save_customer", "save_customer_items",
+                    "restore_issuer", "deactivate_issuer", "delete_customer", "delete_invoice")
+DESTRUCTIVE = {"deactivate_issuer", "delete_customer", "delete_invoice"}
+
+
+def validate_permissions(permissions):
+    if (not isinstance(permissions, dict) or set(permissions) != set(WRITE_OPERATIONS)
+            or any(not isinstance(value, str) or value not in ({"deny", "confirm"} if operation in DESTRUCTIVE else {"deny", "confirm", "allow"})
+                   for operation, value in permissions.items())):
+        raise AccessError("Invalid operation permissions.")
+    return dict(permissions)
+
+
+def permission(connection, operation):
+    if operation not in WRITE_OPERATIONS:
+        return "allow"
+    if connection.get("writable") is not True:
+        return "deny"
+    if "permissions" not in connection:
+        return "legacy"  # Existing grants keep their original behavior until explicitly saved.
+    policies = connection["permissions"]
+    value = policies.get(operation) if isinstance(policies, dict) else None
+    return value if isinstance(value, str) and value in ({"deny", "confirm"} if operation in DESTRUCTIVE else {"deny", "confirm", "allow"}) else "deny"
+
+
+def permission_choices(connection):
+    if not connection:
+        return dict.fromkeys(WRITE_OPERATIONS, "confirm")
+    return {operation: ("allow" if operation == "restore_issuer" else "confirm") if permission(connection, operation) == "legacy"
+            else permission(connection, operation) for operation in WRITE_OPERATIONS}
+
+
 def digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -52,7 +85,7 @@ class Access:
         self.save(data)
 
     def create(self, name: str, issuers: list[str], writable: bool, directory: Path,
-               *, customer_mode="none", customer_ids=()):
+               *, customer_mode="none", customer_ids=(), permissions=None, client_approvals=False):
         data = self.load()
         if not data.get("enabled") or len(data["connections"]) >= 20:
             raise AccessError("Enable access first; at most 20 connections are supported.")
@@ -63,6 +96,11 @@ class Access:
             "customer_mode": customer_mode, "customer_ids": sorted(set(customer_ids)),
             "scope": digest(str(directory.resolve())), "token_hash": digest(token),
         }
+        if permissions is not None:
+            data["connections"][identifier].update(permissions=validate_permissions(permissions),
+                writable=any(value != "deny" for value in permissions.values()))
+        if client_approvals:
+            data["connections"][identifier]["client_approvals"] = True
         self.save(data)
         return token
 
@@ -93,7 +131,8 @@ class Access:
             if entry["connection"] == previous:
                 entry["connection"] = dict(connection)
 
-    def set_permissions(self, identifier, expected, *, issuers, writable, customer_mode, customer_ids):
+    def set_permissions(self, identifier, expected, *, issuers, writable, customer_mode, customer_ids,
+                        permissions=None, client_approvals=False):
         """Keep the credential, but discard requests tied to changed permissions."""
         data = self.load()
         connection = data["connections"].get(identifier)
@@ -101,6 +140,11 @@ class Access:
             raise AccessError("Connection changed or revoked. Review it again.")
         connection.update(issuers=sorted(set(issuers)), writable=writable,
                           customer_mode=customer_mode, customer_ids=sorted(set(customer_ids)))
+        if permissions is not None:
+            connection.update(permissions=validate_permissions(permissions),
+                              writable=any(value != "deny" for value in permissions.values()))
+        if client_approvals or "client_approvals" in connection:
+            connection["client_approvals"] = client_approvals is True
         if connection != expected:
             self.save(data)
             self.clear_requests(identifier)
@@ -144,6 +188,7 @@ class Access:
         for entry in self.pending.values():
             if entry["status"] == "pending" and entry["expires"] <= now:
                 entry.update(status="expired", confirmation=None, arguments={})
+                entry.pop("client_nonce", None)
         self.pending = {k: v for k, v in self.pending.items() if v["expires"] + 600 > now}
 
     def propose(self, connection, operation, arguments, confirmation):

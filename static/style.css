@@ -943,3 +943,10 @@ dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-hei
 .agent-ui td { vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-ui .agent-fields { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 8px 16px; }
 .agent-fields dt { color: var(--muted); } .agent-fields dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.agent-operation-permissions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 250px); gap: 12px 20px; align-items: center; margin: 16px 0; }
+.agent-operation-permissions label { margin: 0; }
+@media (max-width: 520px) {
+  .agent-operation-permissions { grid-template-columns: 1fr; gap: 4px; }
+  .agent-operation-permissions select { margin-bottom: 12px; }
+}

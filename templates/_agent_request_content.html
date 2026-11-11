@@ -27,7 +27,7 @@
     <button type="submit" name="decision" value="approve">{{ 'Ausdrücklich bestätigen' if de else 'Explicitly approve' }}</button>
   </form>
 {% else %}
-  <h2>{{ {'completed': 'Ausgeführt', 'failed': 'Nicht ausgeführt', 'denied': 'Abgelehnt', 'expired': 'Abgelaufen'}.get(entry.status, entry.status) if de else entry.status|capitalize }}</h2>
+  <h2>{{ {'completed': 'Ausgeführt', 'failed': 'Nicht ausgeführt', 'denied': 'Abgelehnt', 'cancelled': 'Abgebrochen', 'expired': 'Abgelaufen'}.get(entry.status, entry.status) if de else entry.status|capitalize }}</h2>
   {% if entry.result and entry.result.status == 'approval_required' %}<p>{{ 'Der Datenstand hat sich geändert. Bitte die neue Anfrage separat prüfen.' if de else 'The data changed. Review the new request separately.' }}</p>{% endif %}
   {% if entry.result and entry.result.filename %}<p>{{ entry.result.filename }}</p>{% endif %}
   {% if entry.result and entry.result.message %}<p>{{ entry.result.message }}</p>{% endif %}

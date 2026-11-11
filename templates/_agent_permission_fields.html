@@ -26,5 +26,33 @@
     </fieldset>
     <p class="hint" data-customer-mode="none">{{ 'Kein Zugriff auf Kundendaten, gespeicherte Positionen oder Rechnungen. Ausstellerdaten und allgemeine Rechnungsinformationen bleiben verfügbar.' if de else 'No access to customer data, saved items or invoices. Issuer details and general invoice information remain available.' }}</p>
     <p class="hint" data-customer-mode="all">{{ 'Gibt alle Kunden und ihre gespeicherten Positionen sowie die Archive der gewählten Aussteller frei. Das umfasst auch künftig angelegte Kunden und ältere Belege.' if de else 'Grants all customers and saved items, plus the selected issuers’ archives. This includes future customers and older invoices.' }}</p>
-    <label class="agent-check"><input type="checkbox" name="write" value="yes"{% if grant.get('writable') %} checked{% endif %}><span>{{ 'Rechnungen erstellen und Datenänderungen anfragen' if de else 'Create invoices and request data changes' }}</span></label>
-    <p class="hint">{{ 'Endgültige Rechnungen, Löschungen und Änderungen an vorhandenen Daten warten auf deine ausdrückliche Bestätigung in eRechnung.' if de else 'Final invoices, deletions and changes to existing data wait for your explicit approval in eRechnung.' }}</p>
+    <h3>{{ 'Aktionen' if de else 'Actions' }}</h3>
+    <p class="hint">{{ 'Lege fest, was diese Verbindung ausführen darf. „Erlauben“ führt die Aktion ohne zusätzliche Bestätigung aus.' if de else 'Choose what this connection may do. “Allow” executes the operation without additional confirmation.' }}</p>
+    <input type="hidden" name="permission_policy" value="1">
+    {% set policies = agent_permission_choices(grant) %}
+    <div class="agent-operation-permissions">
+    {% for operation, labels in [
+      ('create_invoice', ('Rechnungen erstellen', 'Create invoices')),
+      ('save_issuer', ('Ausstellerdaten bearbeiten', 'Edit issuer details')),
+      ('save_customer', ('Kunden anlegen und bearbeiten', 'Create and edit customers')),
+      ('save_customer_items', ('Gespeicherte Positionen bearbeiten', 'Edit saved items')),
+      ('restore_issuer', ('Aussteller reaktivieren', 'Reactivate issuers')),
+      ('deactivate_issuer', ('Aussteller deaktivieren', 'Deactivate issuers')),
+      ('delete_customer', ('Kunden löschen', 'Delete customers')),
+      ('delete_invoice', ('Rechnungen löschen', 'Delete invoices'))] %}
+      <label for="{{ field_prefix }}-{{ operation }}">{{ labels[0] if de else labels[1] }}</label>
+      <select id="{{ field_prefix }}-{{ operation }}" name="permission_{{ operation }}">
+        {% for value, texts in [('deny', ('Verbieten', 'Deny')), ('confirm', ('Nachfragen (empfohlen)', 'Ask (recommended)')), ('allow', ('Erlauben', 'Allow'))] %}
+        {% if value != 'allow' or operation not in agent_destructive_operations %}<option value="{{ value }}"{% if policies[operation] == value %} selected{% endif %}>{{ texts[0] if de else texts[1] }}</option>{% endif %}
+        {% endfor %}
+      </select>
+    {% endfor %}
+    </div>
+    <p class="hint">{{ '„Rechnungen erstellen“ legt verbindliche Belege im Archiv ab. Änderungen an Kundendaten benötigen zusätzlich die entsprechende Kundenfreigabe. Ausstellerdaten umfassen auch Bankverbindungen. Löschen und Deaktivieren benötigen immer eine einzelne Bestätigung; vorhandene Belege werden nicht überschrieben.' if de else '“Create invoices” finalizes documents in the archive. Customer changes also require customer editing permission. Issuer details include bank accounts. Deletions and deactivation always require individual confirmation; existing documents are never overwritten.' }}</p>
+    <label for="{{ field_prefix }}-approval-location">{{ 'Wo soll nachgefragt werden?' if de else 'Where should confirmation appear?' }}
+      <select id="{{ field_prefix }}-approval-location" name="client_approvals">
+        <option value="no"{% if not grant.get('client_approvals') %} selected{% endif %}>{{ 'In eRechnung' if de else 'In eRechnung' }}</option>
+        <option value="yes"{% if grant.get('client_approvals') %} selected{% endif %}>{{ 'Im Agenten, wenn unterstützt' if de else 'In the agent, when supported' }}</option>
+      </select>
+    </label>
+    <p class="hint">{{ 'Bei Bestätigung im Agenten vertraust du dessen App, deine Entscheidung korrekt zu übermitteln. eRechnung kann die menschliche Bestätigung dort nicht unabhängig nachweisen. Ohne Unterstützung bleibt die Anfrage in eRechnung verfügbar.' if de else 'For in-agent confirmation, you trust its app to relay your decision correctly. eRechnung cannot independently verify human approval there. Without support, the request remains available in eRechnung.' }}</p>
