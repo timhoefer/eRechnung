@@ -6,9 +6,10 @@
   const boundDialogs = new WeakSet();
   const root = () => document.getElementById('agent-management');
   const restoreFocus = () => {
-    if (opener?.isConnected) opener.focus();
-    else if (opener?.id && document.getElementById(opener.id)) document.getElementById(opener.id).focus();
-    else document.querySelector('#agent-access-card [role="switch"]')?.focus();
+    const target = opener?.isConnected ? opener
+      : (opener?.id && document.getElementById(opener.id))
+        || document.querySelector('#agent-access-card [role="switch"]');
+    target?.focus({ preventScroll: true });
   };
   const headers = { 'X-Requested-With': 'fetch' };
   window.AgentAccess = { isBusy: () => busy };

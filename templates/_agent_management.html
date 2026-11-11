@@ -89,7 +89,7 @@
     <p><strong>{{ entry.connection.name }}</strong> · {{ entry.confirmation.title if entry.confirmation else entry.operation }} — {{ entry.status }}
     <a {% if agent_settings %}data-agent-review {% endif %}href="{{ url_for('agents_review', identifier=id) }}">{{ 'Prüfen' if de else 'Review' }}</a></p>
   {% else %}<p>{{ 'Keine offenen Anfragen.' if de else 'No pending requests.' }}</p>{% endfor %}
-  <a {% if agent_settings %}data-agent-refresh {% endif %}href="{{ url_for('agents_panel' if agent_settings else 'agents_settings') }}">{{ 'Aktualisieren' if de else 'Refresh' }}</a>
+  <a id="agent-requests-refresh" {% if agent_settings %}data-agent-refresh {% endif %}href="{{ url_for('agents_panel' if agent_settings else 'agents_settings') }}">{{ 'Aktualisieren' if de else 'Refresh' }}</a>
 </section>
 {% endif %}
 </section>

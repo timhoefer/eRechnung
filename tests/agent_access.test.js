@@ -5,11 +5,13 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 function setup() {
-  const listeners = {}, requests = [], initialized = [];
+  const listeners = {}, requests = [], initialized = [], focusCalls = [];
   const error = { hidden: true, textContent: 'Action failed' };
   const disclaimer = { textContent: 'Local data' };
   let focused = false, refreshed = 0;
-  const button = { disabled: false, isConnected: false, focus: () => { focused = true; } };
+  const button = { disabled: false, isConnected: false, focus: options => {
+    focused = true; focusCalls.push({ target: 'toggle', preventScroll: options?.preventScroll });
+  } };
   const dialog = {
     open: false, innerHTML: '', listeners: {}, error: null,
     showModal() { this.open = true; },
@@ -41,12 +43,18 @@ function setup() {
   });
   const form = { action: { value: 'enable' }, getAttribute: () => '/agents/settings',
     fields: { csrf: 'fictional', return_to: 'settings' }, matches: () => true };
-  return { requests, section, dialog, error, disclaimer, button, initialized, focused: () => focused, refreshed: () => refreshed,
+  return { requests, section, dialog, error, disclaimer, button, initialized, focusCalls, focused: () => focused, refreshed: () => refreshed,
     submit: submitter => listeners.submit({ target: form, submitter, preventDefault() {} }),
     escape() { let prevented = false; listeners.cancel({ target: dialog, preventDefault() { prevented = true; } }); return prevented; },
     cancel: () => listeners.click({ target: { closest: () => true } }),
     review() { const link = { href: '/agents/requests/fictional' }; listeners.click({button: 0, target: {
       closest: selector => selector === '[data-agent-cancel]' ? null : link }, preventDefault() {} }); },
+    refresh() {
+      const link = { id: 'agent-requests-refresh', href: '/agents/panel', isConnected: false };
+      elements[link.id] = { focus: options => focusCalls.push({ target: 'refresh', preventScroll: options?.preventScroll }) };
+      listeners.click({button: 0, target: {
+        closest: selector => selector === '[data-agent-cancel]' ? null : link }, preventDefault() {} });
+    },
     respond(data, status = 200) { requests.at(-1).resolve({ ok: status < 400, status, json: async () => data }); },
   };
 }
@@ -68,6 +76,18 @@ test('updates only agent settings and disclaimer, suppresses double submission a
   assert.equal(page.button.disabled, false);
   assert.deepEqual(page.initialized, ['settings', 'setup']);
   assert.equal(page.focused(), true);
+  assert.deepEqual(page.focusCalls, [{ target: 'toggle', preventScroll: true }]);
+});
+
+test('refresh keeps focus on the replaced refresh link without scrolling to the access toggle', async () => {
+  const page = setup();
+  page.refresh();
+  assert.equal(page.requests.length, 1);
+  assert.equal(page.requests[0].url, '/agents/panel');
+  assert.equal(page.requests[0].options.method, undefined);
+  page.respond({ management: 'Updated requests', disclaimer: 'Agent data processing' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(page.focusCalls, [{ target: 'refresh', preventScroll: true }]);
 });
 
 test('destructive and stale warnings require a new submit; cancel sends nothing', async () => {
