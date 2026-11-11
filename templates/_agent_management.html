@@ -104,7 +104,7 @@
   </div>
 </dialog>
 {% if setup_views %}<script type="application/json" id="agent-setup-initial">{{ setup_views|tojson }}</script>{% endif %}
-{% if state.enabled %}
+{% if state.enabled and state.connections %}
 <section class="agent-subsection" aria-labelledby="agent-approvals-title">
   <h3 id="agent-approvals-title">{{ 'Aktionsfreigaben' if de else 'Action approvals' }}</h3>
   <p>{{ 'Hier bestätigst du einzelne Aktionen bereits eingerichteter MCP-Verbindungen. Dadurch erhält kein weiterer Agent Zugang.' if de else 'Approve individual actions from existing MCP connections here. This does not grant access to another agent.' }}</p>
