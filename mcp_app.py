@@ -42,6 +42,12 @@ def register(m):
     def csrf():
         return session.setdefault("mcp_csrf", secrets.token_urlsafe(32))
 
+    def connection_name():
+        name = request.form.get("name", "").strip()
+        if len(name) > 80:
+            abort(400)
+        return name or ("Meine Verbindung" if m.get_ui_lang(request) == "de" else "My connection")
+
     def disclaimer(active):
         text = m.translate(m.get_ui_lang(request))
         return text["disclaimer_full"] + " " + text["disclaimer_agent" if active else "disclaimer_local"]
@@ -123,6 +129,26 @@ def register(m):
             raise AccessError("Linked customer files are not supported.")
         return m.load_customers()
 
+    def permission_fields(existing=None):
+        issuers = request.form.getlist("issuers")
+        allowed = {p["id"] for p in m.issuer_profiles() if p["available"]}
+        # Existing archive grants may be retained or removed, never newly added.
+        if existing:
+            allowed.update(existing["issuers"])
+        if not issuers or not set(issuers) <= allowed:
+            abort(400)
+        mode = request.form.get("customer_mode", "none")
+        if mode not in {"none", "selected", "all"}:
+            abort(400)
+        ids = []
+        if mode == "selected":
+            customers = customer_records()
+            ids = customer_scope.assign_selected(customers, request.form.getlist("customers"))
+            # Only internal identities are added; no invoice or customer fields change.
+            m._write_json(m.CUSTOMERS_FILE, customers)
+        return dict(issuers=issuers, writable=request.form.get("write") == "yes",
+                    customer_mode=mode, customer_ids=ids)
+
     @app.get("/agents")
     def agents_settings():
         ui_guard()
@@ -179,19 +205,42 @@ def register(m):
             revision = digest(json.dumps(connection, sort_keys=True))
             token = None
             changed = False
+            renamed = False
+            permissions_saved = False
             if request.method == "POST":
-                if request.form.get("confirm") != "renew" or request.form.get("revision") != revision:
+                action = request.form.get("action")
+                if action in {"rename", "permissions"}:
+                    if request.form.get("revision") != revision:
+                        changed = True
+                    else:
+                        if action == "rename":
+                            access.rename(identifier, connection_name())
+                            renamed = True
+                        else:
+                            access.set_permissions(identifier, connection, **permission_fields(connection))
+                            permissions_saved = True
+                        connection = access.load()["connections"][identifier]
+                        revision = digest(json.dumps(connection, sort_keys=True))
+                elif request.form.get("confirm") != "renew" or request.form.get("revision") != revision:
                     # Also makes double submission/reload harmless: it cannot
                     # invalidate a key that was just displayed by the first POST.
                     changed = True
                 else:
                     token = access.renew(identifier, connection)
-            context = dict(connection=connection, revision=revision,
-                           profiles=m.issuer_profiles(include_deleted=True),
-                           customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customer_records()},
-                           changed=changed, csrf=csrf(), **configuration_context(token))
+            customers = customer_records()
+            profiles = m.issuer_profiles(include_deleted=True)
+            choices = customer_scope.choices(customers)
+            for choice, customer in zip(choices, customers, strict=True):
+                choice["selected"] = customer_scope.customer_id(customer) in connection.get("customer_ids", [])
+            context = dict(connection=connection, revision=revision, profiles=profiles,
+                           permission_profiles=[p for p in profiles if (p["available"] and not p["deleted"])
+                                                or p["id"] in connection["issuers"]],
+                           customer_choices=choices,
+                           customer_names={customer_scope.customer_id(c): c.get("name", "") for c in customers},
+                           changed=changed, renamed=renamed, permissions_saved=permissions_saved,
+                           csrf=csrf(), **configuration_context(token))
             if request.headers.get("X-Requested-With") == "fetch":
-                return {"views": configuration_views(context)}, 409 if changed else 200
+                return {"views": configuration_views(context), "updated": renamed or permissions_saved}, 409 if changed else 200
             return render_template("agent_setup.html", **context), 409 if changed else 200
 
     @app.post("/agents/settings")
@@ -233,26 +282,11 @@ def register(m):
                     return render_template("agent_revoke.html", **context)
                 access.revoke(identifier)
             elif action == "connect":
-                name = request.form.get("name", "").strip()
-                issuers = request.form.getlist("issuers")
-                allowed = {p["id"] for p in m.issuer_profiles() if p["available"]}
-                if not name or len(name) > 80 or not issuers or not set(issuers) <= allowed:
-                    abort(400)
-                mode = request.form.get("customer_mode", "none")
-                if mode not in {"none", "selected", "all"}:
-                    abort(400)
-                ids = []
-                if mode == "selected":
-                    state = access.load()
-                    if not state.get("enabled") or len(state["connections"]) >= 20:
-                        raise AccessError("Enable access first; at most 20 connections are supported.")
-                    customers = customer_records()
-                    ids = customer_scope.assign_selected(customers, request.form.getlist("customers"))
-                    # Only internal identities are added; no customer fields or
-                    # invoices change. Name-based grants are never persisted.
-                    m._write_json(m.CUSTOMERS_FILE, customers)
-                token = access.create(name, issuers, request.form.get("write") == "yes", m.DATA_DIR,
-                                      customer_mode=mode, customer_ids=ids)
+                name = connection_name()
+                state = access.load()
+                if not state.get("enabled") or len(state["connections"]) >= 20:
+                    raise AccessError("Enable access first; at most 20 connections are supported.")
+                token = access.create(name, directory=m.DATA_DIR, **permission_fields())
             else:
                 abort(400)
             if in_settings:

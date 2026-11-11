@@ -10,6 +10,7 @@
     let views = null;
     let opener = null;
     let busy = false;
+    let refreshOnClose = false;
 
     function setBusy(value) {
       busy = value;
@@ -44,10 +45,16 @@
         if (!response.ok && response.status !== 409) throw new Error('Setup unavailable');
         const result = await response.json();
         if (!result.views?.de || !result.views?.en) throw new Error('Incomplete setup');
+        refreshOnClose ||= Boolean(result.updated);
         views = result.views;
         render();
       } catch {
-        showError(language === 'de'
+        const editing = ['rename', 'permissions'].includes(options.body?.get('action'));
+        // A lost response may follow a successful save. Refresh on close, never retry.
+        refreshOnClose ||= editing;
+        showError(editing ? (language === 'de'
+          ? 'Das Speichern konnte nicht bestätigt werden. Öffne die Konfiguration erneut und prüfe den aktuellen Stand.'
+          : 'Saving could not be confirmed. Reopen configuration and review its current settings.') : language === 'de'
           ? 'Die Konfiguration konnte nicht geladen werden. Falls du gerade einen Schlüssel erneuert hast, könnte der bisherige bereits ungültig sein. Öffne die Konfiguration erneut, um einen neuen Schlüssel einzurichten.'
           : 'The configuration could not be loaded. If you just renewed a credential, the previous one may already be invalid. Reopen configuration to set up a new credential.');
       } finally {
@@ -78,14 +85,20 @@
       const form = event.target;
       event.preventDefault();
       if (busy) return;
-      // Only the reviewed renewal form is submitted, never on open.
-      load(form.action, { method: 'POST', body: new FormData(form) });
+      // Submit only the chosen action, never on open.
+      // A named input "action" shadows the form.action DOM property.
+      load(form.getAttribute('action'), { method: 'POST', body: new FormData(form) });
     });
     dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
     dialog.addEventListener('close', () => {
       views = null;
       content.replaceChildren();
       opener?.focus();
+      if (refreshOnClose) {
+        refreshOnClose = false;
+        if (window.refreshAgentSettings) window.refreshAgentSettings();
+        else window.location.reload();
+      }
     });
 
     const initial = document.getElementById('agent-setup-initial');

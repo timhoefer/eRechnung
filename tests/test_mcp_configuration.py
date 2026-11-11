@@ -69,7 +69,7 @@ def test_dialog_views_do_not_rotate_until_explicit_confirmation(client):
     fields_by_language = []
     for language, content in response.json["views"].items():
         assert old not in content
-        form, = html.fromstring(content).xpath('//form')
+        form, = html.fromstring(content).xpath('//form[input[@name="confirm" and @value="renew"]]')
         fields_by_language.append(dict(form.form_values()))
         assert form.action.startswith(target)
         assert "erneuern" in content if language == "de" else "Renew credential?" in content

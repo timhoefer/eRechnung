@@ -455,7 +455,8 @@ def confirm_change(title: str, message: str, before, after, details: list[dict],
     payload = [str(DATA_DIR.resolve()), current_issuer(), request.path,
                request.args.to_dict(flat=False), fields, before, after]
     if g.get("mcp_connection"):
-        payload.append(g.mcp_connection)
+        # Display labels may change without changing the credential or its grant.
+        payload.append({key: value for key, value in g.mcp_connection.items() if key != "name"})
     fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     if g.get("mcp_connection"):
         # Only the app's approval handler can supply this fingerprint. It is never

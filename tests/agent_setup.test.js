@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const warning = { de: 'Warnung vor Erneuerung', en: 'Warning before renewal' };
 const credential = { de: 'Konfiguration: FICTIONAL-KEY', en: 'Configuration: FICTIONAL-KEY' };
-const response = (views, status = 200) => ({ ok: status === 200, status, json: async () => ({ views }) });
+const response = (views, status = 200, updated = false) => ({ ok: status === 200, status, json: async () => ({ views, updated }) });
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 function setup(initialViews, language = 'de') {
@@ -57,9 +57,9 @@ function setup(initialViews, language = 'de') {
       },
     },
     Event: class { constructor(type) { this.type = type; } },
-    FormData: class { constructor(form) { this.fields = form.fields; } },
+    FormData: class { constructor(form) { this.fields = form.fields; } get(name) { return this.fields[name]; } },
     URLSearchParams,
-    window: { location: { assign: value => navigation.push(value) } },
+    window: { location: { assign: value => navigation.push(value), reload: () => navigation.push('reload') } },
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
   });
   const event = target => ({ target, prevented: false, preventDefault() { this.prevented = true; } });
@@ -67,7 +67,10 @@ function setup(initialViews, language = 'de') {
     dialog, content, close, link, elements, initial, requests, navigation, renders,
     open(modifiers = {}) { const e = { ...event(link), button: 0, ...modifiers }; handlers.open(e); return e; },
     click(target) { return handlers.click(event(target)); },
-    submit() { handlers.submit(event({ action: link.href, fields: { csrf: 'csrf-only', revision: 'reviewed-revision', confirm: 'renew' } })); },
+    submit(fields = { csrf: 'csrf-only', revision: 'reviewed-revision', confirm: 'renew' }) {
+      handlers.submit(event({ action: fields.action ? { value: fields.action } : link.href,
+        getAttribute: name => name === 'action' ? link.href : null, fields }));
+    },
     escape() { const e = event(dialog); handlers.cancel(e); if (!e.prevented) dialog.close(); return e; },
   };
 }
@@ -138,4 +141,42 @@ test('stale renewal displays the new warning and network errors never retry the 
   assert.equal(page.elements['agent-setup-error'].hidden, false);
   assert.match(page.elements['agent-setup-error'].textContent, /bisherige bereits ungültig/);
   assert.equal(page.escape().prevented, false);
+});
+
+for (const action of ['rename', 'permissions']) {
+  test(`${action} changes wait for submit; closing an unsaved editor does not post`, async () => {
+    const page = setup();
+    page.open(); page.requests[0].resolve(response(warning)); await settle();
+    page.content.innerHTML = 'Unsaved input';
+    page.escape();
+    assert.equal(page.requests.length, 1);
+    assert.deepEqual(page.navigation, []);
+    page.open(); page.requests[1].resolve(response(warning)); await settle();
+    assert.equal(page.content.innerHTML, warning.de);
+    page.submit({ action, revision: 'current', csrf: 'csrf-only' });
+    assert.equal(page.requests[2].url, page.link.href);
+    assert.equal(page.requests[2].options.body.fields.action, action);
+    assert.equal(page.requests[2].options.body.fields.confirm, undefined);
+    page.requests[2].resolve(response({ de: 'Gespeichert', en: 'Saved' }, 200, true)); await settle();
+    assert.equal(page.dialog.open, true);
+    assert.deepEqual(page.navigation, []);
+    // A later deliberate key renewal is not lost through a premature refresh.
+    page.submit(); page.requests[3].resolve(response(credential)); await settle();
+    assert.equal(page.content.innerHTML, credential.de);
+    assert.deepEqual(page.navigation, []);
+    page.escape();
+    assert.deepEqual(page.navigation, ['reload']);
+  });
+}
+
+test('uncertain permission save is never retried automatically and refreshes on close', async () => {
+  const page = setup();
+  page.open(); page.requests[0].resolve(response(warning)); await settle();
+  page.submit({ action: 'permissions', revision: 'current' });
+  page.requests[1].reject(new Error('Response lost')); await settle();
+  assert.equal(page.requests.length, 2);
+  assert.equal(page.elements['agent-setup-error'].hidden, false);
+  assert.match(page.elements['agent-setup-error'].textContent, /aktuellen Stand/);
+  page.escape();
+  assert.deepEqual(page.navigation, ['reload']);
 });

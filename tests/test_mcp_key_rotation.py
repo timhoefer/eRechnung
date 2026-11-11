@@ -16,7 +16,7 @@ from mcp_access import Access, AccessError, digest
 def setup_form(client, identifier):
     page = client.get(f"/agents/connections/{identifier}/setup")
     assert page.status_code == 200
-    form, = html.fromstring(page.data).xpath('//form')
+    form, = html.fromstring(page.data).xpath('//form[input[@name="confirm" and @value="renew"]]')
     return form.action, dict(form.form_values())
 
 
@@ -87,7 +87,7 @@ def test_card_has_setup_link_and_warning_is_non_mutating(client):
     assert identifier in link
     assert "Der bisherige Schlüssel wird sofort ungültig" in confirmation.text_content()
     assert "Aussteller, Kundenfreigaben, Rechte" in confirmation.text_content()
-    assert "<script>fictional</script>" in confirmation.text_content()
+    assert confirmation.xpath('//input[@name="name"]/@value') == ["<script>fictional</script>"]
     assert not confirmation.xpath('//script[contains(text(), "fictional")]')
     assert credential not in response.text and state["connections"][identifier]["token_hash"] not in response.text
     assert client.get(confirmation.xpath('//a/@href')[0]).status_code == 200

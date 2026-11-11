@@ -43,6 +43,7 @@
   --text-base: 15px;
   --text-lg: 18px;
   --text-xl: 24px;
+  --field-label-gap: 4px;
   color-scheme: light;
 }
 
@@ -216,8 +217,7 @@ h2 { margin: 0 0 14px; font-size: var(--text-lg); }
 /* justify-content: flex-end -> Inputs einer Grid-Zeile bleiben auf einer Linie,
    auch wenn ein langes Label (z. B. "Kundenreferenz / Bestellnr. (optional)")
    zweizeilig umbricht: das Label wächst dann nach oben statt das Feld zu schieben. */
-label { display: flex; flex-direction: column; justify-content: flex-end; font-size: var(--text-sm); color: var(--muted); gap: 4px; }
-.agent-ui label[for="agent-customer-mode"] { margin-bottom: 8px; }
+label { display: flex; flex-direction: column; justify-content: flex-end; font-size: var(--text-sm); color: var(--muted); gap: var(--field-label-gap); }
 .wide { grid-column: 1 / -1; }
 label.span-2 { grid-column: span 2; }
 label.span-3 { grid-column: span 3; }
@@ -405,7 +405,7 @@ select {
 .extra-row > .discount-label { grid-column: 2; }
 .extra-row > .reason-label { grid-column: 3 / -1; }
 .period-label, .discount-label, .reason-label {
-  margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--field-label-gap);
   font-size: var(--text-sm); color: var(--muted); min-width: 0; width: 100%;
 }
 .period-label .period { display: flex; width: 100%; }
@@ -505,7 +505,7 @@ button.secondary:hover { background: var(--surface-2-h); }
 .acct-head[data-kind="iban"] .f-bank { grid-column: span 2; }
 .bank-select[hidden] { display: none; }
 /* Logo-Upload (Briefkopf) */
-.logo-label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: 4px; }
+.logo-label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: var(--field-label-gap); }
 .logo-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .logo-preview { max-height: 48px; max-width: 180px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: #fff; }
 .logo-pick { display: inline-flex; align-items: center; cursor: pointer; padding: 8px 14px;
@@ -583,7 +583,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible,
 }
 .export-box h3 { margin: 0 0 4px; font-size: var(--text-base); }
 .export-bar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-.export-bar label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); color: var(--muted); }
+.export-bar label { display: flex; flex-direction: column; gap: var(--field-label-gap); font-size: var(--text-sm); color: var(--muted); }
 .export-presets { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
 
 .flash { padding: 12px 18px; font-size: var(--text-base); }
@@ -891,7 +891,7 @@ dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-hei
 .configuration-tabs button { flex: 1; background: transparent; color: var(--muted); border-radius: 7px; padding: 10px 14px; }
 .configuration-tabs button[aria-selected="true"] { background: var(--surface-hi); color: var(--ink); }
 .configuration-field { margin: 16px 0; }
-.configuration-field-label { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.configuration-field-label { display: flex; align-items: flex-end; gap: 10px; margin-bottom: var(--field-label-gap); }
 .configuration-field-label label { min-width: 0; overflow-wrap: anywhere; }
 .configuration-field-label .configuration-copy { padding: 5px; background: transparent; color: var(--muted); }
 .configuration-field-value { display: flex; align-items: center; gap: 12px; }

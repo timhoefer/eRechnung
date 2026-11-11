@@ -16,7 +16,7 @@ function setup(clipboard) {
   const elements = { 'mcp-configuration': { textContent: displayed }, 'configuration-copy-status': status };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
     window: {},
-    document: { addEventListener: () => {}, getElementById: id => elements[id], querySelectorAll: () => [button] },
+    document: { addEventListener: () => {}, getElementById: id => elements[id], querySelectorAll: selector => selector === '[data-copy-target]' ? [button] : [] },
     navigator: { clipboard },
   });
   return { button, status, displayed, click: () => click() };
@@ -68,7 +68,7 @@ test('tabs keep the same values and support arrow keys, Home and End without cop
   }));
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
     window: {},
-    document: { addEventListener: () => {}, getElementById: id => elements[id], querySelectorAll: () => copies },
+    document: { addEventListener: () => {}, getElementById: id => elements[id], querySelectorAll: selector => selector === '[data-copy-target]' ? copies : [] },
     navigator: { clipboard: { writeText: async text => { writes.push(text); } } },
   });
   function selected(index) {
@@ -130,7 +130,7 @@ test('new connection opens on demand and cancel/escape return focus without subm
   const elements = { 'agent-connection-dialog': dialog, 'agent-connection-add': add };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
     window: {},
-    document: { addEventListener: () => {}, getElementById: id => elements[id], querySelector: () => null },
+    document: { addEventListener: () => {}, getElementById: id => elements[id], querySelector: () => null, querySelectorAll: () => [] },
   });
   assert.equal(dialog.open, false);
   listeners.add();
@@ -155,15 +155,17 @@ test('empty issuer or selected-customer groups block submission and recover with
   const issuerError = { hidden: true }, customerError = { hidden: true };
   const mode = { value: 'selected', addEventListener() {} };
   const options = { hidden: false, disabled: false, tagName: 'FIELDSET', dataset: { customerMode: 'selected' } };
-  const dialog = {
+  const form = {
+    querySelector: selector => selector === '[data-customer-access]' ? mode
+      : selector.includes('issuers') ? issuerError : customerError,
     querySelectorAll: selector => selector === 'input[name="issuers"]' ? [issuer]
-      : selector === 'input[name="customers"]' ? [customer] : [],
+      : selector === 'input[name="customers"]' ? [customer] : [options],
     addEventListener(name, fn) { listeners[name] = fn; },
   };
-  const elements = { 'agent-connection-dialog': dialog, 'agent-connection-add': { addEventListener() {} },
+  const elements = { 'agent-connection-add': { addEventListener() {} },
     'agent-customer-mode': mode, 'agent-issuers-error': issuerError, 'agent-customers-error': customerError };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
-    window: {}, document: { addEventListener() {}, getElementById: id => elements[id], querySelectorAll: () => [options] },
+    window: {}, document: { addEventListener() {}, getElementById: id => elements[id], querySelectorAll: selector => selector === 'form[data-agent-permissions]' ? [form] : [] },
   });
   function submit() {
     const event = { prevented: false, stopped: false,

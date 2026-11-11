@@ -10,13 +10,21 @@
         button.addEventListener('click', () => dialog.close());
       });
       dialog.addEventListener('close', () => add.focus());
+    }
+    initPermissionForms();
+  }
+  function initPermissionForms() {
+    document.querySelectorAll('form[data-agent-permissions]').forEach(form => {
+      if (initialized.has(form)) return;
+      initialized.add(form);
       let attempted = false;
+      const mode = form.querySelector('[data-customer-access]');
       const validateSelections = () => {
         let firstInvalid = null;
         for (const name of ['issuers', 'customers']) {
-          const error = document.getElementById(`agent-${name}-error`);
-          const options = [...dialog.querySelectorAll(`input[name="${name}"]`)];
-          const required = name === 'issuers' || document.getElementById('agent-customer-mode').value === 'selected';
+          const error = form.querySelector(`[data-selection-error="${name}"]`);
+          const options = [...form.querySelectorAll(`input[name="${name}"]`)];
+          const required = name === 'issuers' || mode.value === 'selected';
           const invalid = required && !options.some(option => option.type === 'hidden' ? option.value : option.checked);
           error.hidden = !attempted || !invalid;
           options.forEach(option => {
@@ -27,7 +35,7 @@
         }
         return firstInvalid;
       };
-      dialog.addEventListener('submit', event => {
+      form.addEventListener('submit', event => {
         attempted = true;
         const invalid = validateSelections();
         if (!invalid) return;
@@ -35,20 +43,16 @@
         event.stopPropagation(); // Do not send an incomplete grant to the server.
         invalid.focus();
       });
-      dialog.addEventListener('change', validateSelections);
-    }
-    const mode = document.getElementById('agent-customer-mode');
-    if (mode && !initialized.has(mode)) {
-      initialized.add(mode);
+      form.addEventListener('change', validateSelections);
       const update = () => {
-        document.querySelectorAll('[data-customer-mode]').forEach(element => {
+        form.querySelectorAll('[data-customer-mode]').forEach(element => {
           element.hidden = element.dataset.customerMode !== mode.value;
           if (element.tagName === 'FIELDSET') element.disabled = element.hidden;
         });
       };
       mode.addEventListener('change', update);
       update();
-    }
+    });
   }
   function initializeConfiguration() {
     const tabs = document.getElementById('configuration-tabs');
@@ -103,5 +107,8 @@
   window.AgentSettings = { init };
   init();
   initializeConfiguration();
-  document.addEventListener('agent-setup-rendered', initializeConfiguration);
+  document.addEventListener('agent-setup-rendered', () => {
+    initPermissionForms();
+    initializeConfiguration();
+  });
 })();

@@ -79,6 +79,32 @@ class Access:
     def clear_requests(self, identifier):
         self.pending = {k: v for k, v in self.pending.items() if v["connection"]["id"] != identifier}
 
+    def rename(self, identifier, name):
+        data = self.load()
+        connection = data["connections"].get(identifier)
+        if not data.get("enabled") or not connection:
+            raise AccessError("Access disabled or connection revoked.")
+        previous = dict(connection)
+        connection["name"] = name
+        self.save(data)
+        # Only the display name changes. Keep matching requests and their expiry;
+        # never update a snapshot whose permissions or credential already differ.
+        for entry in self.pending.values():
+            if entry["connection"] == previous:
+                entry["connection"] = dict(connection)
+
+    def set_permissions(self, identifier, expected, *, issuers, writable, customer_mode, customer_ids):
+        """Keep the credential, but discard requests tied to changed permissions."""
+        data = self.load()
+        connection = data["connections"].get(identifier)
+        if not data.get("enabled") or not connection or connection != expected:
+            raise AccessError("Connection changed or revoked. Review it again.")
+        connection.update(issuers=sorted(set(issuers)), writable=writable,
+                          customer_mode=customer_mode, customer_ids=sorted(set(customer_ids)))
+        if connection != expected:
+            self.save(data)
+            self.clear_requests(identifier)
+
     def renew(self, identifier, expected):
         """Replace only the credential after the UI has reviewed this exact grant."""
         data = self.load()

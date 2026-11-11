@@ -35,7 +35,8 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
 3. Direkt darunter zeigt **Verbindungen**, ob bereits ein Zugang eingerichtet ist.
    Mit **Verbindung hinzufügen** (später **+**) eine neue Verbindung
-   anlegen. In Schritt **1 · Verbindung freigeben** einen Namen und die gewünschten aktiven Aussteller wählen.
+   anlegen. In Schritt **1 · Verbindung freigeben** optional einen Namen eingeben
+   (sonst **Meine Verbindung**) und die gewünschten aktiven Aussteller wählen.
    Deaktivierte Aussteller werden bei neuen Verbindungen nicht angeboten. Bereits
    erteilte Archivfreigaben bleiben für die Historie und Korrekturen erhalten.
    Unter **Kundenzugriff** zwischen **Keine Kundendaten**, **Nur ausgewählte Kunden**
@@ -66,10 +67,18 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Verbindung nötig. Rechnungen und gespeicherte Daten bleiben erhalten.
 8. **Konfiguration einrichten** öffnet einen Dialog direkt über der jeweiligen
    Verbindung. Der Dialog übernimmt die Sprache der App. Die Schrittanzeige
-   erscheint nur beim Anlegen einer neuen Verbindung. Nach dem Schließen sind
-   wieder die Verbindungen sichtbar. Eine funktionierende
+   erscheint nur beim Anlegen einer neuen Verbindung. Hier lassen sich der Name
+   mit **Namen speichern** und Aussteller-, Kunden- und Änderungsrechte mit
+   **Freigaben bestätigen** separat ändern. Die Auswahl allein speichert nichts;
+   **X**, Escape oder **Abbrechen** verwirft unbestätigte Änderungen. Bestätigte
+   Rechte gelten sofort für den vorhandenen Schlüssel und verwerfen die offenen
+   Aktionsanfragen dieser Verbindung. Eine reine Umbenennung erhält diese Anfragen.
+   Pausierte Verbindungen bleiben pausiert. Veraltete Formulare können neuere
+   Einstellungen nicht überschreiben. Bereits freigegebene inaktive Aussteller
+   lassen sich abwählen; neue Freigaben dafür sind nicht möglich.
+   Nach dem Schließen sind wieder die Verbindungen sichtbar. Eine funktionierende
    Verbindung benötigt keinen neuen Schlüssel. Bei verlorener Konfiguration
-   zuerst die Warnung lesen und dann
+   unter **Verbindungsschlüssel erneuern** zuerst die Warnung lesen und dann
    **Neuen Schlüssel erzeugen** bestätigen. Erst dann wird der bisherige Schlüssel
    ungültig und die vollständige neue Konfiguration einmalig angezeigt, mit einem
    Button zum Kopieren. Diese Konfiguration im Agenten ersetzen.
