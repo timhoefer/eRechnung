@@ -470,6 +470,7 @@ def confirm_change(title: str, message: str, before, after, details: list[dict],
             raise ChangeConfirmationRequired({
                 "fingerprint": fingerprint, "title": title, "message": message, "details": details,
                 "issuer": issuer_label(load_seller()),
+                "language": get_ui_lang(request),
                 "invoice_snapshot": invoice_snapshot,
             })
         return

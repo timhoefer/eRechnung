@@ -13,7 +13,7 @@ from test_mcp_access import BUYER, call, configure, decide, snapshot
 from test_mcp_access import client as client
 from test_mcp_access import fresh_access as fresh_access
 from test_mcp_key_rotation import configured_token, setup_form
-from test_mcp_operation_permissions import policy_grant
+from test_mcp_operation_permissions import arguments, policy_grant
 from test_mcp_permission_editing import permissions
 from werkzeug.serving import make_server
 
@@ -79,6 +79,80 @@ def test_real_sdk_approval_denial_and_cancel(client, transport, action, content,
         assert m.load_customers()[0]["email"] == "new@example.com"
     else:
         assert snapshot() == before
+
+
+@pytest.mark.parametrize("operation", ["save_customer", "save_customer_items", "save_issuer",
+                                       "delete_customer", "delete_invoice", "deactivate_issuer", "restore_issuer"])
+def test_compact_review_keeps_every_changed_value_and_warning(client, operation):
+    token = policy_grant(client, client_approvals=True, **{operation: "confirm"})
+    if operation == "restore_issuer":
+        m._write_json(m.SELLER_FILE, {**m.load_seller(), "_deleted": True})
+    if operation == "delete_invoice":
+        (m.OUTPUT_DIR / "Rechnung_TEST.pdf").write_bytes(b"fictional archived document")
+        (m.OUTPUT_DIR / "Rechnung_TEST.json").write_text('{}')
+    before = snapshot()
+    pending = call(token, operation, **arguments(operation))
+    private = pending["_client_approval"]
+    review = private["review"]
+    message = mcp_server.confirmation_message(private, operation)
+    assert snapshot() == before
+    assert private["connection"] in message and review["issuer"] in message
+    assert review["message"].split(" / ")[0] in message
+    assert review["language"] == "de"
+    for detail in review["details"]:
+        assert json.dumps(detail["before"], ensure_ascii=False) in message
+        assert json.dumps(detail["after"], ensure_ascii=False) in message
+    assert private["nonce"] not in message and "fingerprint" not in message
+    assert '"details"' not in message and '"invoice_snapshot"' not in message
+    if operation == "delete_invoice":
+        assert "dauerhaft gelöscht" in message and "nicht rückgängig" in message
+        assert "Rechnung_TEST.pdf" in message and "Rechnung_TEST.json" in message
+    if operation == "delete_customer":
+        assert "Kunden löschen" in message and "nicht rückgängig" in message
+
+
+def test_invoice_review_retains_business_data_without_serializing_unused_seller_data(client):
+    # A raw snapshot can include a huge logo, unrelated bank accounts and revisions.
+    seller = {**m.load_seller(), "logo": "PRIVATE-IMAGE-DATA", "_revision": "INTERNAL-REVISION",
+              "accounts": [{"iban": "UNUSED-ACCOUNT"}]}
+    m._write_json(m.SELLER_FILE, seller)
+    token = policy_grant(client, client_approvals=True, create_invoice="confirm", save_customer="confirm")
+    args = arguments("create_invoice")
+    args["invoice"].update(discount="10", discount_type="pct", discount_reason="Test discount",
+                           prepaid="50", prepaid_ref="PREPAYMENT-1", note="Full invoice note")
+    # No invoice is exported while its review is pending.
+    pending = call(token, "create_invoice", **args)
+    private = pending["_client_approval"]
+    review = private["review"]
+    message = mcp_server.confirmation_message(private)
+    invoice = review["invoice_snapshot"]
+    for record in [invoice["invoice"], invoice["buyer"], *invoice["items"], invoice["bank"]]:
+        for value in record.values():
+            if value is not None and value != "":
+                assert json.dumps(str(value), ensure_ascii=False) in message
+    for detail in review["details"]:
+        assert json.dumps(detail["after"], ensure_ascii=False) in message
+    assert "PRIVATE-IMAGE-DATA" not in message and "UNUSED-ACCOUNT" not in message
+    assert "INTERNAL-REVISION" not in message and private["nonce"] not in message
+    assert "Create invoice" not in message and "Rechnung erstellen" in message
+    assert not list(m.OUTPUT_DIR.glob("*.pdf"))
+
+
+def test_compact_review_delimits_multiline_values_and_uses_one_language():
+    name = 'Example / Client · Europe'
+    private = {"connection": "Test", "review": {
+        "language": "en", "title": "Customer", "issuer": "Example Studio",
+        "message": "Changes apply to all issuers.",
+        "details": [{"label": name + " · Address", "before": 'Street 1\n"Old"',
+                     "after": 'Street 2\n"New"'},
+                    {"label": name + " · Payment term", "before": "30", "after": "0"}],
+    }}
+    message = mcp_server.confirmation_message(private)
+    assert message.count(name) == 1
+    assert '"Street 1\\n\\"Old\\"" → "Street 2\\n\\"New\\""' in message
+    assert '"30" → "0"' in message
+    assert "Connection:" in message and "Confirming executes" in message
+    assert "Verbindung" not in message and "Bestätigen" not in message
 
 
 @pytest.mark.parametrize("client_support,opted_in", [(False, True), (True, False)])

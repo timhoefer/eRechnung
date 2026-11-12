@@ -65,6 +65,13 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    nur, solange offene Anfragen existieren. Lesen, Prüfen und Vorschauen benötigen
    keine einzelne Bestätigung. **Erlauben** führt die betreffende Änderungsaktion
    direkt aus; **Verbieten** lehnt sie ab, ohne eine Freigabeanfrage anzulegen.
+   Der Dialog zeigt Verbindung, Aussteller und die konkreten Änderungen als
+   **bisher → neu**. Bei Rechnungen kommen Rechnungsdaten, Kunde, Positionen und
+   das ausgewählte Zahlungskonto hinzu. Technische JSON-Strukturen, interne
+   Revisionen und Bilddaten werden nicht angezeigt. Größe und Darstellung des
+   Dialogs bestimmt der MCP-Client; eRechnung kann keine kleine oder in den Chat
+   eingebettete Darstellung erzwingen. Eine Bestätigung hält den betreffenden
+   Änderungsaufruf bis zur Entscheidung an.
 7. Jede Verbindung lässt sich mit ihrem eigenen Schalter pausieren und wieder
    einschalten. Schlüssel, Aussteller und Rechte bleiben erhalten. Beim Pausieren
    werden alle Aufrufe sofort gesperrt und ihre offenen Anfragen verworfen; diese
