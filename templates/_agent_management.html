@@ -33,7 +33,7 @@
     <div class="agent-connection-details">
       {% include '_agent_connection_permissions.html' %}
       <div class="agent-actions">
-        <a class="abtn" data-open-setup href="{{ url_for('agents_setup', identifier=connection.id) }}">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</a>
+        <a class="abtn" data-open-setup href="{{ url_for('agents_setup', identifier=connection.id) }}">{{ 'Verwalten' if de else 'Manage' }}</a>
         <form method="post" action="{{ url_for('agents_update') }}"{% if agent_settings %} class="agent-management-form"{% endif %}>
         {% if agent_settings %}<input type="hidden" name="return_to" value="settings">{% endif %}
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="connection" value="{{ id }}">
@@ -46,32 +46,47 @@
   </div>
   {% else %}
   <div class="export-box agent-connections-empty">
-    <p>{{ 'Noch keine Verbindung eingerichtet. Füge eine Verbindung hinzu, damit ein Agent Zugriff erhält.' if de else 'No connection set up yet. Add a connection to give an agent access.' }}</p>
-    <button type="button" class="small" id="agent-connection-add" aria-haspopup="dialog" aria-controls="agent-connection-dialog">{{ 'Verbindung hinzufügen' if de else 'Add connection' }}</button>
+    <p>{{ 'Lass deinen Assistenten Rechnungen vorbereiten und freigegebene Daten nutzen. Du bestimmst den Zugriff.' if de else 'Let your assistant prepare invoices and use the data you share. You control access.' }}</p>
+    <button type="button" class="small" id="agent-connection-add" aria-haspopup="dialog" aria-controls="agent-connection-dialog">{{ 'Assistent verbinden' if de else 'Connect assistant' }}</button>
   </div>
   {% endfor %}
 </section>
 <dialog class="modal agent-connection-dialog" id="agent-connection-dialog" aria-labelledby="agent-connection-title">
   <div class="agent-section-header">
-    <h2 id="agent-connection-title">{{ 'Neue Verbindung' if de else 'New connection' }}</h2>
+    <h2 id="agent-connection-title">{{ 'Assistent verbinden' if de else 'Connect assistant' }}</h2>
     <button type="button" class="secondary" data-close-connection aria-label="{{ t.close }}">&times;</button>
   </div>
   {% with step=1 %}{% include '_agent_setup_steps.html' %}{% endwith %}
-  <form data-agent-permissions method="post" action="{{ url_for('agents_update') }}"{% if agent_settings %} class="agent-management-form"{% endif %}>
+  <form data-agent-permissions data-agent-onboarding method="post" action="{{ url_for('agents_update') }}"{% if agent_settings %} class="agent-management-form"{% endif %}>
     {% if agent_settings %}<input type="hidden" name="return_to" value="settings">{% endif %}
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="connect">
-    <label>{{ 'Name der Verbindung (optional)' if de else 'Connection name (optional)' }}<input name="name" maxlength="80" autocomplete="off" autofocus placeholder="{{ 'Meine Verbindung' if de else 'My connection' }}"></label>
-    {% with grant={}, field_prefix='agent', permission_profiles=profiles|selectattr('available')|rejectattr('deleted')|list %}{% include '_agent_permission_fields.html' %}{% endwith %}
+    <section data-onboarding-page="1" aria-labelledby="agent-assistant-heading">
+      <h3 id="agent-assistant-heading" tabindex="-1">{{ 'Welchen Assistenten möchtest du verbinden?' if de else 'Which assistant would you like to connect?' }}</h3>
+      <p class="hint">{{ 'Die Verbindung läuft lokal auf diesem Computer. Wähle deinen Assistenten für die passende Anleitung.' if de else 'The connection runs locally on this computer. Choose your assistant for matching setup instructions.' }}</p>
+      <div class="agent-assistant-choices">
+        {% for value, name, note in [('chatgpt', 'ChatGPT', 'Desktop-App' if de else 'Desktop app'), ('codex', 'Codex', 'Desktop-App' if de else 'Desktop app'), ('claude', 'Claude', 'Desktop-App' if de else 'Desktop app'), ('other', 'Andere MCP-App' if de else 'Other MCP app', 'Lokale MCP-Verbindung' if de else 'Local MCP connection')] %}
+        <label class="agent-assistant-choice"><input type="radio" name="assistant" value="{{ value }}"><span><strong>{{ name }}</strong><small>{{ note }}</small></span></label>
+        {% endfor %}
+      </div>
+      <p class="agent-selection-error" data-assistant-error role="alert" hidden>{{ 'Bitte wähle einen Assistenten aus.' if de else 'Please choose an assistant.' }}</p>
+      <p class="hint">{{ 'Benötigt eine Desktop-App mit Unterstützung für lokale MCP-Server. Eine reine Web- oder Handy-App kann diesen Zugang nicht direkt nutzen.' if de else 'Requires a desktop app with local MCP server support. A web-only or mobile app cannot use this connection directly.' }}</p>
+      <div class="agent-actions"><button type="button" class="secondary" data-close-connection>{{ t.cancel }}</button><button type="button" data-onboarding-next>{{ 'Weiter' if de else 'Continue' }}</button></div>
+    </section>
+    <section data-onboarding-page="2" aria-labelledby="agent-access-heading" hidden>
+      <h3 id="agent-access-heading" tabindex="-1">{{ 'Zugriff prüfen' if de else 'Review access' }}</h3>
+      <p class="hint">{{ 'Freigegebene Daten können vom Assistenten an dessen Anbieter übertragen werden. Die Rechnungserstellung und Prüfung bleiben lokal.' if de else 'Your assistant may send shared data to its provider. Invoice creation and validation remain local.' }}</p>
+    {% with grant={}, field_prefix='agent', onboarding=true, permission_profiles=profiles|selectattr('available')|rejectattr('deleted')|list %}{% include '_agent_permission_fields.html' %}{% endwith %}
     <div class="agent-actions">
-      <button type="button" class="secondary" data-close-connection>{{ t.cancel }}</button>
+      <button type="button" class="secondary" data-onboarding-back>{{ 'Zurück' if de else 'Back' }}</button>
       <button type="submit">{{ 'Freigeben und weiter' if de else 'Grant and continue' }}</button>
     </div>
+    </section>
   </form>
 </dialog>
 {% endif %}
 <dialog class="modal agent-setup-dialog" id="agent-setup-dialog" aria-labelledby="agent-setup-title"{% if configuration %} open{% endif %}>
   <div class="agent-section-header">
-    <h2 id="agent-setup-title">{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</h2>
+    <h2 id="agent-setup-title">{{ 'Verbindung einrichten' if de else 'Set up connection' }}</h2>
     <button type="button" class="secondary" data-close-setup aria-label="{{ t.close }}">&times;</button>
   </div>
   <p class="hint" id="agent-setup-error" role="alert" hidden></p>

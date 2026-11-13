@@ -876,6 +876,27 @@ dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-hei
 .agent-setup-steps [aria-current="step"] .agent-step-number { background: var(--accent); border-color: var(--accent); color: #fff; }
 .agent-setup-steps .is-complete .agent-step-number { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
 .agent-setup-finish { justify-content: flex-end; }
+.agent-assistant-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+.agent-ui .agent-assistant-choice { flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; color: var(--ink); }
+.agent-assistant-choice input { width: auto; flex: none; }
+.agent-assistant-choice:has(input:checked) { border-color: var(--accent); background: var(--bg); }
+.agent-assistant-choice strong { display: block; font-size: var(--text-base); }
+.agent-assistant-choice small { display: block; margin-top: 4px; color: var(--muted); }
+.agent-access-summary, .agent-connect-guide { border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 20px 0; }
+.agent-access-summary p { margin: 10px 0 0; }
+.agent-access-summary .hint { margin-top: 10px; }
+.agent-connect-guide ol { padding-left: 22px; margin: 16px 0; }
+.agent-connect-guide li + li { margin-top: 12px; }
+.agent-connect-guide .hint { margin-bottom: 0; }
+.agent-access-customize, .agent-manual-setup { border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 20px 0; }
+.agent-access-customize > summary, .agent-manual-setup > summary { cursor: pointer; font-weight: 600; }
+.agent-access-customize[open] > summary, .agent-manual-setup[open] > summary { margin-bottom: 20px; }
+@media (max-width: 520px) {
+  .agent-assistant-choices { grid-template-columns: 1fr; }
+  .agent-setup-steps { gap: 8px; padding: 12px 8px; }
+  .agent-setup-steps li { flex-wrap: wrap; gap: 6px; }
+  .agent-step-arrow { display: none; }
+}
 .agent-connection-dialog h3 { margin-top: 24px; }
 .agent-connection-dialog .hint { color: var(--muted); }
 .agent-ui p[data-customer-mode] { margin-top: 12px; }

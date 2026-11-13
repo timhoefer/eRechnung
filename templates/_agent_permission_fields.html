@@ -1,5 +1,6 @@
     {% if permission_profiles|length == 1 and (not grant or grant.issuers == [permission_profiles[0].id]) %}
     <input type="hidden" name="issuers" value="{{ permission_profiles[0].id }}">
+    {% if onboarding %}<dl class="agent-permissions"><dt>{{ 'Aussteller' if de else 'Issuer' }}</dt><dd>{{ permission_profiles[0].label }}</dd></dl>{% endif %}
     {% elif permission_profiles %}
     <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
     <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
@@ -26,6 +27,16 @@
     </fieldset>
     <p class="hint" data-customer-mode="none">{{ 'Kein Zugriff auf Kundendaten, gespeicherte Positionen oder Rechnungen. Ausstellerdaten und allgemeine Rechnungsinformationen bleiben verfügbar.' if de else 'No access to customer data, saved items or invoices. Issuer details and general invoice information remain available.' }}</p>
     <p class="hint" data-customer-mode="all">{{ 'Gibt alle Kunden und ihre gespeicherten Positionen sowie die Archive der gewählten Aussteller frei. Das umfasst auch künftig angelegte Kunden und ältere Belege.' if de else 'Grants all customers and saved items, plus the selected issuers’ archives. This includes future customers and older invoices.' }}</p>
+    {% if onboarding %}
+    <div class="agent-access-summary" aria-live="polite">
+      <strong>{{ 'Aktionen' if de else 'Actions' }}</strong>
+      <p data-policy-summary>{{ 'Änderungen: nachfragen. Löschen und Deaktivieren: verboten.' if de else 'Changes: ask. Deletion and deactivation: denied.' }}</p>
+      <p class="hint" data-approval-summary>{{ 'Bestätigungen erfolgen in eRechnung.' if de else 'Confirmations appear in eRechnung.' }}</p>
+    </div>
+    <details class="agent-access-customize">
+      <summary>{{ 'Zugriff anpassen' if de else 'Customize access' }}</summary>
+      <label>{{ 'Name der Verbindung (optional)' if de else 'Connection name (optional)' }}<input name="name" maxlength="80" autocomplete="off" placeholder="{{ 'Meine Verbindung' if de else 'My connection' }}"></label>
+    {% endif %}
     <h3>{{ 'Aktionen' if de else 'Actions' }}</h3>
     <p class="hint">{{ 'Lege fest, was diese Verbindung ausführen darf. „Erlauben“ führt die Aktion ohne zusätzliche Bestätigung aus.' if de else 'Choose what this connection may do. “Allow” executes the operation without additional confirmation.' }}</p>
     <input type="hidden" name="permission_policy" value="1">
@@ -41,7 +52,7 @@
       ('delete_customer', ('Kunden löschen', 'Delete customers')),
       ('delete_invoice', ('Rechnungen löschen', 'Delete invoices'))] %}
       <label for="{{ field_prefix }}-{{ operation }}">{{ labels[0] if de else labels[1] }}</label>
-      <select id="{{ field_prefix }}-{{ operation }}" name="permission_{{ operation }}">
+      <select id="{{ field_prefix }}-{{ operation }}" name="permission_{{ operation }}" data-operation-label="{{ labels[0] if de else labels[1] }}">
         {% set recommended = 'deny' if operation in agent_destructive_operations else 'confirm' %}
         {% for value, texts in [('deny', ('Verbieten', 'Deny')), ('confirm', ('Nachfragen', 'Ask')), ('allow', ('Erlauben', 'Allow'))] %}
         {% if value != 'allow' or operation not in agent_destructive_operations %}<option value="{{ value }}"{% if policies[operation] == value %} selected{% endif %}>{{ texts[0] if de else texts[1] }}{% if value == recommended %}{{ ' (empfohlen)' if de else ' (recommended)' }}{% endif %}</option>{% endif %}
@@ -57,3 +68,4 @@
       </select>
     </label>
     <p class="hint">{{ 'Bei Bestätigung im Agenten vertraust du dessen App, deine Entscheidung korrekt zu übermitteln. eRechnung kann die menschliche Bestätigung dort nicht unabhängig nachweisen. Ohne Unterstützung bleibt die Anfrage in eRechnung verfügbar.' if de else 'For in-agent confirmation, you trust its app to relay your decision correctly. eRechnung cannot independently verify human approval there. Without support, the request remains available in eRechnung.' }}</p>
+    {% if onboarding %}</details>{% endif %}

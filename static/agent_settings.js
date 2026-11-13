@@ -9,7 +9,7 @@
       dialog.querySelectorAll('[data-close-connection]').forEach(button => {
         button.addEventListener('click', () => dialog.close());
       });
-      dialog.addEventListener('close', () => add.focus());
+      dialog.addEventListener('close', () => add.focus({ preventScroll: true }));
     }
     initPermissionForms();
   }
@@ -19,6 +19,11 @@
       initialized.add(form);
       let attempted = false;
       const mode = form.querySelector('[data-customer-access]');
+      const wizard = form.hasAttribute('data-agent-onboarding') ? initOnboarding(form) : null;
+      form.addEventListener('reset', () => {
+        attempted = false;
+        form.querySelectorAll('[aria-invalid]').forEach(option => option.removeAttribute('aria-invalid'));
+      });
       const validateSelections = () => {
         let firstInvalid = null;
         for (const name of ['issuers', 'customers']) {
@@ -36,6 +41,12 @@
         return firstInvalid;
       };
       form.addEventListener('submit', event => {
+        if (wizard && !wizard.ready()) {
+          event.preventDefault();
+          event.stopPropagation();
+          wizard.next();
+          return;
+        }
         attempted = true;
         const invalid = validateSelections();
         if (!invalid) return;
@@ -53,6 +64,71 @@
       mode.addEventListener('change', update);
       update();
     });
+  }
+  function initOnboarding(form) {
+    const dialog = form.closest('dialog');
+    const choices = [...form.querySelectorAll('input[name="assistant"]')];
+    const name = form.querySelector('input[name="name"]');
+    const placeholder = name.placeholder;
+    const error = form.querySelector('[data-assistant-error]');
+    const de = document.documentElement.lang === 'de';
+    let step = 1;
+    function showStep(value, focus = true) {
+      step = value;
+      form.querySelectorAll('[data-onboarding-page]').forEach(page => {
+        page.hidden = Number(page.dataset.onboardingPage) !== step;
+        if (!page.hidden && focus) page.querySelector('h3').focus({ preventScroll: true });
+      });
+      dialog.querySelectorAll('[data-setup-step]').forEach(item => {
+        const number = Number(item.dataset.setupStep);
+        if (number === step) item.setAttribute('aria-current', 'step');
+        else item.removeAttribute('aria-current');
+        item.classList.toggle('is-complete', number < step);
+      });
+      dialog.scrollTop = 0;
+    }
+    function next() {
+      const choice = choices.find(input => input.checked);
+      error.hidden = Boolean(choice);
+      if (!choice) { choices[0].focus(); return; }
+      name.placeholder = { chatgpt: 'ChatGPT', codex: 'Codex', claude: 'Claude' }[choice.value] || placeholder;
+      showStep(2);
+    }
+    const policies = [...form.querySelectorAll('[data-operation-label]')];
+    const location = form.querySelector('[name="client_approvals"]');
+    function summary() {
+      const labels = de ? { deny: 'Verboten', confirm: 'Nachfragen', allow: 'Erlaubt' }
+        : { deny: 'Denied', confirm: 'Ask', allow: 'Allowed' };
+      const defaults = policies.every(select => select.value ===
+        (['permission_deactivate_issuer', 'permission_delete_customer', 'permission_delete_invoice'].includes(select.name) ? 'deny' : 'confirm'));
+      form.querySelector('[data-policy-summary]').textContent = defaults
+        ? (de ? 'Änderungen: nachfragen. Löschen und Deaktivieren: verboten.' : 'Changes: ask. Deletion and deactivation: denied.')
+        : Object.entries(labels).flatMap(([value, label]) => {
+          const names = policies.filter(select => select.value === value).map(select => select.dataset.operationLabel);
+          return names.length ? [`${label}: ${names.join(', ')}.`] : [];
+        }).join(' ');
+      form.querySelector('[data-approval-summary]').textContent = location.value === 'yes'
+        ? (de ? 'Bestätigungen im Assistenten, wenn unterstützt; sonst in eRechnung.' : 'Confirmations in your assistant when supported; otherwise in eRechnung.')
+        : (de ? 'Bestätigungen erfolgen in eRechnung.' : 'Confirmations appear in eRechnung.');
+    }
+    form.querySelector('[data-onboarding-next]').addEventListener('click', next);
+    form.querySelector('[data-onboarding-back]').addEventListener('click', () => showStep(1));
+    form.addEventListener('change', () => {
+      if (choices.some(input => input.checked)) error.hidden = true;
+      summary();
+    });
+    // Cancelled drafts must not carry wider permissions into a later connection.
+    dialog.addEventListener('close', () => {
+      form.reset();
+      form.querySelectorAll('details').forEach(details => { details.open = false; });
+      form.querySelectorAll('[data-selection-error]').forEach(element => { element.hidden = true; });
+      error.hidden = true;
+      name.placeholder = placeholder;
+      form.querySelector('[data-customer-access]').dispatchEvent(new Event('change'));
+      summary();
+      showStep(1, false);
+    });
+    return { ready: () => step === 2, next };
   }
   function initializeConfiguration() {
     const tabs = document.getElementById('configuration-tabs');
@@ -82,7 +158,7 @@
           buttons[next].focus();
         });
       });
-      activate(buttons[0]);
+      activate(buttons.find(button => button.id === tabs.dataset?.initialTab) || buttons[0]);
       tabs.hidden = false;
     }
     const status = document.getElementById('configuration-copy-status');

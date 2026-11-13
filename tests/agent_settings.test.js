@@ -39,20 +39,20 @@ test('configuration is copied only after a click, including on the separate setu
   assert.equal(page.status.textContent, 'Copied');
 });
 
-test('tabs keep the same values and support arrow keys, Home and End without copying', async () => {
+for (const initial of ['json', 'values']) test(`tabs start on ${initial} and preserve values and keyboard navigation`, async () => {
   const elements = { 'configuration-copy-status': { textContent: 'Old message' } };
   const buttons = ['json', 'values'].map(name => {
     const panel = `configuration-${name}-panel`;
     elements[panel] = { hidden: false };
     return {
-      listeners: {}, attributes: { 'aria-controls': panel }, focused: false,
+      id: `configuration-${name}-tab`, listeners: {}, attributes: { 'aria-controls': panel }, focused: false,
       addEventListener(name, fn) { this.listeners[name] = fn; },
       setAttribute(name, value) { this.attributes[name] = value; },
       getAttribute(name) { return this.attributes[name]; },
       focus() { this.focused = true; },
     };
   });
-  elements['configuration-tabs'] = { hidden: true, querySelectorAll: () => buttons };
+  elements['configuration-tabs'] = { hidden: true, dataset: { initialTab: `configuration-${initial}-tab` }, querySelectorAll: () => buttons };
   const writes = [];
   const targets = {
     command: { value: '/Applications/e Rechnung "Test".app/Contents/MacOS/eRechnung' },
@@ -84,7 +84,7 @@ test('tabs keep the same values and support arrow keys, Home and End without cop
     assert.equal(prevented, true);
   }
   assert.equal(elements['configuration-tabs'].hidden, false);
-  selected(0);
+  selected(initial === 'json' ? 0 : 1);
   buttons[1].listeners.click();
   selected(1);
   assert.equal(elements['configuration-copy-status'].textContent, '');
@@ -104,6 +104,107 @@ test('tabs keep the same values and support arrow keys, Home and End without cop
   assert.equal(elements['configuration-copy-status'].textContent, '');
   await copies[3].click();
   assert.equal(writes.at(-1), targets.token.value);
+});
+
+test('onboarding never submits its first step, preserves drafts on Back and resets all grants on close', () => {
+  const node = (properties = {}) => ({
+    hidden: false, attributes: {}, listeners: {}, dataset: {},
+    addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); },
+    dispatchEvent(event) { (this.listeners[event.type] || []).forEach(fn => fn(event)); },
+    setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; },
+    focus() { this.focused = true; },
+    ...properties,
+  });
+  const assistant = node({ value: 'codex', checked: false });
+  const name = node({ value: '', placeholder: 'My connection' });
+  const issuer = node({ checked: false });
+  const customer = node({ checked: false });
+  const mode = node({ value: 'none' });
+  const location = node({ value: 'no' });
+  const policy = node({ name: 'permission_save_customer', value: 'confirm', dataset: { operationLabel: 'Edit customers' } });
+  const deletion = node({ name: 'permission_delete_customer', value: 'deny', dataset: { operationLabel: 'Delete customers' } });
+  const details = node({ open: false });
+  const selectionErrors = [node({ hidden: true }), node({ hidden: true })];
+  const error = node({ hidden: true });
+  const summary = node(), approvalSummary = node(), next = node(), back = node();
+  const group = node({ tagName: 'FIELDSET', dataset: { customerMode: 'selected' } });
+  const pages = [1, 2].map(step => node({ hidden: step === 2, dataset: { onboardingPage: String(step) }, querySelector: () => node() }));
+  const steps = [1, 2, 3].map(step => node({ dataset: { setupStep: String(step) }, classList: { toggle() {} } }));
+  const dialog = node({ querySelectorAll: () => steps });
+  const single = {
+    '[data-customer-access]': mode, 'input[name="name"]': name, '[data-assistant-error]': error,
+    '[name="client_approvals"]': location, '[data-policy-summary]': summary, '[data-approval-summary]': approvalSummary,
+    '[data-onboarding-next]': next, '[data-onboarding-back]': back,
+    '[data-selection-error="issuers"]': selectionErrors[0], '[data-selection-error="customers"]': selectionErrors[1],
+  };
+  const lists = {
+    'input[name="assistant"]': [assistant], 'input[name="issuers"]': [issuer], 'input[name="customers"]': [customer],
+    '[data-operation-label]': [policy, deletion], '[data-onboarding-page]': pages, details: [details],
+    '[data-customer-mode]': [group], '[data-selection-error]': selectionErrors, '[aria-invalid]': [issuer, customer],
+  };
+  const form = node({
+    hasAttribute: () => true, closest: () => dialog,
+    querySelector: selector => single[selector], querySelectorAll: selector => lists[selector] || [],
+    reset() {
+      this.dispatchEvent({ type: 'reset' });
+      assistant.checked = issuer.checked = customer.checked = false;
+      name.value = '';
+      mode.value = 'none'; location.value = 'no'; policy.value = 'confirm'; deletion.value = 'deny';
+    },
+  });
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
+    Event: class { constructor(type) { this.type = type; } }, window: {},
+    document: { documentElement: { lang: 'en' }, addEventListener() {}, getElementById() {},
+      querySelectorAll: selector => selector === 'form[data-agent-permissions]' ? [form] : [] },
+  });
+  function submit() {
+    const event = { type: 'submit', prevented: false, stopped: false,
+      preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    form.dispatchEvent(event);
+    assert.equal(event.prevented, event.stopped);
+    return event.prevented;
+  }
+  assert.equal(submit(), true);
+  assert.equal(error.hidden, false);
+  assert.equal(pages[1].hidden, true);
+  assistant.checked = true;
+  assert.equal(submit(), true); // Enter advances only; the grant POST cannot bubble.
+  assert.equal(pages[1].hidden, false);
+  assert.equal(steps[1].attributes['aria-current'], 'step');
+  assert.equal(name.placeholder, 'Codex');
+  assert.equal(submit(), true); // An issuer is still required.
+  issuer.checked = true;
+  mode.value = 'selected'; mode.dispatchEvent({ type: 'change' });
+  assert.equal(group.disabled, false);
+  assert.equal(submit(), true); // Empty customer selection stays blocked.
+  customer.checked = true;
+  policy.value = 'allow'; location.value = 'yes';
+  name.value = 'Draft'; details.open = true;
+  form.dispatchEvent({ type: 'change' });
+  assert.match(summary.textContent, /Allowed: Edit customers/);
+  assert.match(approvalSummary.textContent, /in your assistant/);
+  back.dispatchEvent({ type: 'click' });
+  assert.equal(pages[1].hidden, true);
+  assert.equal(submit(), true);
+  assert.equal(customer.checked, true);
+  assert.equal(policy.value, 'allow');
+  assert.equal(submit(), false); // Only the reviewed, valid second step may submit.
+  dialog.dispatchEvent({ type: 'close' }); // X, Escape and Cancel share this event.
+  assert.equal(pages[1].hidden, true);
+  assert.equal(details.open, false);
+  assert.equal(name.value, '');
+  assert.equal(name.placeholder, 'My connection');
+  assert.equal(mode.value, 'none');
+  assert.equal(group.disabled, true);
+  assert.equal(issuer.checked, false);
+  assert.equal(customer.checked, false);
+  assert.equal(policy.value, 'confirm');
+  assert.equal(deletion.value, 'deny');
+  assert.equal(location.value, 'no');
+  assert.match(summary.textContent, /Deletion and deactivation: denied/);
+  assert.match(approvalSummary.textContent, /in eRechnung/);
+  assert.equal(submit(), true);
 });
 
 for (const clipboard of [undefined, { writeText: async () => { throw new Error('Denied'); } }]) {
@@ -156,6 +257,7 @@ test('empty issuer or selected-customer groups block submission and recover with
   const mode = { value: 'selected', addEventListener() {} };
   const options = { hidden: false, disabled: false, tagName: 'FIELDSET', dataset: { customerMode: 'selected' } };
   const form = {
+    hasAttribute: () => false,
     querySelector: selector => selector === '[data-customer-access]' ? mode
       : selector.includes('issuers') ? issuerError : customerError,
     querySelectorAll: selector => selector === 'input[name="issuers"]' ? [issuer]

@@ -86,7 +86,7 @@ class Access:
         self.save(data)
 
     def create(self, name: str, issuers: list[str], writable: bool, directory: Path,
-               *, customer_mode="none", customer_ids=(), permissions=None, client_approvals=False):
+               *, customer_mode="none", customer_ids=(), permissions=None, client_approvals=False, assistant="other"):
         data = self.load()
         if not data.get("enabled") or len(data["connections"]) >= 20:
             raise AccessError("Enable access first; at most 20 connections are supported.")
@@ -102,6 +102,9 @@ class Access:
                 writable=any(value != "deny" for value in permissions.values()))
         if client_approvals:
             data["connections"][identifier]["client_approvals"] = True
+        if assistant != "other":
+            # Setup instructions only: the client choice never grants permissions.
+            data["connections"][identifier]["assistant"] = assistant
         self.save(data)
         return token
 

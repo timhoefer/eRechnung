@@ -29,6 +29,8 @@ from mcp_access import (
 )
 from mcp_contract import ITEM_FIELDS, TOOLS, validate
 
+ASSISTANTS = {"chatgpt": "ChatGPT", "codex": "Codex", "claude": "Claude", "other": ""}
+
 
 def publish_endpoint(m, url):
     # Publish even with the feature off so the bridge reuses this instance and
@@ -51,11 +53,11 @@ def register(m):
     def csrf():
         return session.setdefault("mcp_csrf", secrets.token_urlsafe(32))
 
-    def connection_name():
+    def connection_name(assistant="other"):
         name = request.form.get("name", "").strip()
         if len(name) > 80:
             abort(400)
-        return name or ("Meine Verbindung" if m.get_ui_lang(request) == "de" else "My connection")
+        return name or ASSISTANTS[assistant] or ("Meine Verbindung" if m.get_ui_lang(request) == "de" else "My connection")
 
     def disclaimer(active):
         text = m.translate(m.get_ui_lang(request))
@@ -299,11 +301,14 @@ def register(m):
                     return render_template("agent_revoke.html", **context)
                 access.revoke(identifier)
             elif action == "connect":
-                name = connection_name()
+                assistant = request.form.get("assistant", "other")
+                if assistant not in ASSISTANTS:
+                    abort(400)
+                name = connection_name(assistant)
                 state = access.load()
                 if not state.get("enabled") or len(state["connections"]) >= 20:
                     raise AccessError("Enable access first; at most 20 connections are supported.")
-                token = access.create(name, directory=m.DATA_DIR, **permission_fields())
+                token = access.create(name, directory=m.DATA_DIR, assistant=assistant, **permission_fields())
             else:
                 abort(400)
             if in_settings:

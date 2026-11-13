@@ -1,5 +1,5 @@
 {% set de = lang == "de" %}
-  {% if new_connection %}{% with step=2 %}{% include '_agent_setup_steps.html' %}{% endwith %}{% endif %}
+  {% if new_connection %}{% with step=3 %}{% include '_agent_setup_steps.html' %}{% endwith %}{% endif %}
   {% if configuration %}<h2>{{ connection.name }}</h2>
   {% else %}
   <form method="post" action="{{ url_for('agents_setup', identifier=connection.id) }}">

@@ -34,30 +34,43 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    **Abbrechen** erhält den bisherigen Zustand. Hat sich die Liste seit der
    Anzeige geändert, muss sie vor dem Ausschalten erneut geprüft werden.
 3. Direkt darunter zeigt **Verbindungen**, ob bereits ein Zugang eingerichtet ist.
-   Mit **Verbindung hinzufügen** (später **+**) eine neue Verbindung
-   anlegen. In Schritt **1 · Verbindung freigeben** optional einen Namen eingeben
-   (sonst **Meine Verbindung**) und die gewünschten aktiven Aussteller wählen.
+   Mit **Assistent verbinden** (später **+**) die Einrichtung öffnen. In Schritt
+   **1 · Assistent** ChatGPT, Codex, Claude oder eine andere lokale MCP-App wählen.
+   Diese Auswahl passt nur die Anleitung und den vorgeschlagenen Verbindungsnamen
+   an; sie vergibt keine Rechte und installiert nichts im Assistenten.
+   In Schritt **2 · Zugriff** die gewünschten aktiven Aussteller wählen.
    Deaktivierte Aussteller werden bei neuen Verbindungen nicht angeboten. Bereits
    erteilte Archivfreigaben bleiben für die Historie und Korrekturen erhalten.
    Unter **Kundenzugriff** zwischen **Keine Kundendaten**, **Nur ausgewählte Kunden**
    (Mehrfachauswahl) und **Alle Kunden** wählen. Neue Verbindungen starten ohne
    Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
    Prüfen und Vorschau beschränkt.
-4. Unter **Aktionen** jede Änderungsaktion auf **Verbieten**, **Nachfragen** oder
+4. Die Zusammenfassung zeigt die Aktionsrechte und den Ort der Bestätigung.
+   Unter **Zugriff anpassen** lassen sich ein optionaler Name und einzelne Rechte
+   festlegen. Ohne Namen wird der gewählte Assistent verwendet, bei anderen Apps
+   **Meine Verbindung**. Unter **Aktionen** jede Änderungsaktion auf **Verbieten**, **Nachfragen** oder
    **Erlauben** setzen. Neue Verbindungen starten für Aussteller deaktivieren,
    Kunden löschen und Rechnungen löschen mit **Verbieten (empfohlen)**;
    für die übrigen Aktionen ist **Nachfragen (empfohlen)** vorausgewählt.
    Löschen und Deaktivieren bieten nur Verbieten/Nachfragen.
    Unter **Wo soll nachgefragt werden?** optional **Im Agenten, wenn unterstützt**
    wählen; standardmäßig wird weiterhin in eRechnung bestätigt.
-   **Freigeben und weiter** erstellt die Verbindung und öffnet Schritt 2.
-5. In Schritt **2 · Im Agenten einrichten** die einmalig angezeigte Konfiguration
-   in den MCP-Client übernehmen und den Dialog mit **Fertig** schließen. Manche
+   Erst **Freigeben und weiter** erstellt die Verbindung und öffnet Schritt 3.
+   **Zurück** erhält die ungespeicherte Auswahl. **Abbrechen**, Escape oder **X**
+   verwirft den Entwurf einschließlich aller Rechteänderungen.
+5. In Schritt **3 · Verbinden** der Anleitung für den gewählten Assistenten folgen.
+   Unter **Einrichtungsdaten anzeigen** die einmalig angezeigte Konfiguration
+   in den MCP-Client übernehmen und den Dialog mit **Fertig** schließen. Die lokale
+   Einrichtung erfordert eine Desktop-App mit STDIO-Unterstützung; ein entfernter
+   Server für Web- oder Mobil-Clients wird nicht bereitgestellt. Manche
    Clients benötigen statt des `mcpServers`-Blocks ein eigenes Konfigurationsformat;
    Befehl, Argumente und Umgebungsvariablen bleiben dieselben. Der Tab **Einzelne
    Werte** bietet dafür Kopierbuttons für den Startbefehl, jedes Argument sowie
    die Namen und Werte aller Umgebungsvariablen. Beide Ansichten enthalten denselben
    Schlüssel und sind nur unmittelbar nach dem Anlegen oder Erneuern verfügbar.
+   ChatGPT/Codex starten mit den einzelnen Werten, Claude und andere Apps mit der
+   vollständigen Konfiguration. Zum Prüfen anschließend im Assistenten fragen:
+   „Welche Aussteller darfst du in eRechnung sehen?“
 6. Bei **Nachfragen** zeigt ein unterstützender MCP-Client nach entsprechender
    Freigabe einen Bestätigungsdialog. Ohne Unterstützung oder bei einem
    Dialogfehler bleibt die Anfrage in eRechnung verfügbar. Unter **Aktionsanfragen
@@ -79,7 +92,7 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    **Zugang löschen** zeigt zuerst eine Warnung und widerruft den Schlüssel nach
    **Dauerhaft löschen** endgültig. Für einen späteren Zugriff ist dann eine neue
    Verbindung nötig. Rechnungen und gespeicherte Daten bleiben erhalten.
-8. **Konfiguration einrichten** öffnet einen Dialog direkt über der jeweiligen
+8. **Verwalten** öffnet einen Dialog direkt über der jeweiligen
    Verbindung. Der Dialog übernimmt die Sprache der App. Die Schrittanzeige
    erscheint nur beim Anlegen einer neuen Verbindung. Hier lassen sich der Name
    mit **Namen speichern** und Aussteller-, Kunden- und Änderungsrechte mit
@@ -255,7 +268,7 @@ Originalrechnung als `correction_source` mit derselben Kundenkennung.
 und allgemeine Werkzeuge bleiben zugänglich. **Alle Kunden** umfasst ausdrücklich
 auch neue Kunden und alte Belege. Bereits bestehende Verbindungen ohne diese
 neue Einstellung behalten ihren bisherigen vollständigen Kundenzugriff. Um sie
-einzuschränken, die Freigaben unter **Konfiguration einrichten** bearbeiten und bestätigen.
+einzuschränken, die Freigaben unter **Verwalten** bearbeiten und bestätigen.
 Die Verbindungskarte zeigt ihren aktuellen Kundenumfang.
 
 ## Bestätigung einer Änderung

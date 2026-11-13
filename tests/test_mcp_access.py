@@ -772,7 +772,7 @@ def test_inline_settings_show_setup_state_and_manage_connections(client, languag
     assert enabled.status_code == 200
     page = html.fromstring(enabled.json["management"])
     assert page.get_element_by_id("agent-connection-add").text.strip() == (
-        "Verbindung hinzufügen" if language == "de" else "Add connection")
+        "Assistent verbinden" if language == "de" else "Connect assistant")
     assert not access.load()["connections"]
     assert snapshot() == before
     created = update("connect", name="Fictional connection", issuers=["default"], write="yes", customer_mode="all")
