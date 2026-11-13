@@ -27,6 +27,8 @@
       initialized.add(form);
       let attempted = false;
       const mode = form.querySelector('[data-customer-access]');
+      const location = form.querySelector('[name="client_approvals"]');
+      const approvalHint = form.querySelector('[data-agent-approval-hint]');
       const wizard = form.hasAttribute('data-agent-onboarding') ? initOnboarding(form) : null;
       form.addEventListener('reset', () => {
         attempted = false;
@@ -60,12 +62,18 @@
       });
       form.addEventListener('change', validateSelections);
       const update = () => {
+        if (approvalHint) {
+          approvalHint.hidden = location.value !== 'yes';
+          if (approvalHint.hidden) location.removeAttribute('aria-describedby');
+          else location.setAttribute('aria-describedby', approvalHint.id);
+        }
         form.querySelectorAll('[data-customer-mode]').forEach(element => {
           element.hidden = element.dataset.customerMode !== mode.value;
           if (element.tagName === 'FIELDSET') element.disabled = element.hidden;
         });
       };
       mode.addEventListener('change', update);
+      location?.addEventListener('change', update);
       update();
     });
   }

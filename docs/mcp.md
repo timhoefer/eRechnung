@@ -41,14 +41,16 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    In Schritt **2 · Zugriff** die gewünschten aktiven Aussteller wählen.
    Deaktivierte Aussteller werden bei neuen Verbindungen nicht angeboten. Bereits
    erteilte Archivfreigaben bleiben für die Historie und Korrekturen erhalten.
-   Unter **Kundenzugriff** ist **Nur ausgewählte Kunden** voreingestellt, ohne
-   vorausgewählte Kunden. Mindestens einen Kunden auswählen (Mehrfachauswahl)
-   oder ausdrücklich **Alle Kunden** wählen. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
+   Unter **Kundenzugriff** ist **Alle Kunden** voreingestellt. Dies umfasst auch
+   künftig angelegte Kunden und ältere Belege der freigegebenen Aussteller.
+   Alternativ **Nur ausgewählte Kunden** wählen und mindestens einen Kunden
+   auswählen; dabei sind keine Kunden vorausgewählt. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
    Prüfen und Vorschau beschränkt.
 4. Die Zusammenfassung zeigt die Aktionsrechte. **Wo soll nachgefragt werden?**
    ist direkt sichtbar und steht bei neuen Verbindungen auf **Im Agenten, wenn
    unterstützt**. Ohne Unterstützung bleibt die Anfrage in eRechnung verfügbar.
-   Alternativ **In eRechnung** wählen. Bestehende Verbindungen behalten ihre Wahl.
+   Der kontextuelle Hinweis zur Bestätigung im Agenten erscheint nur bei dieser
+   Auswahl. Alternativ **In eRechnung** wählen. Bestehende Verbindungen behalten ihre Wahl.
    Unter **Zugriff anpassen** lassen sich ein optionaler Name und einzelne Rechte
    festlegen. Ohne Namen wird der gewählte Assistent verwendet, bei anderen Apps
    **Meine Verbindung**. Unter **Aktionen** jede Änderungsaktion auf **Verbieten**, **Nachfragen** oder

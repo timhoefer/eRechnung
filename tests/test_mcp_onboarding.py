@@ -27,13 +27,12 @@ def test_assistant_choice_preserves_safe_defaults_and_one_time_configuration(cli
     form, fields = onboarding(client)
     assert not access.load()["connections"]
     assert form.xpath('.//input[@name="assistant"]/@value') == ["chatgpt", "codex", "claude", "other"]
-    assert fields["customer_mode"] == "selected" and fields["client_approvals"] == "yes"
+    assert fields["customer_mode"] == "all" and fields["client_approvals"] == "yes"
     location, = form.xpath('.//select[@name="client_approvals"]')
     assert not location.xpath('ancestor::details')
     assert "customers" not in fields
     assert fields["issuers"] == "default"
     fields["assistant"] = assistant
-    fields["customers"], = form.xpath('.//input[@name="customers"]/@value')
     response = client.post(form.action, data=fields)
     assert response.status_code == 200
     token = configured_token(response)
@@ -42,6 +41,7 @@ def test_assistant_choice_preserves_safe_defaults_and_one_time_configuration(cli
     assert connection.get("assistant", "other") == assistant
     assert connection["permissions"] == {op: "deny" if op in DESTRUCTIVE else "confirm" for op in WRITE_OPERATIONS}
     assert connection["client_approvals"] is True
+    assert connection["customer_mode"] == "all"
     assert [c["name"] for c in call(token, "list_customers")["customers"]] == [BUYER["name"]]
     before = snapshot()
     assert not call(token, "delete_customer", issuer="default", name=BUYER["name"])["ok"]
@@ -93,7 +93,6 @@ def test_onboarding_keeps_customer_scope_and_destructive_confirmation(client, as
 def test_invalid_assistant_or_disabled_opt_in_creates_no_access(client):
     configure(client, "enable", consent="yes")
     form, fields = onboarding(client)
-    fields["customers"], = form.xpath('.//input[@name="customers"]/@value')
     access = m.app.extensions["mcp_access"]
     before, data_before = access.load(), snapshot()
     fields["assistant"] = "unrecognized"
@@ -109,7 +108,6 @@ def test_invalid_assistant_or_disabled_opt_in_creates_no_access(client):
 def test_chosen_approval_location_keeps_mutations_pending_and_app_fallback_available(client, location):
     configure(client, "enable", consent="yes")
     form, fields = onboarding(client)
-    fields["customers"], = form.xpath('.//input[@name="customers"]/@value')
     fields["assistant"] = "codex"
     fields["client_approvals"] = location
     token = configured_token(client.post(form.action, data=fields))

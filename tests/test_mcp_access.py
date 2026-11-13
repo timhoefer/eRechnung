@@ -659,7 +659,7 @@ def test_new_connection_dialog_has_no_implicit_grant_and_groups_actions(client):
     assert dialog.tag == "dialog" and "open" not in dialog.attrib
     form, = dialog.xpath('.//form')
     values = dict(form.form_values())
-    assert values.get("customer_mode") == "selected" and "customers" not in values
+    assert values.get("customer_mode") == "all" and "customers" not in values
     assert "issuers" not in values and "write" not in values
     assert len(form.xpath('.//input[@name="issuers" and @type="checkbox"]')) == 2
     for cancel in dialog.xpath('.//button[@data-close-connection]'):

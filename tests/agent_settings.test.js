@@ -120,8 +120,9 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   const name = node({ value: '', placeholder: 'My connection' });
   const issuer = node({ checked: false });
   const customer = node({ checked: false });
-  const mode = node({ value: 'selected' });
+  const mode = node({ value: 'all' });
   const location = node({ value: 'yes' });
+  const approvalHint = node({ id: 'approval-hint' });
   const policy = node({ name: 'permission_save_customer', value: 'confirm', dataset: { operationLabel: 'Edit customers' } });
   const deletion = node({ name: 'permission_delete_customer', value: 'deny', dataset: { operationLabel: 'Delete customers' } });
   const details = node({ open: false });
@@ -135,7 +136,7 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   const dialog = node({ querySelectorAll: () => steps });
   const single = {
     '[data-customer-access]': mode, 'input[name="name"]': name, '[data-assistant-error]': error,
-    '[name="client_approvals"]': location, '[data-policy-summary]': summary,
+    '[name="client_approvals"]': location, '[data-agent-approval-hint]': approvalHint, '[data-policy-summary]': summary,
     '[data-onboarding-next]': next, '[data-onboarding-back]': back,
     '[data-selection-error="issuers"]': selectionErrors[0], '[data-selection-error="customers"]': selectionErrors[1],
     '[data-selection-group="assistant"]': assistantGroup, '[data-selection-group="issuers"]': issuerGroup,
@@ -154,7 +155,7 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
       this.dispatchEvent({ type: 'reset' });
       assistant.checked = issuer.checked = customer.checked = false;
       name.value = '';
-      mode.value = 'selected'; location.value = 'yes'; policy.value = 'confirm'; deletion.value = 'deny';
+      mode.value = 'all'; location.value = 'yes'; policy.value = 'confirm'; deletion.value = 'deny';
     },
   });
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
@@ -169,6 +170,9 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
     assert.equal(event.prevented, event.stopped);
     return event.prevented;
   }
+  assert.equal(approvalHint.hidden, false);
+  assert.equal(location.attributes['aria-describedby'], approvalHint.id);
+  assert.equal(group.disabled, true);
   assert.equal(submit(), true);
   assert.equal(error.hidden, false);
   assert.equal(assistantGroup.attributes['aria-invalid'], 'true');
@@ -184,12 +188,19 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   assert.equal(submit(), true); // An issuer is still required.
   assert.equal(issuerGroup.attributes['aria-invalid'], 'true');
   issuer.checked = true;
+  mode.value = 'selected'; mode.dispatchEvent({ type: 'change' });
   assert.equal(group.disabled, false);
   assert.equal(submit(), true); // Empty customer selection stays blocked.
   assert.equal(group.attributes['aria-invalid'], 'true');
   assert.equal(issuerGroup.attributes['aria-invalid'], undefined);
   customer.checked = true;
   policy.value = 'allow'; location.value = 'no';
+  location.dispatchEvent({ type: 'change' });
+  assert.equal(approvalHint.hidden, true);
+  assert.equal(location.attributes['aria-describedby'], undefined);
+  location.value = 'yes'; location.dispatchEvent({ type: 'change' });
+  assert.equal(approvalHint.hidden, false);
+  location.value = 'no'; location.dispatchEvent({ type: 'change' });
   name.value = 'Draft'; details.open = true;
   form.dispatchEvent({ type: 'change' });
   assert.match(summary.textContent, /Allowed: Edit customers/);
@@ -211,13 +222,15 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   assert.equal(details.open, false);
   assert.equal(name.value, '');
   assert.equal(name.placeholder, 'My connection');
-  assert.equal(mode.value, 'selected');
-  assert.equal(group.disabled, false);
+  assert.equal(mode.value, 'all');
+  assert.equal(group.disabled, true);
   assert.equal(issuer.checked, false);
   assert.equal(customer.checked, false);
   assert.equal(policy.value, 'confirm');
   assert.equal(deletion.value, 'deny');
   assert.equal(location.value, 'yes');
+  assert.equal(approvalHint.hidden, false);
+  assert.equal(location.attributes['aria-describedby'], approvalHint.id);
   assert.match(summary.textContent, /Deletion and deactivation: denied/);
   assert.equal(submit(), true);
 });

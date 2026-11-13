@@ -62,16 +62,16 @@ def seed_archive(name, buyer, customer_id=None):
 
 @pytest.mark.parametrize("language", ["de", "en"])
 @pytest.mark.parametrize("customers", [[], [BUYER], [BUYER, PRIVATE]])
-def test_new_grant_requires_explicit_customer_selection(client, language, customers):
+def test_new_grant_defaults_to_all_but_requires_an_explicit_scope_submission(client, language, customers):
     client.set_cookie("lang", language)
     m._write_json(m.CUSTOMERS_FILE, customers)
     assert configure(client, "enable", consent="yes").status_code == 200
     page = html.fromstring(client.get("/agents").data)
     mode = page.get_element_by_id("agent-customer-mode")
-    assert mode.value == "selected"
+    assert mode.value == "all"
     assert mode.xpath('./option/@value') == ["selected", "all"]
     group, = page.xpath('//*[@data-selection-group="customers"]')
-    assert "hidden" not in group.attrib and "disabled" not in group.attrib
+    assert "hidden" in group.attrib and "disabled" in group.attrib
     assert len(group.xpath('.//input[@name="customers"]')) == len(customers)
     assert not group.xpath('.//input[@checked]')
     access = m.app.extensions["mcp_access"]

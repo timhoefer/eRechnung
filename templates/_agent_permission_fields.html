@@ -14,7 +14,7 @@
     <h3>{{ 'Kundenzugriff' if de else 'Customer access' }}</h3>
     {# Existing grants without customer scope retain their historical all-customer access.
        Old explicit "none" grants open with an empty selection, without changing the grant. #}
-    {% set customer_mode = 'all' if grant and grant.get('customer_mode', 'all') == 'all' else 'selected' %}
+    {% set customer_mode = 'all' if not grant or grant.get('customer_mode', 'all') == 'all' else 'selected' %}
     <label for="{{ field_prefix }}-customer-mode">{{ 'Freigegebene Kunden' if de else 'Permitted customers' }}
     <select data-customer-access id="{{ field_prefix }}-customer-mode" name="customer_mode">
       <option value="selected"{% if customer_mode == 'selected' %} selected{% endif %}>{{ 'Nur ausgewählte Kunden' if de else 'Selected customers only' }}</option>
@@ -38,12 +38,12 @@
     {% endif %}
     {% set client_approvals = grant.get('client_approvals', false) if grant else true %}
     <label for="{{ field_prefix }}-approval-location">{{ 'Wo soll nachgefragt werden?' if de else 'Where should confirmation appear?' }}
-      <select id="{{ field_prefix }}-approval-location" name="client_approvals">
+      <select id="{{ field_prefix }}-approval-location" name="client_approvals"{% if client_approvals %} aria-describedby="{{ field_prefix }}-approval-hint"{% endif %}>
         <option value="yes"{% if client_approvals %} selected{% endif %}>{{ 'Im Agenten, wenn unterstützt' if de else 'In the agent, when supported' }}</option>
         <option value="no"{% if not client_approvals %} selected{% endif %}>{{ 'In eRechnung' if de else 'In eRechnung' }}</option>
       </select>
     </label>
-    <p class="hint">{{ 'Bei Bestätigung im Agenten vertraust du dessen App, deine Entscheidung korrekt zu übermitteln. eRechnung kann die menschliche Bestätigung dort nicht unabhängig nachweisen. Ohne Unterstützung bleibt die Anfrage in eRechnung verfügbar.' if de else 'For in-agent confirmation, you trust its app to relay your decision correctly. eRechnung cannot independently verify human approval there. Without support, the request remains available in eRechnung.' }}</p>
+    <div class="callout callout-why" id="{{ field_prefix }}-approval-hint" data-agent-approval-hint{% if not client_approvals %} hidden{% endif %}>{{ 'Bei Bestätigung im Agenten vertraust du dessen App, deine Entscheidung korrekt zu übermitteln. eRechnung kann die menschliche Bestätigung dort nicht unabhängig nachweisen. Ohne Unterstützung bleibt die Anfrage in eRechnung verfügbar.' if de else 'For in-agent confirmation, you trust its app to relay your decision correctly. eRechnung cannot independently verify human approval there. Without support, the request remains available in eRechnung.' }}</div>
     {% if onboarding %}
     <details class="agent-access-customize">
       <summary>{{ 'Zugriff anpassen' if de else 'Customize access' }}</summary>

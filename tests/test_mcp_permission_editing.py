@@ -86,6 +86,11 @@ def test_existing_approval_location_is_not_changed_by_new_connection_default(cli
     before = access.load(), snapshot()
     form = edit_form(client, identifier, "permissions")
     assert form.fields["client_approvals"] == ("yes" if client_approvals else "no")
+    hint, = form.xpath('.//*[@data-agent-approval-hint]')
+    assert ("hidden" not in hint.attrib) == bool(client_approvals)
+    assert "callout-why" in hint.get("class", "")
+    location, = form.xpath('.//select[@name="client_approvals"]')
+    assert location.get("aria-describedby") == (hint.get("id") if client_approvals else None)
     assert (access.load(), snapshot()) == before
     assert permissions(client, identifier).status_code == 200
     current = access.authenticate(token, m.DATA_DIR)
