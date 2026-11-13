@@ -99,7 +99,6 @@
       showStep(2);
     }
     const policies = [...form.querySelectorAll('[data-operation-label]')];
-    const location = form.querySelector('[name="client_approvals"]');
     function summary() {
       const labels = de ? { deny: 'Verboten', confirm: 'Nachfragen', allow: 'Erlaubt' }
         : { deny: 'Denied', confirm: 'Ask', allow: 'Allowed' };
@@ -111,9 +110,6 @@
           const names = policies.filter(select => select.value === value).map(select => select.dataset.operationLabel);
           return names.length ? [`${label}: ${names.join(', ')}.`] : [];
         }).join(' ');
-      form.querySelector('[data-approval-summary]').textContent = location.value === 'yes'
-        ? (de ? 'Bestätigungen im Assistenten, wenn unterstützt; sonst in eRechnung.' : 'Confirmations in your assistant when supported; otherwise in eRechnung.')
-        : (de ? 'Bestätigungen erfolgen in eRechnung.' : 'Confirmations appear in eRechnung.');
     }
     form.querySelector('[data-onboarding-next]').addEventListener('click', next);
     form.querySelector('[data-onboarding-back]').addEventListener('click', () => showStep(1));

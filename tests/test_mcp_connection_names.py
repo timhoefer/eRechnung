@@ -33,6 +33,7 @@ def test_empty_connection_name_uses_localized_default(client, language, expected
     field, = form.xpath('.//input[@name="name"]')
     assert "required" not in field.attrib and field.get("placeholder") == expected
     fields = dict(form.form_values())
+    fields["customer_mode"] = "all"
     if name is None:
         fields.pop("name", None)
     else:

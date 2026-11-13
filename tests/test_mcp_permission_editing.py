@@ -27,7 +27,7 @@ def permissions(client, identifier, **changes):
 
 @pytest.mark.parametrize("active", [False, True])
 @pytest.mark.parametrize("writable", [False, True])
-@pytest.mark.parametrize("mode", ["none", "selected", "all"])
+@pytest.mark.parametrize("mode", ["selected", "all"])
 def test_edit_form_reflects_current_grant_and_unchanged_confirmation_preserves_it(client, active, writable, mode):
     token = scoped_grant(client, mode=mode, writable=writable)
     access = m.app.extensions["mcp_access"]
@@ -48,6 +48,49 @@ def test_edit_form_reflects_current_grant_and_unchanged_confirmation_preserves_i
     assert response.status_code == 200
     assert access.load() == before and snapshot() == data_before
     assert call(token, "list_customers")["ok"] == active
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_editing_legacy_no_customer_grant_requires_explicit_selection(client, language):
+    client.set_cookie("lang", language)
+    token = scoped_grant(client, mode="none")
+    access = m.app.extensions["mcp_access"]
+    connection = access.authenticate(token, m.DATA_DIR)
+    before = access.load(), snapshot()
+    form = edit_form(client, connection["id"], "permissions")
+    assert form.fields["customer_mode"] == "selected"
+    assert form.xpath('.//select[@name="customer_mode"]/option/@value') == ["selected", "all"]
+    assert not form.xpath('.//input[@name="customers" and @checked]')
+    # Opening, dismissing or submitting an empty selection cannot broaden access.
+    assert (access.load(), snapshot()) == before
+    assert client.post(form.action, data=MultiDict(form.form_values())).status_code == 403
+    assert (access.load(), snapshot()) == before
+    assert call(token, "list_customers")["customers"] == []
+    key, = form.xpath('.//input[@name="customers"]/@value')
+    assert permissions(client, connection["id"], customers=key).status_code == 200
+    current = access.authenticate(token, m.DATA_DIR)
+    assert current["customer_mode"] == "selected"
+    assert current["token_hash"] == connection["token_hash"]
+    assert [c["name"] for c in call(token, "list_customers")["customers"]] == [BUYER["name"]]
+
+
+@pytest.mark.parametrize("client_approvals", [None, False, True])
+def test_existing_approval_location_is_not_changed_by_new_connection_default(client, client_approvals):
+    token = grant(client)
+    access = m.app.extensions["mcp_access"]
+    identifier = access.authenticate(token, m.DATA_DIR)["id"]
+    if client_approvals is not None:
+        state = access.load()
+        state["connections"][identifier]["client_approvals"] = client_approvals
+        access.save(state)
+    before = access.load(), snapshot()
+    form = edit_form(client, identifier, "permissions")
+    assert form.fields["client_approvals"] == ("yes" if client_approvals else "no")
+    assert (access.load(), snapshot()) == before
+    assert permissions(client, identifier).status_code == 200
+    current = access.authenticate(token, m.DATA_DIR)
+    assert current.get("client_approvals", False) is bool(client_approvals)
+    assert current["token_hash"] == before[0]["connections"][identifier]["token_hash"]
 
 
 def test_confirmed_restrictions_apply_to_existing_key_and_discard_only_its_requests(client):

@@ -266,7 +266,7 @@ def test_generated_configuration_includes_start_but_test_configuration_does_not(
     publish_endpoint(m, "http://127.0.0.1:1")
     for test_mode in [False, True]:
         monkeypatch.setattr(m, "TEST_MODE", test_mode)
-        response = configure(client, "connect", name="Test agent", issuers=["default"])
+        response = configure(client, "connect", name="Test agent", issuers=["default"], customer_mode="all")
         config = json.loads(html.fromstring(response.data).get_element_by_id("mcp-configuration").text)
         env = config["mcpServers"]["erechnung"]["env"]
         assert env["ERECHNUNG_MCP"] == "1"

@@ -60,13 +60,32 @@ def seed_archive(name, buyer, customer_id=None):
     return stem.with_suffix(".pdf").name
 
 
-def test_new_grant_defaults_to_no_customer_access(client):
+@pytest.mark.parametrize("language", ["de", "en"])
+@pytest.mark.parametrize("customers", [[], [BUYER], [BUYER, PRIVATE]])
+def test_new_grant_requires_explicit_customer_selection(client, language, customers):
+    client.set_cookie("lang", language)
+    m._write_json(m.CUSTOMERS_FILE, customers)
     assert configure(client, "enable", consent="yes").status_code == 200
     page = html.fromstring(client.get("/agents").data)
-    assert page.get_element_by_id("agent-customer-mode").value == "none"
+    mode = page.get_element_by_id("agent-customer-mode")
+    assert mode.value == "selected"
+    assert mode.xpath('./option/@value') == ["selected", "all"]
+    group, = page.xpath('//*[@data-selection-group="customers"]')
+    assert "hidden" not in group.attrib and "disabled" not in group.attrib
+    assert len(group.xpath('.//input[@name="customers"]')) == len(customers)
+    assert not group.xpath('.//input[@checked]')
+    access = m.app.extensions["mcp_access"]
+    before = access.load(), snapshot()
+    # Omitting the field cannot silently create an unrestricted or unusable grant.
     response = configure(client, "connect", name="Default grant", issuers="default", write="yes")
-    config = json.loads(html.fromstring(response.data).get_element_by_id("mcp-configuration").text)
-    token = config["mcpServers"]["erechnung"]["env"]["ERECHNUNG_MCP_TOKEN"]
+    assert response.status_code == 403
+    assert (access.load(), snapshot()) == before
+    token = scoped_grant(client, mode="all", names=())
+    assert access.authenticate(token, m.DATA_DIR)["customer_mode"] == "all"
+
+
+def test_legacy_no_customer_access_stays_restricted(client):
+    token = scoped_grant(client, mode="none")
     filename = seed_archive("OLD", BUYER)
     before = snapshot()
     assert call(token, "list_customers")["customers"] == []

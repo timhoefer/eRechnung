@@ -57,7 +57,8 @@ def test_new_connection_denies_destructive_actions_and_asks_for_other_changes(cl
     page = html.fromstring(client.get("/agents").data)
     form, = page.xpath('//form[input[@name="action" and @value="connect"]]')
     fields = MultiDict(form.form_values())
-    assert fields["permission_policy"] == "1" and fields["client_approvals"] == "no"
+    assert fields["permission_policy"] == "1" and fields["client_approvals"] == "yes"
+    fields["customers"], = form.xpath('.//input[@name="customers"]/@value')
     expected = dict.fromkeys(WRITE_OPERATIONS, "confirm")
     expected.update(deactivate_issuer="deny", delete_customer="deny", delete_invoice="deny")
     for op in WRITE_OPERATIONS:

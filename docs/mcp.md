@@ -41,11 +41,14 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    In Schritt **2 · Zugriff** die gewünschten aktiven Aussteller wählen.
    Deaktivierte Aussteller werden bei neuen Verbindungen nicht angeboten. Bereits
    erteilte Archivfreigaben bleiben für die Historie und Korrekturen erhalten.
-   Unter **Kundenzugriff** zwischen **Keine Kundendaten**, **Nur ausgewählte Kunden**
-   (Mehrfachauswahl) und **Alle Kunden** wählen. Neue Verbindungen starten ohne
-   Kundenfreigabe. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
+   Unter **Kundenzugriff** ist **Nur ausgewählte Kunden** voreingestellt, ohne
+   vorausgewählte Kunden. Mindestens einen Kunden auswählen (Mehrfachauswahl)
+   oder ausdrücklich **Alle Kunden** wählen. Ohne Änderungsrecht bleiben freigegebene Daten auf Lesen,
    Prüfen und Vorschau beschränkt.
-4. Die Zusammenfassung zeigt die Aktionsrechte und den Ort der Bestätigung.
+4. Die Zusammenfassung zeigt die Aktionsrechte. **Wo soll nachgefragt werden?**
+   ist direkt sichtbar und steht bei neuen Verbindungen auf **Im Agenten, wenn
+   unterstützt**. Ohne Unterstützung bleibt die Anfrage in eRechnung verfügbar.
+   Alternativ **In eRechnung** wählen. Bestehende Verbindungen behalten ihre Wahl.
    Unter **Zugriff anpassen** lassen sich ein optionaler Name und einzelne Rechte
    festlegen. Ohne Namen wird der gewählte Assistent verwendet, bei anderen Apps
    **Meine Verbindung**. Unter **Aktionen** jede Änderungsaktion auf **Verbieten**, **Nachfragen** oder
@@ -53,8 +56,6 @@ ERECHNUNG_TEST_MODE=1 ERECHNUNG_MCP=1 eRechnung.app/Contents/MacOS/eRechnung
    Kunden löschen und Rechnungen löschen mit **Verbieten (empfohlen)**;
    für die übrigen Aktionen ist **Nachfragen (empfohlen)** vorausgewählt.
    Löschen und Deaktivieren bieten nur Verbieten/Nachfragen.
-   Unter **Wo soll nachgefragt werden?** optional **Im Agenten, wenn unterstützt**
-   wählen; standardmäßig wird weiterhin in eRechnung bestätigt.
    Erst **Freigeben und weiter** erstellt die Verbindung und öffnet Schritt 3.
    **Zurück** erhält die ungespeicherte Auswahl. **Abbrechen**, Escape oder **X**
    verwirft den Entwurf einschließlich aller Rechteänderungen.
@@ -264,8 +265,11 @@ nachträglich. Es gibt keine automatische Zuordnung alter Belege anhand des Name
 Korrekturen/Stornos benötigen bei eingeschränktem Zugriff eine freigegebene
 Originalrechnung als `correction_source` mit derselben Kundenkennung.
 
-**Keine Kundendaten** sperrt alle Kunden-/Belegaktionen; freigegebene Aussteller
-und allgemeine Werkzeuge bleiben zugänglich. **Alle Kunden** umfasst ausdrücklich
+Ältere Verbindungen mit **Keine Kundendaten** bleiben unverändert eingeschränkt:
+Kunden-/Belegaktionen sind gesperrt, freigegebene Aussteller und allgemeine Werkzeuge
+bleiben zugänglich. Diese Option wird nicht mehr angeboten. Beim Bearbeiten
+erscheint stattdessen **Nur ausgewählte Kunden** ohne Auswahl; erst das Auswählen
+und Bestätigen erteilt Kundenfreigaben. **Alle Kunden** umfasst ausdrücklich
 auch neue Kunden und alte Belege. Bereits bestehende Verbindungen ohne diese
 neue Einstellung behalten ihren bisherigen vollständigen Kundenzugriff. Um sie
 einzuschränken, die Freigaben unter **Verwalten** bearbeiten und bestätigen.

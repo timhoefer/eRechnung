@@ -619,7 +619,7 @@ def test_settings_opt_in_preserves_approval_and_updates_disclaimer(client, langu
     assert confirmation.xpath('//button[@data-agent-cancel and @type="button"]')
     confirm, confirm_fields = controls(review.json["confirmation"])
     # Another tab changes the connection after the warning was shown.
-    configure(client, "connect", name="Second connection", issuers=["default"])
+    configure(client, "connect", name="Second connection", issuers=["default"], customer_mode="all")
     stale = client.post(confirm.action, data=confirm_fields, headers=headers)
     assert stale.status_code == 409 and "Second connection" in stale.json["confirmation"]
     assert access.load()["enabled"] and len(access.load()["connections"]) == 2
@@ -659,7 +659,7 @@ def test_new_connection_dialog_has_no_implicit_grant_and_groups_actions(client):
     assert dialog.tag == "dialog" and "open" not in dialog.attrib
     form, = dialog.xpath('.//form')
     values = dict(form.form_values())
-    assert values.get("customer_mode") == "none"
+    assert values.get("customer_mode") == "selected" and "customers" not in values
     assert "issuers" not in values and "write" not in values
     assert len(form.xpath('.//input[@name="issuers" and @type="checkbox"]')) == 2
     for cancel in dialog.xpath('.//button[@data-close-connection]'):
@@ -690,7 +690,7 @@ def test_single_active_issuer_is_used_without_a_selector_and_never_retargeted(cl
     page = html.fromstring(client.get("/agents").data)
     form, = page.get_element_by_id("agent-connection-dialog").xpath('.//form')
     assert not form.xpath('.//input[@name="issuers" and @type="checkbox"]')
-    values = {**dict(form.form_values()), "name": "Sole issuer connection"}
+    values = {**dict(form.form_values()), "name": "Sole issuer connection", "customer_mode": "all"}
     assert values["issuers"] == sole_issuer
     response = client.post(form.action, data=values)
     assert response.status_code == 200
@@ -713,7 +713,7 @@ def test_new_connections_exclude_inactive_issuers_and_reject_stale_forms(client,
     page = html.fromstring(client.get("/agents").data)
     form, = page.get_element_by_id("agent-connection-dialog").xpath('.//form')
     assert OTHER in form.xpath('.//input[@name="issuers"]/@value')
-    stale = {**dict(form.form_values()), "name": "New connection", "issuers": OTHER}
+    stale = {**dict(form.form_values()), "name": "New connection", "issuers": OTHER, "customer_mode": "all"}
     seller_file = m.DATA_DIR / "issuers" / OTHER / "seller.json"
     seller = json.loads(seller_file.read_text())
     seller["_deleted"] = True

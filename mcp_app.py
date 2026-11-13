@@ -155,7 +155,8 @@ def register(m):
             allowed.update(existing["issuers"])
         if not issuers or not set(issuers) <= allowed:
             abort(400)
-        mode = request.form.get("customer_mode", "none")
+        mode = request.form.get("customer_mode", "selected")
+        # Keep explicit "none" for older clients; new forms require a selection.
         if mode not in {"none", "selected", "all"}:
             abort(400)
         ids = []

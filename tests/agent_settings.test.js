@@ -120,22 +120,22 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   const name = node({ value: '', placeholder: 'My connection' });
   const issuer = node({ checked: false });
   const customer = node({ checked: false });
-  const mode = node({ value: 'none' });
-  const location = node({ value: 'no' });
+  const mode = node({ value: 'selected' });
+  const location = node({ value: 'yes' });
   const policy = node({ name: 'permission_save_customer', value: 'confirm', dataset: { operationLabel: 'Edit customers' } });
   const deletion = node({ name: 'permission_delete_customer', value: 'deny', dataset: { operationLabel: 'Delete customers' } });
   const details = node({ open: false });
   const selectionErrors = [node({ hidden: true }), node({ hidden: true })];
   const error = node({ hidden: true });
   const assistantGroup = node(), issuerGroup = node();
-  const summary = node(), approvalSummary = node(), next = node(), back = node();
+  const summary = node(), next = node(), back = node();
   const group = node({ tagName: 'FIELDSET', dataset: { customerMode: 'selected' } });
   const pages = [1, 2].map(step => node({ hidden: step === 2, dataset: { onboardingPage: String(step) }, querySelector: () => node() }));
   const steps = [1, 2, 3].map(step => node({ dataset: { setupStep: String(step) }, classList: { toggle() {} } }));
   const dialog = node({ querySelectorAll: () => steps });
   const single = {
     '[data-customer-access]': mode, 'input[name="name"]': name, '[data-assistant-error]': error,
-    '[name="client_approvals"]': location, '[data-policy-summary]': summary, '[data-approval-summary]': approvalSummary,
+    '[name="client_approvals"]': location, '[data-policy-summary]': summary,
     '[data-onboarding-next]': next, '[data-onboarding-back]': back,
     '[data-selection-error="issuers"]': selectionErrors[0], '[data-selection-error="customers"]': selectionErrors[1],
     '[data-selection-group="assistant"]': assistantGroup, '[data-selection-group="issuers"]': issuerGroup,
@@ -154,7 +154,7 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
       this.dispatchEvent({ type: 'reset' });
       assistant.checked = issuer.checked = customer.checked = false;
       name.value = '';
-      mode.value = 'none'; location.value = 'no'; policy.value = 'confirm'; deletion.value = 'deny';
+      mode.value = 'selected'; location.value = 'yes'; policy.value = 'confirm'; deletion.value = 'deny';
     },
   });
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/agent_settings.js'), 'utf8'), {
@@ -184,22 +184,21 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   assert.equal(submit(), true); // An issuer is still required.
   assert.equal(issuerGroup.attributes['aria-invalid'], 'true');
   issuer.checked = true;
-  mode.value = 'selected'; mode.dispatchEvent({ type: 'change' });
   assert.equal(group.disabled, false);
   assert.equal(submit(), true); // Empty customer selection stays blocked.
   assert.equal(group.attributes['aria-invalid'], 'true');
   assert.equal(issuerGroup.attributes['aria-invalid'], undefined);
   customer.checked = true;
-  policy.value = 'allow'; location.value = 'yes';
+  policy.value = 'allow'; location.value = 'no';
   name.value = 'Draft'; details.open = true;
   form.dispatchEvent({ type: 'change' });
   assert.match(summary.textContent, /Allowed: Edit customers/);
-  assert.match(approvalSummary.textContent, /in your assistant/);
   back.dispatchEvent({ type: 'click' });
   assert.equal(pages[1].hidden, true);
   assert.equal(submit(), true);
   assert.equal(customer.checked, true);
   assert.equal(policy.value, 'allow');
+  assert.equal(location.value, 'no');
   assert.equal(submit(), false); // Only the reviewed, valid second step may submit.
   assert.equal(group.attributes['aria-invalid'], undefined);
   // Closing an invalid draft clears both the error message and its field highlight.
@@ -212,15 +211,14 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   assert.equal(details.open, false);
   assert.equal(name.value, '');
   assert.equal(name.placeholder, 'My connection');
-  assert.equal(mode.value, 'none');
-  assert.equal(group.disabled, true);
+  assert.equal(mode.value, 'selected');
+  assert.equal(group.disabled, false);
   assert.equal(issuer.checked, false);
   assert.equal(customer.checked, false);
   assert.equal(policy.value, 'confirm');
   assert.equal(deletion.value, 'deny');
-  assert.equal(location.value, 'no');
+  assert.equal(location.value, 'yes');
   assert.match(summary.textContent, /Deletion and deactivation: denied/);
-  assert.match(approvalSummary.textContent, /in eRechnung/);
   assert.equal(submit(), true);
 });
 
@@ -312,12 +310,10 @@ test('empty issuer or selected-customer groups block submission and recover with
   assert.equal(submit(), false);
   customer.checked = false;
   assert.equal(submit(), true);
-  for (const value of ['none', 'all']) {
-    mode.value = value;
-    listeners.change();
-    assert.equal(customerError.hidden, true);
-    assert.equal(submit(), false);
-  }
+  mode.value = 'all';
+  listeners.change();
+  assert.equal(customerError.hidden, true);
+  assert.equal(submit(), false);
   assert.equal(issuer.checked, true);
   // A single active issuer is submitted as a fixed hidden value, without a checkbox.
   issuer.checked = false;
