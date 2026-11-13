@@ -1,0 +1,16 @@
+<p class="hint">{{ ('Lesen und freigegebene Aktionen' if connection.writable else 'Nur lesen') if de else ('Read and permitted actions' if connection.writable else 'Read only') }}</p>
+<dl class="agent-permissions">
+  <dt>{{ 'Aussteller' if de else 'Issuers' }}</dt>
+  <dd><ul>{% for profile in profiles if profile.id in connection.issuers %}<li>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</li>{% endfor %}</ul></dd>
+  <dt>{{ 'Kunden' if de else 'Customers' }}</dt>
+  <dd>
+    {% set customer_mode = connection.get('customer_mode', 'all') %}
+    {% if customer_mode == 'all' %}{{ 'Alle Kunden' if de else 'All customers' }}
+    {% elif customer_mode == 'selected' %}<ul>{% for customer_id in connection.customer_ids %}<li>{{ customer_names.get(customer_id, 'Nicht mehr vorhanden' if de else 'No longer available') }}</li>{% endfor %}</ul>
+    {% else %}{{ 'Keine Freigabe' if de else 'No access' }}{% endif %}
+  </dd>
+  {% if connection.writable %}
+  <dt>{{ 'Bestätigungen' if de else 'Confirmations' }}</dt>
+  <dd>{{ ('Im Agenten, sonst in eRechnung' if connection.get('client_approvals') else 'In eRechnung') if de else ('In the agent, otherwise in eRechnung' if connection.get('client_approvals') else 'In eRechnung') }}</dd>
+  {% endif %}
+</dl>

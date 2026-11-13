@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ 'Agentenzugriff' if lang == 'de' else 'Agent access' }} · eRechnung</title>
+  {% include "_theme_script.html" %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_version('style.css') }}">
+
+</head>
+<body><main class="agent-page agent-ui">
+{% set de = lang == 'de' %}
+{% block content %}{% endblock %}
+</main>{% block scripts %}{% endblock %}</body></html>

@@ -1,0 +1,5 @@
+{% extends "agent_base.html" %}
+{% block content %}
+<section class="card">{% include '_agent_request_content.html' %}</section>
+<p><a href="{{ url_for('agents_settings') }}">{{ 'Zurück zum Agentenzugriff' if de else 'Back to agent access' }}</a></p>
+{% endblock %}

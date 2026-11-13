@@ -242,6 +242,9 @@ def archive_invoice(data: dict, pdf: bytes, xml: bytes, output: Path,
     sidecar["issuer_id"] = data.get("issuer_id", "default")
     identity = dict(sidecar, seller=seller_details(sidecar["seller"]))
     fingerprint = digest(canonical(identity))
+    # Identical re-exports keep their original metadata, including missing IDs.
+    if data.get("customer_id"):
+        sidecar["customer_id"] = data["customer_id"]
     stem = "Rechnung_" + safe_name(number)
     with data_lock(lock_directory or seller_file.parent):
         recover_archive(output, seller_file)

@@ -1,0 +1,76 @@
+    {% if permission_profiles|length == 1 and (not grant or grant.issuers == [permission_profiles[0].id]) %}
+    <input type="hidden" name="issuers" value="{{ permission_profiles[0].id }}">
+    {% if onboarding %}<dl class="agent-permissions"><dt>{{ 'Aussteller' if de else 'Issuer' }}</dt><dd>{{ permission_profiles[0].label }}</dd></dl>{% endif %}
+    {% elif permission_profiles %}
+    <h3>{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}</h3>
+    <p class="hint">{{ 'Die Freigabe gilt für die ausgewählten Aussteller im aktuellen Datenordner. Neue Aussteller sind nicht automatisch freigegeben.' if de else 'Permission applies to the selected issuers in the current data folder. New issuers are not automatically granted.' }}</p>
+    <div class="agent-selection-group" data-selection-group="issuers" role="group" aria-label="{{ 'Freigegebene Aussteller' if de else 'Permitted issuers' }}" aria-describedby="{{ field_prefix }}-issuers-error">
+    {% for profile in permission_profiles %}
+    <label class="agent-check"><input type="checkbox" name="issuers" value="{{ profile.id }}"{% if profile.id in grant.get('issuers', []) %} checked{% endif %} aria-describedby="{{ field_prefix }}-issuers-error"><span>{{ profile.label }}{{ ' (inaktiv)' if de and profile.deleted else ' (inactive)' if profile.deleted else '' }}</span></label>
+    {% endfor %}
+    </div>
+    {% endif %}
+    <p class="agent-selection-error" data-selection-error="issuers" id="{{ field_prefix }}-issuers-error" role="alert" tabindex="-1"{% if permission_profiles %} hidden{% endif %}>{% include '_agent_error_icon.html' %}<span>{{ ('Bitte wähle mindestens einen Aussteller aus.' if de else 'Please select at least one issuer.') if permission_profiles else ('Bitte lege zuerst aktive Stammdaten an.' if de else 'Please set up an active issuer first.') }}</span></p>
+    <h3>{{ 'Kundenzugriff' if de else 'Customer access' }}</h3>
+    {# Existing grants without customer scope retain their historical all-customer access.
+       Old explicit "none" grants open with an empty selection, without changing the grant. #}
+    {% set customer_mode = 'all' if not grant or grant.get('customer_mode', 'all') == 'all' else 'selected' %}
+    <label for="{{ field_prefix }}-customer-mode">{{ 'Freigegebene Kunden' if de else 'Permitted customers' }}
+    <select data-customer-access id="{{ field_prefix }}-customer-mode" name="customer_mode">
+      <option value="selected"{% if customer_mode == 'selected' %} selected{% endif %}>{{ 'Nur ausgewählte Kunden' if de else 'Selected customers only' }}</option>
+      <option value="all"{% if customer_mode == 'all' %} selected{% endif %}>{{ 'Alle Kunden' if de else 'All customers' }}</option>
+    </select>
+    </label>
+    <fieldset class="agent-customer-options" data-selection-group="customers" data-customer-mode="selected" aria-describedby="{{ field_prefix }}-customers-error"{% if customer_mode != 'selected' %} hidden disabled{% endif %}>
+      <legend>{{ 'Kunden auswählen' if de else 'Choose customers' }}</legend>
+      {% for customer in customer_choices %}
+      <label class="agent-check"><input type="checkbox" name="customers" value="{{ customer.key }}"{% if customer.selected %} checked{% endif %} aria-describedby="{{ field_prefix }}-customers-error"><span>{{ customer.name }}</span></label>
+      {% else %}<p class="hint">{{ 'Noch keine Kunden gespeichert.' if de else 'No saved customers yet.' }}</p>{% endfor %}
+      <p class="agent-selection-error" data-selection-error="customers" id="{{ field_prefix }}-customers-error" role="alert" tabindex="-1" hidden>{% include '_agent_error_icon.html' %}<span>{{ 'Bitte wähle mindestens einen Kunden aus oder ändere den Kundenzugriff.' if de else 'Please select at least one customer or change customer access.' }}</span></p>
+      <p class="hint">{{ 'Nur diese Kunden, ihre gespeicherten Positionen und eindeutig zugeordneten Belege werden freigegeben. Neue Kunden und ältere Belege ohne Zuordnung bleiben gesperrt.' if de else 'Only these customers, their saved items and unambiguously linked invoices are permitted. New customers and older invoices without a link remain blocked.' }}</p>
+    </fieldset>
+    <p class="hint" data-customer-mode="all">{{ 'Gibt alle Kunden und ihre gespeicherten Positionen sowie die Archive der gewählten Aussteller frei. Das umfasst auch künftig angelegte Kunden und ältere Belege.' if de else 'Grants all customers and saved items, plus the selected issuers’ archives. This includes future customers and older invoices.' }}</p>
+    {% if onboarding %}
+    <div class="agent-access-summary" aria-live="polite">
+      <strong>{{ 'Aktionen' if de else 'Actions' }}</strong>
+      <p data-policy-summary>{{ 'Änderungen: nachfragen. Löschen und Deaktivieren: verboten.' if de else 'Changes: ask. Deletion and deactivation: denied.' }}</p>
+    </div>
+    {% endif %}
+    {% set client_approvals = grant.get('client_approvals', false) if grant else true %}
+    <label for="{{ field_prefix }}-approval-location">{{ 'Wo soll nachgefragt werden?' if de else 'Where should confirmation appear?' }}
+      <select id="{{ field_prefix }}-approval-location" name="client_approvals"{% if client_approvals %} aria-describedby="{{ field_prefix }}-approval-hint"{% endif %}>
+        <option value="yes"{% if client_approvals %} selected{% endif %}>{{ 'Im Agenten, wenn unterstützt' if de else 'In the agent, when supported' }}</option>
+        <option value="no"{% if not client_approvals %} selected{% endif %}>{{ 'In eRechnung' if de else 'In eRechnung' }}</option>
+      </select>
+    </label>
+    <div class="callout callout-why" id="{{ field_prefix }}-approval-hint" data-agent-approval-hint{% if not client_approvals %} hidden{% endif %}>{{ 'Bei Bestätigung im Agenten vertraust du dessen App, deine Entscheidung korrekt zu übermitteln. eRechnung kann die menschliche Bestätigung dort nicht unabhängig nachweisen. Ohne Unterstützung bleibt die Anfrage in eRechnung verfügbar.' if de else 'For in-agent confirmation, you trust its app to relay your decision correctly. eRechnung cannot independently verify human approval there. Without support, the request remains available in eRechnung.' }}</div>
+    {% if onboarding %}
+    <details class="agent-access-customize">
+      <summary>{{ 'Zugriff anpassen' if de else 'Customize access' }}</summary>
+      <label>{{ 'Name der Verbindung (optional)' if de else 'Connection name (optional)' }}<input name="name" maxlength="80" autocomplete="off" placeholder="{{ 'Meine Verbindung' if de else 'My connection' }}"></label>
+    {% endif %}
+    <h3>{{ 'Aktionen' if de else 'Actions' }}</h3>
+    <p class="hint">{{ 'Lege fest, was diese Verbindung ausführen darf. „Erlauben“ führt die Aktion ohne zusätzliche Bestätigung aus.' if de else 'Choose what this connection may do. “Allow” executes the operation without additional confirmation.' }}</p>
+    <input type="hidden" name="permission_policy" value="1">
+    {% set policies = agent_permission_choices(grant) %}
+    <div class="agent-operation-permissions">
+    {% for operation, labels in [
+      ('create_invoice', ('Rechnungen erstellen', 'Create invoices')),
+      ('save_issuer', ('Ausstellerdaten bearbeiten', 'Edit issuer details')),
+      ('save_customer', ('Kunden anlegen und bearbeiten', 'Create and edit customers')),
+      ('save_customer_items', ('Gespeicherte Positionen bearbeiten', 'Edit saved items')),
+      ('restore_issuer', ('Aussteller reaktivieren', 'Reactivate issuers')),
+      ('deactivate_issuer', ('Aussteller deaktivieren', 'Deactivate issuers')),
+      ('delete_customer', ('Kunden löschen', 'Delete customers')),
+      ('delete_invoice', ('Rechnungen löschen', 'Delete invoices'))] %}
+      <label for="{{ field_prefix }}-{{ operation }}">{{ labels[0] if de else labels[1] }}</label>
+      <select id="{{ field_prefix }}-{{ operation }}" name="permission_{{ operation }}" data-operation-label="{{ labels[0] if de else labels[1] }}">
+        {% set recommended = 'deny' if operation in agent_destructive_operations else 'confirm' %}
+        {% for value, texts in [('deny', ('Verbieten', 'Deny')), ('confirm', ('Nachfragen', 'Ask')), ('allow', ('Erlauben', 'Allow'))] %}
+        {% if value != 'allow' or operation not in agent_destructive_operations %}<option value="{{ value }}"{% if policies[operation] == value %} selected{% endif %}>{{ texts[0] if de else texts[1] }}{% if value == recommended %}{{ ' (empfohlen)' if de else ' (recommended)' }}{% endif %}</option>{% endif %}
+        {% endfor %}
+      </select>
+    {% endfor %}
+    </div>
+    <p class="hint">{{ '„Rechnungen erstellen“ legt verbindliche Belege im Archiv ab. Änderungen an Kundendaten benötigen zusätzlich die entsprechende Kundenfreigabe. Ausstellerdaten umfassen auch Bankverbindungen. Löschen und Deaktivieren benötigen immer eine einzelne Bestätigung; vorhandene Belege werden nicht überschrieben.' if de else '“Create invoices” finalizes documents in the archive. Customer changes also require customer editing permission. Issuer details include bank accounts. Deletions and deactivation always require individual confirmation; existing documents are never overwritten.' }}</p>
+    {% if onboarding %}</details>{% endif %}

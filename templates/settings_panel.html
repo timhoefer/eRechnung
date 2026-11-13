@@ -230,6 +230,8 @@
   <p class="hint" style="margin-top:10px">{{ t.datadir_current }} <code>{{ data_dir }}</code></p>
 </div>
 
+{% if config.MCP_FEATURE %}{{ agent_settings_html|safe }}{% endif %}
+
 {% if lazy_deps %}
 <div id="deps-card"><div class="card"><p class="hint">{{ t.dep_checking }}</p></div></div>
 {% else %}

@@ -1,0 +1,9 @@
+{% extends "agent_base.html" %}
+{% block content %}
+<h1>{{ 'Konfiguration einrichten' if de else 'Set up configuration' }}</h1>
+<section class="card">
+  {% include '_agent_setup_content.html' %}
+</section>
+{% if configuration %}<p><a href="{{ url_for('agents_settings') }}">{{ 'Zurück zu den Verbindungen' if de else 'Back to connections' }}</a></p>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='agent_settings.js') }}?v={{ asset_version('agent_settings.js') }}"></script>{% endblock %}

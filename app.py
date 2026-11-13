@@ -61,6 +61,8 @@ from invoice_core import safe_name as safe_name
 from invoice_core import seller_accounts as seller_accounts
 from invoice_journal import JournalConflict, verify_csv_snapshots, verify_csv_source
 from issuer_store import seller_revision as seller_revision
+from mcp_app import publish_endpoint
+from mcp_app import register as register_mcp
 from version import __version__ as APP_VERSION
 from whats_new import ANNOUNCEMENT
 from zugferd import (
@@ -438,7 +440,8 @@ class ChangeConfirmationRequired(Exception):
         self.confirmation = confirmation
 
 
-def confirm_change(title: str, message: str, before, after, details: list[dict]) -> None:
+def confirm_change(title: str, message: str, before, after, details: list[dict],
+                   *, invoice_snapshot: dict | None = None, mcp_allow: bool = False) -> None:
     """Protect changes to saved data while DATA_LOCK is held.
 
     All handlers check before their first persistent side effect. The signature
@@ -446,12 +449,31 @@ def confirm_change(title: str, message: str, before, after, details: list[dict])
     """
     if not has_request_context():
         return
+    connection = g.get("mcp_connection")
+    # Only explicitly marked non-destructive call sites can use standing grants.
+    # Legacy grants and unmarked destructive call sites still require approval.
+    if (connection and connection.get("writable") is True and mcp_allow and g.get("mcp_policy") == "allow"):
+        return
     owner = session.setdefault("change_confirmation_owner", secrets.token_urlsafe(24))
     fields = request.form.to_dict(flat=False)
     fields.pop("_change_confirmation", None)
     payload = [str(DATA_DIR.resolve()), current_issuer(), request.path,
                request.args.to_dict(flat=False), fields, before, after]
+    if g.get("mcp_connection"):
+        # Display labels may change without changing the credential or its grant.
+        payload.append({key: value for key, value in g.mcp_connection.items() if key != "name"})
     fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    if g.get("mcp_connection"):
+        # Only the app's approval handler can supply this fingerprint. It is never
+        # accepted from tool arguments, bearer headers or an agent response.
+        if g.get("mcp_approved") != fingerprint:
+            raise ChangeConfirmationRequired({
+                "fingerprint": fingerprint, "title": title, "message": message, "details": details,
+                "issuer": issuer_label(load_seller()),
+                "language": get_ui_lang(request),
+                "invoice_snapshot": invoice_snapshot,
+            })
+        return
     token = request.headers.get("X-Change-Confirmation") or request.form.get("_change_confirmation", "")
     fresh = CHANGE_CONFIRMATIONS.check(token, owner, fingerprint)
     if fresh:
@@ -637,7 +659,7 @@ CORRECTION_ENDPOINTS = {
 
 @app.before_request
 def _select_issuer():
-    if request.endpoint in {"static", "change_confirmation_cancel"}:
+    if request.endpoint in {"static", "change_confirmation_cancel"} or (request.endpoint or "").startswith("agents_"):
         return
     values = request.args.getlist("issuer") + request.form.getlist("issuer")
     if len(set(values)) > 1:
@@ -817,6 +839,10 @@ def issuer_restore():
                     if original:
                         seller = {**original["seller"], **seller}
                         break
+            if g.get("mcp_policy") == "confirm":
+                confirm_change("Aussteller reaktivieren / Restore issuer", "Der Aussteller kann wieder Rechnungen erstellen. / The issuer can issue invoices again.",
+                               seller, {**seller, "_deleted": False},
+                               [{"label": issuer_label(seller), "before": "Inaktiv / Inactive", "after": "Aktiv / Active"}])
             # Reinstating an old default must not change the current startup choice.
             _write_json(SELLER_FILE.parent / "issuer_preferences.json", {"default_issuer": default_issuer()})
             seller.pop("_deleted", None)
@@ -904,8 +930,8 @@ def setlang(code):
     target = request.args.get("next", "")
     parsed = urlparse(target)
     # A form returned after a rejected POST must go back to a GET-capable URL.
-    # Accept only this app's invoice form, never an external redirect target.
-    if parsed.scheme or parsed.netloc or parsed.path != "/":
+    # Accept only known GET pages, never an external redirect target.
+    if parsed.scheme or parsed.netloc or parsed.path not in {"/", "/agents"}:
         target = request.referrer or url_for("index")
     resp = redirect(target)
     if code in LANGUAGES:
@@ -937,12 +963,12 @@ def save_seller_form() -> tuple[dict, int]:
     if updated_revision != current_revision:
         existing_details = any(seller.get(key) for key in (*SELLER_FIELDS, "logo", "accounts")
                                if key not in {"profile_label", "country", "bank_kind"})
-        if existing_details:
+        if existing_details or g.get("mcp_policy") == "confirm":
             details = change_details(seller, updated)
             if details:
                 ui = translate(get_ui_lang(request))
                 confirm_change(f'{ui["master"]}: {issuer_label(seller)}', ui["change_master_warning"],
-                               seller, updated, details)
+                               seller, updated, details, mcp_allow=True)
         save_seller(updated)
     return {"ok": True, "revision": updated_revision,
             "message": translate(get_ui_lang(request))["master_saved"]}, 200
@@ -1020,6 +1046,13 @@ def load_customers() -> list[dict]:
 def confirm_customer_changes(customers: list[dict]) -> None:
     if has_request_context():
         before = load_customers()
+        names = {c.get("name", "").lower() for c in before}
+        added = [c for c in customers if c.get("name", "").lower() not in names]
+        # Saving positions may implicitly create a customer. Both grants apply.
+        implicit_customer = bool(added) and g.get("mcp_operation") == "save_customer_items"
+        if implicit_customer and g.get("mcp_customer_policy") == "deny":
+            abort(403, "Creating a customer is not permitted for this connection.")
+        customer_confirmation = implicit_customer and g.get("mcp_customer_policy") == "confirm"
         details = []
         removed = False
         for old in before:
@@ -1033,10 +1066,15 @@ def confirm_customer_changes(customers: list[dict]) -> None:
             for detail in change_details(old, new):
                 detail["label"] = f'{old.get("name", "")} · {detail["label"]}'
                 details.append(detail)
+        if g.get("mcp_policy") == "confirm" or customer_confirmation:
+            details.extend({"label": new.get("name", "") + " · " + d["label"], **{k: d[k] for k in ("before", "after")}}
+                           for new in added
+                           for d in change_details({}, new))
         if details:
             ui = translate(get_ui_lang(request))
             confirm_change(ui["customer"], ui["change_customer_delete" if removed else "change_customer_warning"],
-                           before, customers, details)
+                           before, customers, details,
+                           mcp_allow=not removed and not customer_confirmation)
 
 
 def save_customers(customers: list[dict]) -> None:
@@ -1537,7 +1575,46 @@ def generate():
     # Review implicit customer changes before publishing any invoice files.
     # The shared lock keeps this reviewed state stable until the final write.
     customers = prepare_customer_update(data["buyer"])
-    confirm_customer_changes(customers)
+    # Authorization metadata stays outside PDF/XML and never retrofits old files.
+    matching = [c for c in customers if c.get("name", "").lower() == data["buyer"]["name"].lower()]
+    customer_id = matching[0].get("_customer_id") if len(matching) == 1 else None
+    if data["invoice"]["doc_type"] in {"381", "384"} and request.form.get("correction_source"):
+        original = correction_original(request.form["correction_source"]) or {}
+        # A correction with a changed recipient or unlinked original must not
+        # inherit either customer's grant, including when created through the UI.
+        if original.get("customer_id") != customer_id:
+            customer_id = None
+    if customer_id:
+        data["customer_id"] = customer_id
+    if g.get("mcp_connection"):
+        # One review covers both finalization and any implicit customer overwrite.
+        # Bind the current customer/issuer state as well as the exact invoice.
+        customer_changes = [
+            {"label": old.get("name", "") + " · " + d["label"], "before": d["before"], "after": d["after"]}
+            for old in load_customers() for new in customers
+            if old.get("name", "").lower() == new.get("name", "").lower()
+            for d in change_details(old, new)
+        ]
+        old_names = {c.get("name", "").lower() for c in load_customers()}
+        customer_changes.extend({"label": new.get("name", "") + " · " + d["label"], **{k: d[k] for k in ("before", "after")}}
+                                for new in customers if new.get("name", "").lower() not in old_names
+                                for d in change_details({}, new))
+        if customer_changes and g.get("mcp_customer_policy") == "deny":
+            return {"ok": False, "error": "customer_changes_forbidden",
+                    "message": "This invoice would save customer changes. Use the saved customer details or grant customer editing."}, 403
+        confirm_change(
+            "Rechnung erstellen / Create invoice", "Die Rechnung wird verbindlich im Archiv abgelegt. "
+            "Geänderte Kundendaten werden gespeichert. / This finalizes the invoice and saves changed customer data.",
+            {"seller": seller, "customers": load_customers()}, {"invoice": data, "customers": customers},
+            [{"label": "Rechnung / Invoice", "before": "—", "after": data["invoice"]["number"]},
+             {"label": "Kunde / Customer", "before": "—", "after": data["buyer"]["name"]},
+             {"label": "Brutto / Gross", "before": "—", "after": str(totals["grand_total"]) + " " + data["invoice"]["currency"]},
+             *customer_changes],
+            invoice_snapshot=data,
+            mcp_allow=not customer_changes or g.get("mcp_customer_policy") == "allow",
+        )
+    else:
+        confirm_customer_changes(customers)
 
     is_xr = data["invoice"]["profile"] == "xrechnung"
     xml = build_xml(data)
@@ -1584,6 +1661,10 @@ def generate():
         # Only update customer data after a successful final archive operation.
         _write_json(CUSTOMERS_FILE, customers)
 
+    if g.get("mcp_connection"):
+        return {"ok": valid, "filename": filename, "xml_filename": xml_filename,
+                "reused": reused, "messages": messages, "schematron": sch,
+                "totals": {k: str(v) for k, v in totals.items()}}
     return render_template(
         "result.html",
         filename=filename,
@@ -1808,7 +1889,7 @@ def check_updates():
     return info
 
 
-def _settings_context() -> dict:
+def _settings_context(*, archive_year: str | None = None) -> dict:
     """Gemeinsamer Kontext für die Einstellungen/Archiv (Vollseite + In-Place-Panel)."""
     archive = []
     ruleset = validation_ruleset()
@@ -1890,7 +1971,7 @@ def _settings_context() -> dict:
         )
     years = sorted({date.today().year, *(row["year"] for row in archive if row["year"] is not None)}, reverse=True)
     undated = any(row["year"] is None for row in archive)
-    year = request.args.get("year", str(date.today().year))
+    year = archive_year if archive_year is not None else request.args.get("year", str(date.today().year))
     if year not in {"all", "unknown"} and not re.fullmatch(r"[1-9][0-9]{3}", year):
         year = str(date.today().year)
     if year not in {"all", "unknown"} and int(year) not in years:
@@ -1913,6 +1994,7 @@ def _settings_context() -> dict:
                 for y, q in sorted({(row["year"], row["quarter"]) for row in archive if row["year"] is not None},
                                    key=lambda period: (-period[0], period[1]))]
     return {
+        "agent_settings_html": app.extensions["mcp_settings_fragment"]() if app.config.get("MCP_FEATURE") else "",
         "archive": archive,
         "archive_validation_unsaved": any(row["validation"] and not row["validation"]["saved"] for row in archive),
         "archive_quarters": quarters,
@@ -2297,8 +2379,11 @@ def _validate_request():
     })
 
 
-if __name__ == "__main__":
-    import os
+register_mcp(sys.modules[__name__])
+
+
+def main():
+    from mcp_connection import app_instance
 
     # Debugger standardmäßig AUS: der Werkzeug-Debugger erlaubt sonst bei jeder
     # Exception Code-Ausführung und leakt Quellcode/Variablen (z. B. Bankdaten).
@@ -2306,4 +2391,26 @@ if __name__ == "__main__":
     debug = os.environ.get("FLASK_DEBUG") == "1"
     if TEST_MODE:
         print(f"Testmodus: separater Datenordner {BASE}; wird beim Beenden entfernt.")
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5001 if TEST_MODE else 5000)), debug=debug)
+    with app_instance(BASE) as acquired:
+        if not acquired:
+            return
+        if "--mcp-start" in sys.argv:
+            import webbrowser
+
+            from werkzeug.serving import make_server
+
+            server = make_server("127.0.0.1", 0, app, threaded=True)
+            url = f"http://127.0.0.1:{server.server_port}"
+            publish_endpoint(sys.modules[__name__], url)
+            webbrowser.open(url)
+            server.serve_forever()
+        else:
+            port = int(os.environ.get("PORT", 5001 if TEST_MODE else 5000))
+            publish_endpoint(sys.modules[__name__], f"http://127.0.0.1:{port}")
+            # Keep the instance lock in the serving process, also during debugging.
+            # A reloader child would compete with its own parent for this lock.
+            app.run(host="127.0.0.1", port=port, debug=debug, use_reloader=False)
+
+
+if __name__ == "__main__":
+    main()

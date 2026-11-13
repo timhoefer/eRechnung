@@ -1,0 +1,13 @@
+{% extends "agent_base.html" %}
+{% block content %}
+<div class="agent-section-header"><h1>{{ 'Agentenzugriff' if de else 'Agent access' }}</h1>{% include '_agent_language_links.html' %}</div>
+<p class="hint">{{ 'Experimentell · Nur nach deiner Freigabe' if de else 'Experimental · Only with your permission' }}</p>
+{% include '_agent_management.html' %}
+{% set active_issuers = profiles|selectattr('available')|rejectattr('deleted')|map(attribute='id')|list %}
+{% set return_issuer = request.args.get('issuer') if request.args.get('issuer') in active_issuers else active_issuers|first %}
+<p><a href="{{ url_for('index', issuer=return_issuer, _anchor='agent-access-card') if active_issuers else url_for('validate') }}">{{ 'Zurück zu den Einstellungen' if de else 'Back to settings' }}</a></p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='agent_settings.js') }}?v={{ asset_version('agent_settings.js') }}"></script>
+<script src="{{ url_for('static', filename='agent_setup.js') }}?v={{ asset_version('agent_setup.js') }}"></script>
+{% endblock %}

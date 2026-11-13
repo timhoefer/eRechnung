@@ -1,0 +1,9 @@
+<ol class="agent-setup-steps" aria-label="{{ 'Verbindung einrichten' if de else 'Set up connection' }}">
+  {% for label in [('Assistent' if de else 'Assistant'), ('Zugriff' if de else 'Access'), ('Verbinden' if de else 'Connect')] %}
+  <li data-setup-step="{{ loop.index }}"{% if loop.index == step %} aria-current="step"{% elif loop.index < step %} class="is-complete"{% endif %}>
+    <span class="agent-step-number" aria-hidden="true">{{ loop.index }}</span>
+    <span>{{ label }}</span>
+    {% if not loop.last %}<svg class="agent-step-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 12h16M14 6l6 6-6 6"/></svg>{% endif %}
+  </li>
+  {% endfor %}
+</ol>

@@ -1,0 +1,24 @@
+{% set de = lang == 'de' %}
+  <form class="agent-toggle-row{{ ' agent-access-form' if agent_settings else '' }}" method="post" action="{{ url_for('agents_update') }}">
+    {% if agent_settings %}<input type="hidden" name="return_to" value="settings">{% endif %}
+    <input type="hidden" name="csrf" value="{{ agent_csrf }}">
+    <input type="hidden" name="action" value="{{ 'disable' if agent_enabled else 'enable' }}">
+    {% if not agent_enabled %}<input type="hidden" name="consent" value="yes">{% endif %}
+    <h2 id="agent-access-label">{{ 'Agentenzugriff erlauben' if de else 'Allow agent access' }}</h2>
+    <span class="agent-toggle-control">
+      <span class="hint" aria-hidden="true">{{ ('Ein' if agent_enabled else 'Aus') if de else ('On' if agent_enabled else 'Off') }}</span>
+      <button class="agent-toggle" type="submit" role="switch" aria-checked="{{ 'true' if agent_enabled else 'false' }}"
+              {% if agent_access_unavailable %}disabled{% endif %}
+              aria-labelledby="agent-access-label" aria-describedby="agent-access-notice agent-access-effect">
+        <span aria-hidden="true"></span>
+      </button>
+    </span>
+  </form>
+  {% if agent_access_unavailable %}<p role="alert">{{ 'Agenteneinstellungen konnten nicht gelesen werden. Agentenzugriff bleibt gesperrt.' if de else 'Agent settings could not be read. Agent access remains blocked.' }}</p>{% endif %}
+  <p id="agent-access-effect">{% if agent_enabled %}{{ 'Nur eingerichtete Verbindungen erhalten Zugriff. Ausschalten widerruft alle Zugänge und offenen Anfragen.' if de else 'Only configured connections have access. Turning this off revokes all connections and pending requests.' }}
+  {% else %}
+  {{ 'Mit dem Einschalten erlaubst du Agentenzugriff. Anschließend wählst du für jede Verbindung die freigegebenen Aussteller und Rechte.' if de else 'Turning this on allows agent access. Then choose the permitted issuers and permissions for each connection.' }}{% endif %}</p>
+  <p class="hint" id="agent-access-notice">{{ 'Freigegebene Daten können vom Agenten an dessen Anbieter übertragen werden. eRechnung erstellt und prüft Rechnungen weiterhin lokal.' if de else 'The agent may send granted data to its provider. eRechnung continues to create and validate invoices locally.' }}</p>
+  {% if agent_settings %}
+  <p class="hint" data-agent-error role="alert" hidden>{{ t.action_failed }}</p>
+  {% endif %}

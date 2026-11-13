@@ -321,7 +321,7 @@ test("failed default save restores the action without showing success", async ()
 
 test("rapid archive switches ignore an older response and retain the chosen archive on reload", async () => {
   const app = loadApp();
-  const pane = {innerHTML: ""};
+  const pane = {innerHTML: "", querySelector: () => null};
   app.document.getElementById = (id) => id === "settings-pane" ? pane : null;
   const requests = [];
   app.fetch = (url) => new Promise((resolve) => { requests.push({url, resolve}); });
@@ -341,7 +341,7 @@ test("rapid archive switches ignore an older response and retain the chosen arch
 
 function settingsView() {
   const app = loadApp();
-  const pane = {innerHTML: "Current archive", hidden: true, focus() {}};
+  const pane = {innerHTML: "Current archive", hidden: true, focus() {}, querySelector: () => null};
   const content = {hidden: false};
   const button = {dataset: {open: "Open", close: "Close"}, classList: {add() {}, remove() {}}, setAttribute() {}, focus() {}};
   const elements = {"settings-pane": pane, "form-content": content, "settings-toggle": button};
@@ -538,7 +538,7 @@ for (const language of ['en', 'de']) {
     const restored = [];
     app.window.ArchiveSelection = {capture: () => selected, init: (root, state) => restored.push(state)};
     const archiveForm = {action: '/settings/panel', querySelectorAll: () => []};
-    pane.querySelector = () => archiveForm;
+    pane.querySelector = selector => selector === "#archive-issuer-form" ? archiveForm : null;
     app.FormData = class extends URLSearchParams {
       constructor() { super({issuer: 'all', year: '2025', sort: 'customer'}); }
     };
@@ -578,7 +578,7 @@ for (const language of ['en', 'de']) {
         action: '/settings/panel',
         querySelectorAll: selector => selector === 'select:disabled' ? controls.filter(c => c.disabled) : controls,
       };
-      pane.querySelector = () => form;
+      pane.querySelector = selector => selector === "#archive-issuer-form" ? form : null;
       // Like browser FormData, exclude temporarily disabled archive filters.
       app.FormData = class extends URLSearchParams {
         constructor() { super(controls.filter(c => !c.disabled).map(c => [c.name, c.value])); }
@@ -1155,4 +1155,28 @@ test('customer switch keeps existing behavior when the experimental flag is off'
   await app.chooseCust(1);
   assert.equal(fields.buyer_name.value, 'B');
   assert.equal(prompts.length, 0);
+});
+
+test('return from agent management opens settings instead of the invoice screen', async () => {
+  const {app, pane, content, button} = settingsView();
+  app.window.location = {hash: '#agent-access-card', pathname: '/', search: '?issuer=default'};
+  let cleaned;
+  app.window.history = {replaceState: (_, __, url) => { cleaned = url; }};
+  app.fetch = async () => ({ok: true, text: async () => 'Settings with agent switch'});
+  await app.restoreInitialSettings();
+  assert.equal(cleaned, '/?issuer=default');
+  assert.equal(pane.hidden, false);
+  assert.equal(content.hidden, true);
+  assert.equal(button.textContent, 'Close');
+});
+
+test('a late archive response cannot discard an open agent dialog or an in-flight grant', async () => {
+  for (const [open, busy] of [[true, false], [false, true]]) {
+    const {app, pane} = settingsView();
+    pane.querySelector = () => open ? {open: true} : null;
+    app.window.AgentAccess = {isBusy: () => busy};
+    app.fetch = async () => ({ok: true, text: async () => 'Late archive'});
+    assert.equal(await app.loadSettingsPanel('/settings/panel'), false);
+    assert.equal(pane.innerHTML, 'Current archive');
+  }
 });
