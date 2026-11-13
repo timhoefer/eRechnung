@@ -127,6 +127,7 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   const details = node({ open: false });
   const selectionErrors = [node({ hidden: true }), node({ hidden: true })];
   const error = node({ hidden: true });
+  const assistantGroup = node(), issuerGroup = node();
   const summary = node(), approvalSummary = node(), next = node(), back = node();
   const group = node({ tagName: 'FIELDSET', dataset: { customerMode: 'selected' } });
   const pages = [1, 2].map(step => node({ hidden: step === 2, dataset: { onboardingPage: String(step) }, querySelector: () => node() }));
@@ -137,11 +138,14 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
     '[name="client_approvals"]': location, '[data-policy-summary]': summary, '[data-approval-summary]': approvalSummary,
     '[data-onboarding-next]': next, '[data-onboarding-back]': back,
     '[data-selection-error="issuers"]': selectionErrors[0], '[data-selection-error="customers"]': selectionErrors[1],
+    '[data-selection-group="assistant"]': assistantGroup, '[data-selection-group="issuers"]': issuerGroup,
+    '[data-selection-group="customers"]': group,
   };
   const lists = {
     'input[name="assistant"]': [assistant], 'input[name="issuers"]': [issuer], 'input[name="customers"]': [customer],
     '[data-operation-label]': [policy, deletion], '[data-onboarding-page]': pages, details: [details],
-    '[data-customer-mode]': [group], '[data-selection-error]': selectionErrors, '[aria-invalid]': [issuer, customer],
+    '[data-customer-mode]': [group], '[data-selection-error]': selectionErrors,
+    '[aria-invalid]': [assistant, issuer, customer, assistantGroup, issuerGroup, group],
   };
   const form = node({
     hasAttribute: () => true, closest: () => dialog,
@@ -167,17 +171,24 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   }
   assert.equal(submit(), true);
   assert.equal(error.hidden, false);
+  assert.equal(assistantGroup.attributes['aria-invalid'], 'true');
+  assert.equal(assistant.attributes['aria-invalid'], 'true');
   assert.equal(pages[1].hidden, true);
   assistant.checked = true;
   assert.equal(submit(), true); // Enter advances only; the grant POST cannot bubble.
   assert.equal(pages[1].hidden, false);
+  assert.equal(assistantGroup.attributes['aria-invalid'], undefined);
+  assert.equal(assistant.attributes['aria-invalid'], undefined);
   assert.equal(steps[1].attributes['aria-current'], 'step');
   assert.equal(name.placeholder, 'Codex');
   assert.equal(submit(), true); // An issuer is still required.
+  assert.equal(issuerGroup.attributes['aria-invalid'], 'true');
   issuer.checked = true;
   mode.value = 'selected'; mode.dispatchEvent({ type: 'change' });
   assert.equal(group.disabled, false);
   assert.equal(submit(), true); // Empty customer selection stays blocked.
+  assert.equal(group.attributes['aria-invalid'], 'true');
+  assert.equal(issuerGroup.attributes['aria-invalid'], undefined);
   customer.checked = true;
   policy.value = 'allow'; location.value = 'yes';
   name.value = 'Draft'; details.open = true;
@@ -190,7 +201,13 @@ test('onboarding never submits its first step, preserves drafts on Back and rese
   assert.equal(customer.checked, true);
   assert.equal(policy.value, 'allow');
   assert.equal(submit(), false); // Only the reviewed, valid second step may submit.
+  assert.equal(group.attributes['aria-invalid'], undefined);
+  // Closing an invalid draft clears both the error message and its field highlight.
+  customer.checked = false;
+  assert.equal(submit(), true);
   dialog.dispatchEvent({ type: 'close' }); // X, Escape and Cancel share this event.
+  assert.equal(group.attributes['aria-invalid'], undefined);
+  assert.equal(selectionErrors[1].hidden, true);
   assert.equal(pages[1].hidden, true);
   assert.equal(details.open, false);
   assert.equal(name.value, '');
@@ -258,8 +275,8 @@ test('empty issuer or selected-customer groups block submission and recover with
   const options = { hidden: false, disabled: false, tagName: 'FIELDSET', dataset: { customerMode: 'selected' } };
   const form = {
     hasAttribute: () => false,
-    querySelector: selector => selector === '[data-customer-access]' ? mode
-      : selector.includes('issuers') ? issuerError : customerError,
+    querySelector: selector => ({ '[data-customer-access]': mode,
+      '[data-selection-error="issuers"]': issuerError, '[data-selection-error="customers"]': customerError })[selector],
     querySelectorAll: selector => selector === 'input[name="issuers"]' ? [issuer]
       : selector === 'input[name="customers"]' ? [customer] : [options],
     addEventListener(name, fn) { listeners[name] = fn; },

@@ -63,12 +63,12 @@
     <section data-onboarding-page="1" aria-labelledby="agent-assistant-heading">
       <h3 id="agent-assistant-heading" tabindex="-1">{{ 'Welchen Assistenten möchtest du verbinden?' if de else 'Which assistant would you like to connect?' }}</h3>
       <p class="hint">{{ 'Die Verbindung läuft lokal auf diesem Computer. Wähle deinen Assistenten für die passende Anleitung.' if de else 'The connection runs locally on this computer. Choose your assistant for matching setup instructions.' }}</p>
-      <div class="agent-assistant-choices">
+      <div class="agent-assistant-choices" data-selection-group="assistant" role="group" aria-labelledby="agent-assistant-heading" aria-describedby="agent-assistant-error">
         {% for value, name, note in [('chatgpt', 'ChatGPT', 'Desktop-App' if de else 'Desktop app'), ('codex', 'Codex', 'Desktop-App' if de else 'Desktop app'), ('claude', 'Claude', 'Desktop-App' if de else 'Desktop app'), ('other', 'Andere MCP-App' if de else 'Other MCP app', 'Lokale MCP-Verbindung' if de else 'Local MCP connection')] %}
-        <label class="agent-assistant-choice"><input type="radio" name="assistant" value="{{ value }}"><span><strong>{{ name }}</strong><small>{{ note }}</small></span></label>
+        <label class="agent-assistant-choice"><input type="radio" name="assistant" value="{{ value }}" aria-describedby="agent-assistant-error"><span><strong>{{ name }}</strong><small>{{ note }}</small></span></label>
         {% endfor %}
       </div>
-      <p class="agent-selection-error" data-assistant-error role="alert" hidden>{{ 'Bitte wähle einen Assistenten aus.' if de else 'Please choose an assistant.' }}</p>
+      <p class="agent-selection-error" data-assistant-error id="agent-assistant-error" role="alert" hidden>{% include '_agent_error_icon.html' %}<span>{{ 'Bitte wähle einen Assistenten aus.' if de else 'Please choose an assistant.' }}</span></p>
       <p class="hint">{{ 'Benötigt eine Desktop-App mit Unterstützung für lokale MCP-Server. Eine reine Web- oder Handy-App kann diesen Zugang nicht direkt nutzen.' if de else 'Requires a desktop app with local MCP server support. A web-only or mobile app cannot use this connection directly.' }}</p>
       <div class="agent-actions"><button type="button" class="secondary" data-close-connection>{{ t.cancel }}</button><button type="button" data-onboarding-next>{{ 'Weiter' if de else 'Continue' }}</button></div>
     </section>

@@ -927,7 +927,11 @@ dialog.agent-setup-dialog { width: 820px; max-width: calc(100vw - 40px); max-hei
 .agent-page { max-width: 960px; margin: 28px auto; padding: 0 20px; }
 .agent-ui .agent-check { display: flex; flex-direction: row; justify-content: flex-start; gap: 12px; align-items: flex-start; margin: 14px 0; cursor: pointer; color: var(--ink); }
 .agent-check input { width: auto; flex: none; margin-top: 4px; }
-.agent-selection-error { color: var(--err); margin: 12px 0; }
+.agent-ui .agent-selection-error { display: flex; align-items: flex-start; gap: 10px; color: var(--err); background: var(--err-bg); border: 1px solid var(--err); border-radius: 9px; padding: 12px 14px; margin: 12px 0 20px; }
+.agent-selection-error svg { flex: none; margin-top: 2px; }
+.agent-selection-group { border: 1px solid transparent; border-radius: 9px; padding: 0 12px; margin: 12px 0; }
+.agent-ui [data-selection-group][aria-invalid="true"], .agent-ui .agent-assistant-choice:has(input[aria-invalid="true"]) { border-color: var(--err); background: var(--field-err); }
+.agent-ui input[aria-invalid="true"] { outline: 2px solid var(--err); outline-offset: 2px; }
 .agent-customer-options { margin-top: 12px; border: 1px solid var(--line); border-radius: 9px; padding: 12px; max-height: 280px; overflow-y: auto; }
 .agent-connection { position: relative; isolation: isolate; overflow: hidden; min-height: 220px; overflow-wrap: anywhere; }
 .agent-connection-header strong { min-width: 0; }

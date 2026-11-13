@@ -1,5 +1,13 @@
 (() => {
   const initialized = new WeakSet();
+  function showSelectionError(form, name, options, error, invalid) {
+    error.hidden = !invalid;
+    const group = form.querySelector(`[data-selection-group="${name}"]`);
+    [group, ...options].filter(Boolean).forEach(element => {
+      if (invalid) element.setAttribute('aria-invalid', 'true');
+      else element.removeAttribute('aria-invalid');
+    });
+  }
   function init() {
     const dialog = document.getElementById('agent-connection-dialog');
     const add = document.getElementById('agent-connection-add');
@@ -31,11 +39,7 @@
           const options = [...form.querySelectorAll(`input[name="${name}"]`)];
           const required = name === 'issuers' || mode.value === 'selected';
           const invalid = required && !options.some(option => option.type === 'hidden' ? option.value : option.checked);
-          error.hidden = !attempted || !invalid;
-          options.forEach(option => {
-            if (attempted && invalid) option.setAttribute('aria-invalid', 'true');
-            else option.removeAttribute('aria-invalid');
-          });
+          showSelectionError(form, name, options, error, attempted && invalid);
           if (invalid && !firstInvalid) firstInvalid = options[0] || error;
         }
         return firstInvalid;
@@ -89,7 +93,7 @@
     }
     function next() {
       const choice = choices.find(input => input.checked);
-      error.hidden = Boolean(choice);
+      showSelectionError(form, 'assistant', choices, error, !choice);
       if (!choice) { choices[0].focus(); return; }
       name.placeholder = { chatgpt: 'ChatGPT', codex: 'Codex', claude: 'Claude' }[choice.value] || placeholder;
       showStep(2);
@@ -114,7 +118,7 @@
     form.querySelector('[data-onboarding-next]').addEventListener('click', next);
     form.querySelector('[data-onboarding-back]').addEventListener('click', () => showStep(1));
     form.addEventListener('change', () => {
-      if (choices.some(input => input.checked)) error.hidden = true;
+      if (choices.some(input => input.checked)) showSelectionError(form, 'assistant', choices, error, false);
       summary();
     });
     // Cancelled drafts must not carry wider permissions into a later connection.
